@@ -2,11 +2,9 @@
 
 (provide (all-defined-out) <css-color>)
 (provide (all-from-out bitmap/color))
-(provide (all-from-out colorspace))
 
 (require bitmap/digitama/color)
 (require bitmap/color)
-(require colorspace)
 
 (require "digitama/syntax/digicore.rkt")
 (require "digitama/color.rkt")
