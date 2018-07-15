@@ -1,6 +1,7 @@
 #lang typed/racket/base
 
 (provide (all-defined-out) <css-image>)
+(provide (all-from-out bitmap/base))
 
 (require bitmap/base)
 (require bitmap/constructor)
@@ -43,7 +44,7 @@
 (define-values (css->bitmap css->image)
   (values (css->normalized-image (λ [[raw : (CSS-Maybe Bitmap)]] raw))
           (css->normalized-image (λ [[raw : (CSS-Maybe Bitmap)]]
-                                   (cond [(and (bitmap%? raw) (send raw ok?)) raw]
+                                   (cond [(bitmap? raw) raw]
                                          [else (bitmap-solid)])))))
 
 (define css-icon-ref : (-> CSS-Values (Option CSS-Values) Symbol CSS-Make-Icon Nonnegative-Real Color Bitmap)

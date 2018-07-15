@@ -2,8 +2,6 @@
 
 (provide (all-defined-out))
 
-(require bitmap/draw)
-
 (require "../syntax.rkt")
 
 (define-syntax (time-run stx)

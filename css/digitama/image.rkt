@@ -11,6 +11,7 @@
 (require bitmap/misc)
 (require bitmap/composite)
 (require bitmap/constructor)
+(require bitmap/invalid)
 
 (require "syntax/digicore.rkt")
 (require "syntax/dimension.rkt")
@@ -54,27 +55,27 @@
 (define make-image-normalizer : (case-> [Nonnegative-Real Positive-Flonum (-> Bitmap) -> (-> (CSS-Maybe Bitmap) Bitmap)]
                                         [Nonnegative-Real Positive-Flonum -> (-> (CSS-Maybe Bitmap) (CSS-Maybe Bitmap))])
   (let ([normalize (λ [[h : Nonnegative-Real] [d : Positive-Flonum] [b : Bitmap]]
-                     (bitmap-scale (bitmap-alter-density b d) (/ h (send b get-height))))])
+                     (bitmap-scale (bitmap-alter-density b d) (/ h (Bitmap-height b))))])
     (case-lambda
       [(height density)
        (λ [[raw : (CSS-Maybe Bitmap)]]
-         (if (and (bitmap%? raw) (send raw ok?)) (normalize height density raw) css:initial))]
+         (if (bitmap? raw) (normalize height density raw) css:initial))]
       [(height density mk-image)
        (λ [[raw : (CSS-Maybe Bitmap)]]
-         (cond [(and (bitmap%? raw) (send raw ok?)) (normalize height density raw)]
+         (cond [(bitmap? raw) (normalize height density raw)]
                [else (let ([alt-image : Bitmap (mk-image)])
-                       (cond [(> (send alt-image get-height) height) (normalize height density alt-image)]
+                       (cond [(> (Bitmap-height alt-image) height) (normalize height density alt-image)]
                              [else (bitmap-cc-superimpose (bitmap-blank height height #:density density)
                                                           (bitmap-alter-density alt-image density))]))]))])))
 
-(define image->bitmap : (->* (CSS-Image-Datum) (Positive-Real) Bitmap)
+(define image->bitmap : (->* (CSS-Image-Datum) (Positive-Flonum) Bitmap)
   (lambda [img [the-density (default-bitmap-density)]]
     (cond [(non-empty-string? img)
-           (with-handlers ([exn? (λ [[e : exn]] (css-log-read-error e img) the-invalid-image)])
+           (with-handlers ([exn? (λ [[e : exn]] (css-log-read-error e img) the-invalid-bitmap)])
              (bitmap img the-density))]
           [(image? img)
            (define bmp : Bitmap (image->bitmap (image-content img)))
-           (cond [(send bmp ok?) bmp]
+           (cond [(bitmap-invalid? bmp) bmp]
                  [else (let ([color (css->color '_ (image-fallback img))])
                          (bitmap-solid (if (or (FlColor? color) (symbol? color)) color 'transparent)))])]
           [(image-set? img)
@@ -88,13 +89,13 @@
                (if (or (= resolution the-density) (fl<= this-density resolution))
                    (values the-src resolution)
                    (values (car option) this-density))))
-           (cond [(zero? density) the-invalid-image]
+           (cond [(zero? density) the-invalid-bitmap]
                  [else (image->bitmap src density)])]
-          [else the-invalid-image])))
+          [else the-invalid-bitmap])))
 
 (define css->normalized-image : (All (racket) (-> (-> (CSS-Maybe Bitmap) racket) (CSS->Racket racket)))
   (lambda [normalize]
     (λ [_ image]
-      (cond [(bitmap%? image) (normalize image)]
+      (cond [(bitmap? image) (normalize image)]
             [(css-image-datum? image) (normalize (image->bitmap image))]
             [else (normalize css:initial)]))))
