@@ -1,6 +1,6 @@
 #lang typed/racket/base
 
-(provide (all-defined-out) make-cheat-opaque? make-cheat-is-a? make-cheat-procedure?)
+(provide (all-defined-out))
 
 (require typed/racket/class)
 (require typed/racket/unsafe)
@@ -24,7 +24,7 @@
                                   (procedure-arity-includes? v arity kw?)))
                       fname)))
 
-(unsafe-require/typed
+(unsafe-require/typed/provide
  (submod "." cheat)
  [make-cheat-opaque? (All (OT) (-> (-> Any Boolean) Symbol (-> Any Boolean : #:+ OT)))]
  [make-cheat-is-a? (All (%) (-> Any Symbol (-> Any Boolean : #:+ (Instance %))))]
