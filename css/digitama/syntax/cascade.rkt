@@ -3,9 +3,9 @@
 ;;; https://drafts.csswg.org/css-cascade
 ;;; https://drafts.csswg.org/css-values
 
-(provide (except-out (all-defined-out)
-                     desc-more-important? do-filter do-parse
-                     css-filter? css-parser?))
+(provide (except-out (all-defined-out) desc-more-important? do-filter do-parse))
+
+(require typed/racket/unsafe)
 
 (require racket/sequence)
 
@@ -15,10 +15,14 @@
 (require "variables.rkt")
 (require "condition.rkt")
 (require "grammar.rkt")
-(require "cheat.rkt")
 
 (require "../device-adapt.rkt")
 (require "../../recognizer.rkt")
+
+(unsafe-require/typed
+ "unsafe/cascade.rkt"
+ [css-filter? (-> Any Boolean : (CSS:Filter Any))]
+ [css-parser? (-> Any Boolean : (CSS-Parser (Listof Any)))])
 
 (require (for-syntax racket/base))
 (require (for-syntax syntax/parse))
@@ -238,9 +242,6 @@
     (css-condition-okay? query okay?)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-cheat-opaque css-filter? #:=> (CSS:Filter Any) 1 #false)
-(define-cheat-opaque css-parser? #:=> (CSS-Parser (Listof Any)) 2 #false)
-
 (define !importants : (HashTable Symbol Boolean) ((inst make-hasheq Symbol Boolean)))
 
 (define desc-more-important? : (-> Symbol Boolean Boolean)
