@@ -22,23 +22,17 @@
     [(_ parent
         ([id #:+ ID #:=> canonical-unit [conversion ...]] ...)
         ([ctoken #:+ CToken #:-> cparent] ...))
-     (with-syntax ([token->datum (format-id #'parent "~a->datum" (syntax-e #'parent))]
-                   [token-filter (format-id #'parent "~a-filter" (syntax-e #'parent))]
-                   [([id? +id? css:id->scalar css-id->scalar <id> <+id>] ...)
-                    (for/list ([<id> (in-list (syntax->list #'(id ...)))])
-                      (define varname (symbol->string (syntax-e <id>)))
-                      (list (format-id <id> "~a?" (syntax-e <id>))
-                            (format-id <id> "~a?" (string-replace varname ":" "+"))
-                            (format-id <id> "~a->scalar" (syntax-e <id>))
-                            (format-id <id> "~a->scalar" (string-replace varname ":" "-"))
-                            (format-id <id> "<~a>" (syntax-e <id>))
-                            (format-id <id> "<~a>" (string-replace varname "css:" "css+"))))]
-                   [([Flonum/Font Flunum/Font !font?] ...)
-                    (for/list ([<id> (in-list (syntax->list #'(id ...)))])
-                      (if (not (eq? (syntax-e <id>) 'css:length))
-                          (list #'Flonum #'Nonnegative-Flonum #'#true)
-                          (list #'(U Flonum CSS:Length:Font) #'(U Nonnegative-Flonum CSS:Length:Font)
-                                #'(not (css:length:font? token)))))])
+     (with-syntax* ([token->datum (format-id #'parent "~a->datum" (syntax-e #'parent))]
+                    [token-filter (format-id #'parent "~a-filter" (syntax-e #'parent))]
+                    [([id? +id? css:id->scalar css-id->scalar <id> <+id>] ...)
+                     (for/list ([<id> (in-list (syntax->list #'(id ...)))])
+                       (define varname (symbol->string (syntax-e <id>)))
+                       (list (format-id <id> "~a?" (syntax-e <id>))
+                             (format-id <id> "~a?" (string-replace varname ":" "+"))
+                             (format-id <id> "~a->scalar" (syntax-e <id>))
+                             (format-id <id> "~a->scalar" (string-replace varname ":" "-"))
+                             (format-id <id> "<~a>" (syntax-e <id>))
+                             (format-id <id> "<~a>" (string-replace varname "css:" "css+"))))])
        #'(begin (struct id parent () #:transparent) ... (define-type ID id) ...
                 (struct ctoken cparent () #:transparent) ... (define-type CToken ctoken) ...
 
@@ -67,27 +61,23 @@
                              (fl>= (css:dimension-datum token) 0.0)))))
                 ...
 
-                (define <id> : (case-> [-> (CSS:Filter Flonum/Font)]
-                                       [False -> (CSS:Filter Flonum/Font)]
-                                       [True -> (CSS:Filter Flonum)])
-                  (lambda [[ignore-font? #false]]
+                (define <id> : (-> (CSS:Filter Flonum))
+                  (lambda []
                     (λ [[token : CSS-Syntax-Any]]
-                      (cond [(id? token) (if (or ignore-font? !font?) (css:id->scalar token) token)]
+                      (cond [(id? token) (css:id->scalar token)]
                             [(css:dimension? token) (make-exn:css:unit token)]
                             [else #false]))))
                 ...
 
-                (define <+id> : (case-> [-> (CSS:Filter Flunum/Font)]
-                                        [False -> (CSS:Filter Flunum/Font)]
-                                        [True -> (CSS:Filter Nonnegative-Flonum)])
-                  (lambda [[ignore-font? #false]]
+                (define <+id> : (-> (CSS:Filter Nonnegative-Flonum))
+                  (lambda []
                     (λ [[token : CSS-Syntax-Any]]
-                      (cond [(+id? token) (if (or ignore-font? !font?) (css:id->scalar token #false) token)]
+                      (cond [(+id? token) (css:id->scalar token #false)]
                             [(id? token) (make-exn:css:range token)]
                             [(css:dimension? token) (make-exn:css:unit token)]
                             [else #false]))))
                 ...
-                  
+                
                 (define token->datum : (-> (U CSS:Dimension CSS-Zero) Flonum)
                   (lambda [instance]
                     (cond [(id? instance) (css-id->scalar (css:dimension-datum instance) (css:dimension-unit instance))] ...
@@ -140,3 +130,18 @@
                         [(x)     dppx]]])
   ([css:length:font     #:+ CSS:Length:Font     #:-> css:length]
    [css:length:viewport #:+ CSS:Length:Viewport #:-> css:length]))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define <css:length:font> : (-> (CSS:Filter (U Flonum CSS:Length:Font)))
+  (let ([<fallback> (<css:length>)])
+    (lambda []
+      (λ [[token : CSS-Syntax-Any]]
+        (cond [(css:length:font? token) token]
+              [else (<fallback> token)])))))
+
+(define <css+length:font> : (-> (CSS:Filter (U Nonnegative-Flonum CSS:Length:Font)))
+  (let ([<fallback> (<css+length>)])
+    (lambda []
+      (λ [[token : CSS-Syntax-Any]]
+        (cond [(and (css:length:font? token) (css+length? token)) token]
+              [else (<fallback> token)])))))

@@ -417,7 +417,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-css-disjoint-filter <css-size> #:-> (U Nonnegative-Inexact-Real CSS:Length:Font)
-  (<css+length>)
+  (<css+length:font>)
   (CSS:<~> (<css+%real>) exact->inexact))
 
 (define-css-disjoint-filter <css-unitless-size> #:-> (U Nonnegative-Flonum Single-Flonum CSS:Length:Font)
@@ -426,7 +426,7 @@
   ; hence the `negative single flonum` to tell the `css->*` the unitless value must be inheritable.
   (CSS:<~> (<css+real>) (λ [[v : Nonnegative-Real]] (- (real->single-flonum v))))
   (<css:percentage> nonnegative-single-flonum?)
-  (<css+length>))
+  (<css+length:font>))
 
 (define css-make-pair-parser
   : (case-> [(Listof+ (Pairof (CSS:Filter Any) (Listof+ Symbol))) -> CSS-Shorthand+Parser]

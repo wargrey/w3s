@@ -14,7 +14,7 @@
 
 (define-css-disjoint-filter <border-width> #:-> (U Symbol Nonnegative-Inexact-Real CSS:Length:Font)
   ;;; https://drafts.csswg.org/css-backgrounds/#line-width
-  (<css+length>)
+  (<css+length:font>)
   (CSS:<~> (<css+real>) exact->inexact)
   (<css-keyword> css-border-thickness-options))
 

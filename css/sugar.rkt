@@ -60,8 +60,11 @@
 
 (define css-size-ref : (case-> [CSS-Values (Option CSS-Values) Symbol Nonnegative-Flonum -> (CSS-Maybe Nonnegative-Flonum)]
                                [CSS-Values (Option CSS-Values) Symbol Nonnegative-Flonum Nonnegative-Flonum -> Nonnegative-Flonum])
-  (lambda [declares inherits property 100% [defsize css:initial]]
-    (css-ref declares inherits property (make-css->size defsize #:100% 100%))))
+  (case-lambda
+    [(declares inherits property 100%)
+     (css-ref declares inherits property (make-css->size css:initial #:100% 100%))]
+    [(declares inherits property 100% defsize)
+     (css-ref declares inherits property (make-css->size defsize #:100% 100%))]))
 
 (define css-property-accessors : (-> CSS-Values (Option CSS-Values)
                                      (Values (->* (Nonnegative-Flonum Nonnegative-Flonum) (Nonnegative-Flonum Nonnegative-Flonum)

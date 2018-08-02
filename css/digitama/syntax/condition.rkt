@@ -57,7 +57,7 @@
     (case downcased-name
       [(width height device-width device-height)
        (when (or (eq? downcased-name 'device-width) (eq? downcased-name 'device-height)) (deprecated!))
-       (<css+length> #true)]
+       (<css+length>)]
       [(aspect-ratio device-aspect-ratio)
        (when (eq? downcased-name 'device-aspect-ratio) (deprecated!))
        (CSS:<~> (<css:ratio>) real->double-flonum)]
