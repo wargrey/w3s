@@ -9,8 +9,8 @@
 
 (require syntax/strip-context)
 
-(require xml/digitama/digicore)
-(require xml/digitama/document)
+(require xdom/digitama/digicore)
+(require xdom/digitama/document)
 
 (define xml-read
   (lambda [[/dev/xmlin (current-input-port)]]

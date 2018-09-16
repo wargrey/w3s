@@ -17,4 +17,4 @@
   (provide (rename-out [xml-read-syntax read-syntax]))
   (provide (rename-out [xml-info get-info]))
   
-  (require xml/village/hashlang/reader))
+  (require xdom/village/hashlang/reader))
