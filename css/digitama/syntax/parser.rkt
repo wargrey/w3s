@@ -18,11 +18,11 @@
 (define-syntax (define-css-parser-entry stx)
   ;;; https://drafts.csswg.org/css-syntax/#parser-entry-points
   (syntax-case stx [: lambda]
-    [(_ id #:-> ->T (lambda [cssin [args : T defval ...] ...] body ...))
+    [(_ id #:-> ->T (lambda [/dev/cssin [args : T defval ...] ...] body ...))
      #'(define (id [/dev/stdin : CSS-StdIn (current-input-port)] [args : T defval ...] ...) : ->T
          (define /dev/cssin : Input-Port (css-open-input-port /dev/stdin))
          (dynamic-wind (λ [] '(css-open-input-port has already enabled line counting))
-                       (λ [] ((λ [[cssin : Input-Port] [args : T defval ...] ...] : ->T body ...) /dev/cssin args ...))
+                       (λ [] ((λ [[/dev/cssin : Input-Port] [args : T defval ...] ...] : ->T body ...) /dev/cssin args ...))
                        (λ [] (close-input-port /dev/cssin))))]))
 
 ;;; https://drafts.csswg.org/css-syntax/#parser-entry-points

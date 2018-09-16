@@ -70,29 +70,29 @@
   ;;; https://drafts.csswg.org/css-syntax/#CDO-token-diagram
   ;;; https://drafts.csswg.org/css-syntax/#CDC-token-diagram
   (lambda [srcloc open/close]
-    (define css : Input-Port (css-srcloc-in srcloc))
+    (define /dev/cssin : Input-Port (css-srcloc-in srcloc))
     (if (char=? open/close #\<)
-        (let ([cdo : (U EOF String) (peek-string 3 0 css)])
-          (cond [(and (string? cdo) (string=? cdo "!--")) (read-string 3 css) (css-make-token srcloc css:cdo '<!--)]
+        (let ([cdo : (U EOF String) (peek-string 3 0 /dev/cssin)])
+          (cond [(and (string? cdo) (string=? cdo "!--")) (read-string 3 /dev/cssin) (css-make-token srcloc css:cdo '<!--)]
                 [else (css-make-token srcloc css:delim #\<)]))
-        (let ([cdc : (U EOF String) (peek-string 2 0 css)])
+        (let ([cdc : (U EOF String) (peek-string 2 0 /dev/cssin)])
           (cond [(eof-object? cdc) (css-make-token srcloc css:delim #\-)]
-                [(string=? cdc "->") (read-string 2 css) (css-make-token srcloc css:cdc '-->)]
+                [(string=? cdc "->") (read-string 2 /dev/cssin) (css-make-token srcloc css:cdc '-->)]
                 [(css-identifier-prefix? #\- (string-ref cdc 0) (string-ref cdc 1)) (css-consume-ident-token srcloc #\-)]
                 [else (css-consume-numeric-token srcloc #\-)])))))
 
 (define css-consume-comment-token : (-> CSS-Srcloc (U CSS:WhiteSpace CSS:Delim CSS:Bad))
   (lambda [srcloc]
-    (define css : Input-Port (css-srcloc-in srcloc))
-    (define ch1 : (U EOF Char) (peek-char css 0))
+    (define /dev/cssin : Input-Port (css-srcloc-in srcloc))
+    (define ch1 : (U EOF Char) (peek-char /dev/cssin 0))
     (cond [(or (eof-object? ch1) (not (char=? ch1 #\*))) (css-make-token srcloc css:slash #\/)]
-          [(regexp-match #px".*?((\\*/)|$)" css) => (λ [**/] (css-make-token srcloc css:whitespace (format "/~a" (car **/))))]
+          [(regexp-match #px".*?((\\*/)|$)" /dev/cssin) => (λ [**/] (css-make-token srcloc css:whitespace (format "/~a" (car **/))))]
           [else (css-make-bad-token srcloc css:bad:eof struct:css:whitespace "/*")])))
 
 (define css-consume-whitespace-token : (-> CSS-Srcloc CSS:WhiteSpace)
   (lambda [srcloc]
-    (define css : Input-Port (css-srcloc-in srcloc))
-    (css-consume-whitespace css)
+    (define /dev/cssin : Input-Port (css-srcloc-in srcloc))
+    (css-consume-whitespace /dev/cssin)
     (css-make-token srcloc css:whitespace #\space)))
   
 (define css-consume-ident-token : (-> CSS-Srcloc Char (U CSS:Ident CSS:Function CSS:URL CSS:URange CSS:Bad))
@@ -101,61 +101,61 @@
   ;;; https://drafts.csswg.org/css-values/#urls
   ;;; https://drafts.csswg.org/css-variables/#defining-variables
   (lambda [srcloc id0]
-    (define css : Input-Port (css-srcloc-in srcloc))
-    (define ch1 : (U EOF Char) (peek-char css 0))
-    (define ch2 : (U EOF Char) (peek-char css 1))
+    (define /dev/cssin : Input-Port (css-srcloc-in srcloc))
+    (define ch1 : (U EOF Char) (peek-char /dev/cssin 0))
+    (define ch2 : (U EOF Char) (peek-char /dev/cssin 1))
     (cond [(and (char-ci=? id0 #\u) (char? ch1) (char=? ch1 #\+)
                 (or (char-hexdigit? ch2) (and (char? ch2) (char=? ch2 #\?))))
-           (read-char css) (css-consume-unicode-range-token srcloc)]
-          [else (let ([name (css-consume-name css id0)])
-                  (define ch : (U EOF Char) (peek-char css))
+           (read-char /dev/cssin) (css-consume-unicode-range-token srcloc)]
+          [else (let ([name (css-consume-name /dev/cssin id0)])
+                  (define ch : (U EOF Char) (peek-char /dev/cssin))
                   (cond [(or (eof-object? ch) (not (char=? ch #\()))
                          (if (and (char=? id0 #\-) (eqv? id0 ch1))
                              (let ([--id (string->unreadable-symbol name)]) (css-make-token srcloc css:ident --id --id))
                              (css-make-token srcloc css:ident (string->symbol name) (string->symbol (string-downcase name))))]
-                        [(and (or (not (string-ci=? name "url")) (regexp-match-peek #px"^.\\s*[\"']" css)) (read-char css))
+                        [(and (or (not (string-ci=? name "url")) (regexp-match-peek #px"^.\\s*[\"']" /dev/cssin)) (read-char /dev/cssin))
                          (define fnorm : Symbol (string->symbol (string-downcase name)))
                          (css-make-token srcloc css:function (string->unreadable-symbol name) fnorm null #false)]
-                        [else (read-char css) (css-consume-url-token srcloc)]))])))
+                        [else (read-char /dev/cssin) (css-consume-url-token srcloc)]))])))
 
 (define css-consume-escaped-ident-token : (-> CSS-Srcloc (U CSS:Ident CSS:Delim CSS:Function CSS:URL CSS:URange CSS:Bad))
   ;;; https://drafts.csswg.org/css-syntax/#consume-token (when #\\ is found at the beginning of a non-whitespace token)
   (lambda [srcloc]
-    (define css : Input-Port (css-srcloc-in srcloc))
-    (if (css-valid-escape? #\\ (peek-char css 1))
-        (css-consume-ident-token srcloc (css-consume-escaped-char css))
+    (define /dev/cssin : Input-Port (css-srcloc-in srcloc))
+    (if (css-valid-escape? #\\ (peek-char /dev/cssin 1))
+        (css-consume-ident-token srcloc (css-consume-escaped-char /dev/cssin))
         (css-remake-token (css-make-bad-token srcloc css:bad:char struct:css:delim #\\) css:delim #\\))))
 
 (define css-consume-string-token : (-> CSS-Srcloc Char (U CSS:String CSS:Bad))
   ;;; https://drafts.csswg.org/css-syntax/#consume-a-string-token
   (lambda [srcloc quotation]
-    (define css : Input-Port (css-srcloc-in srcloc))
+    (define /dev/cssin : Input-Port (css-srcloc-in srcloc))
     (let consume-string-token : (U CSS:String CSS:Bad) ([chars : (Listof Char) null])
-      (define ch : (U EOF Char) (read-char css))
+      (define ch : (U EOF Char) (read-char /dev/cssin))
       (cond [(or (eof-object? ch) (char=? ch quotation))
              (when (eof-object? ch) (css-make-bad-token srcloc css:bad:eof struct:css:string (list->string (reverse chars))))
              (css-make-token srcloc css:string (list->string (reverse chars)))]
             [(char=? ch #\newline) (css-make-bad-token srcloc css:bad:eol struct:css:string (list->string (reverse chars)))]
             [(not (char=? ch #\\)) (consume-string-token (cons ch chars))]
-            [else (let ([next (peek-char css)])
+            [else (let ([next (peek-char /dev/cssin)])
                     (cond [(eof-object? next) (consume-string-token chars)]
-                          [(and (char=? next #\newline) (read-char css)) (consume-string-token (cons ch chars))]
-                          [else (consume-string-token (cons (css-consume-escaped-char css) chars))]))]))))
+                          [(and (char=? next #\newline) (read-char /dev/cssin)) (consume-string-token (cons ch chars))]
+                          [else (consume-string-token (cons (css-consume-escaped-char /dev/cssin) chars))]))]))))
 
 (define css-consume-numeric-token : (-> CSS-Srcloc Char (U CSS-Numeric CSS:Delim CSS:Bad))
   ;;; https://drafts.csswg.org/css-syntax/#consume-a-number
   ;;; https://drafts.csswg.org/css-values/#numeric-types
   (lambda [srcloc sign/digit]
-    (define css : Input-Port (css-srcloc-in srcloc))
-    (define ch1 : (U EOF Char) (peek-char css 0))
-    (define ch2 : (U EOF Char) (peek-char css 1))
+    (define /dev/cssin : Input-Port (css-srcloc-in srcloc))
+    (define ch1 : (U EOF Char) (peek-char /dev/cssin 0))
+    (define ch2 : (U EOF Char) (peek-char /dev/cssin 1))
     (cond [(not (css-number-prefix? sign/digit ch1 ch2)) (css-make-token srcloc css:delim sign/digit)]
-          [else (let-values ([(n representation) (css-consume-number css sign/digit)])
-                  (let ([ch1 : (U EOF Char) (peek-char css 0)]
-                        [ch2 : (U EOF Char) (peek-char css 1)]
-                        [ch3 : (U EOF Char) (peek-char css 2)])
+          [else (let-values ([(n representation) (css-consume-number /dev/cssin sign/digit)])
+                  (let ([ch1 : (U EOF Char) (peek-char /dev/cssin 0)]
+                        [ch2 : (U EOF Char) (peek-char /dev/cssin 1)]
+                        [ch3 : (U EOF Char) (peek-char /dev/cssin 2)])
                     (cond [(css-identifier-prefix? ch1 ch2 ch3)
-                           (define unit : Symbol (string->symbol (string-downcase (css-consume-name css #false))))
+                           (define unit : Symbol (string->symbol (string-downcase (css-consume-name /dev/cssin #false))))
                            (define value : Flonum (real->double-flonum n))
                            (define rep+unit : String (~a representation unit))
                            (case unit
@@ -169,7 +169,7 @@
                              [(hz khz)                (css-make-token srcloc css:frequency       rep+unit value unit)]
                              [(dpi dpcm dppx x)       (css-make-token srcloc css:resolution      rep+unit value unit)]
                              [else                    (css-make-token srcloc css:dimension       rep+unit value unit)])]
-                          [(and (char? ch1) (char=? ch1 #\%) (read-char css))
+                          [(and (char? ch1) (char=? ch1 #\%) (read-char /dev/cssin))
                            (define n% : Single-Flonum (real->single-flonum (* n 0.01)))
                            (css-make-token srcloc css:percentage (string-append representation "%") n%)]
                           [(flonum? n)
@@ -186,42 +186,42 @@
   ;;; https://drafts.csswg.org/css-values/#url-empty
   ;;; https://drafts.csswg.org/css-values/#about-invalid
   (lambda [srcloc]
-    (define css : Input-Port (css-srcloc-in srcloc))
-    (css-consume-whitespace css)
+    (define /dev/cssin : Input-Port (css-srcloc-in srcloc))
+    (css-consume-whitespace /dev/cssin)
     (let consume-url-token ([srahc : (Listof Char) null])
-      (define ch : (U EOF Char) (read-char css))
+      (define ch : (U EOF Char) (read-char /dev/cssin))
       (cond [(or (eof-object? ch) (char=? ch #\)))
              (define uri : String (list->string (reverse srahc)))
              (when (eof-object? ch) (css-make-bad-token srcloc css:bad:eof struct:css:url uri))
              (css-make-token srcloc css:url uri null #false)]
-            [(and (char-whitespace? ch) (css-consume-whitespace css))
-             (define end : (U EOF Char) (read-char css))
+            [(and (char-whitespace? ch) (css-consume-whitespace /dev/cssin))
+             (define end : (U EOF Char) (read-char /dev/cssin))
              (define uri : String (list->string (reverse srahc)))
              (cond [(or (eof-object? end) (char=? end #\))) (css-make-token srcloc css:url uri null #false)]
-                   [else (css-consume-bad-url-remnants css (css-make-bad-token srcloc css:bad:blank struct:css:url uri))])]
-            [(css-valid-escape? ch (peek-char css)) (consume-url-token (cons (css-consume-escaped-char css) srahc))]
+                   [else (css-consume-bad-url-remnants /dev/cssin (css-make-bad-token srcloc css:bad:blank struct:css:url uri))])]
+            [(css-valid-escape? ch (peek-char /dev/cssin)) (consume-url-token (cons (css-consume-escaped-char /dev/cssin) srahc))]
             [(or (memq ch '(#\\ #\" #\' #\()) (css-char-non-printable? ch))
-             (css-consume-bad-url-remnants css (css-make-bad-token srcloc css:bad:char struct:css:url ch))]
+             (css-consume-bad-url-remnants /dev/cssin (css-make-bad-token srcloc css:bad:char struct:css:url ch))]
             [else (consume-url-token (cons ch srahc))]))))
 
 (define css-consume-unicode-range-token : (-> CSS-Srcloc (U CSS:URange CSS:Bad))
   ;;; https://drafts.csswg.org/css-syntax/#urange-syntax
   (lambda [srcloc]
-    (define css : Input-Port (css-srcloc-in srcloc))
+    (define /dev/cssin : Input-Port (css-srcloc-in srcloc))
     (define-values (n rest) (css-consume-hexadecimal (css-srcloc-in srcloc) 6))
     (define-values (start0 end0)
       (let consume-? : (Values Fixnum Fixnum) ([s : Fixnum n] [e : Fixnum n] [? : Fixnum rest])
         (cond [(zero? ?) (values s e)]
-              [else (let ([ch : (U EOF Char) (peek-char css)])
+              [else (let ([ch : (U EOF Char) (peek-char /dev/cssin)])
                       (cond [(or (eof-object? ch) (not (char=? ch #\?))) (values s e)]
-                            [else (read-char css) (consume-? (fxlshift s 4)
+                            [else (read-char /dev/cssin) (consume-? (fxlshift s 4)
                                                              (fxior (fxlshift e 4) #xF)
                                                              (fx- ? 1))]))])))
     (define-values (start end)
       (cond [(not (fx= start0 end0)) (values start0 end0)]
-            [else (let ([ch1 (peek-char css 0)]
-                        [ch2 (peek-char css 1)])
-                    (cond [(and (char? ch1) (char=? ch1 #\-) (char-hexdigit? ch2) (read-char css))
+            [else (let ([ch1 (peek-char /dev/cssin 0)]
+                        [ch2 (peek-char /dev/cssin 1)])
+                    (cond [(and (char? ch1) (char=? ch1 #\-) (char-hexdigit? ch2) (read-char /dev/cssin))
                            (define-values (end _) (css-consume-hexadecimal (css-srcloc-in srcloc) 6))
                            (values start0 end)]
                           [else (values start0 start0)]))]))
@@ -232,10 +232,10 @@
 (define css-consume-hash-token : (-> CSS-Srcloc (U CSS:Hash CSS:Delim))
   ;;; https://drafts.csswg.org/css-syntax/#hash-token-diagram
   (lambda [srcloc]
-    (define css : Input-Port (css-srcloc-in srcloc))
-    (define ch1 : (U EOF Char) (peek-char css 0))
-    (define ch2 : (U EOF Char) (peek-char css 1))
-    (define ch3 : (U EOF Char) (peek-char css 2))
+    (define /dev/cssin : Input-Port (css-srcloc-in srcloc))
+    (define ch1 : (U EOF Char) (peek-char /dev/cssin 0))
+    (define ch2 : (U EOF Char) (peek-char /dev/cssin 1))
+    (define ch3 : (U EOF Char) (peek-char /dev/cssin 2))
     (if (or (css-char-name? ch1) (css-valid-escape? ch1 ch2))
         (let ([name (css-consume-name (css-srcloc-in srcloc) #false)])
           (css-make-token srcloc css:hash (string->keyword name) #|(string->keyword (string-downcase name))|#))
@@ -244,10 +244,10 @@
 (define css-consume-@keyword-token : (-> CSS-Srcloc (U CSS:@Keyword CSS:Delim))
   ;;; https://drafts.csswg.org/css-syntax/#at-keyword-token-diagram
   (lambda [srcloc]
-    (define css : Input-Port (css-srcloc-in srcloc))
-    (define ch1 : (U EOF Char) (peek-char css 0))
-    (define ch2 : (U EOF Char) (peek-char css 1))
-    (define ch3 : (U EOF Char) (peek-char css 2))
+    (define /dev/cssin : Input-Port (css-srcloc-in srcloc))
+    (define ch1 : (U EOF Char) (peek-char /dev/cssin 0))
+    (define ch2 : (U EOF Char) (peek-char /dev/cssin 1))
+    (define ch3 : (U EOF Char) (peek-char /dev/cssin 2))
     (if (css-identifier-prefix? ch1 ch2 ch3)
         (let ([name (css-consume-name (css-srcloc-in srcloc) #\@)])
           (css-make-token srcloc css:@keyword (string->keyword name) (string->keyword (string-downcase name))))
@@ -257,39 +257,40 @@
   ;;; https://drafts.csswg.org/css-syntax/#include-match-token-diagram
   ;;; https://drafts.csswg.org/css-syntax/#column-token-diagram
   (lambda [srcloc prefix]
-    (define css : Input-Port (css-srcloc-in srcloc))
-    (define ch : (U EOF Char) (peek-char css))
-    (cond [(and (eq? prefix #\|) (eq? ch #\|) (read-char css)) (css-make-token srcloc css:delim #\tab)]
-          [(and (eq? ch #\=) (read-char css)) (css-make-token srcloc css:match prefix)]
+    (define /dev/cssin : Input-Port (css-srcloc-in srcloc))
+    (define ch : (U EOF Char) (peek-char /dev/cssin))
+    (cond [(and (eq? prefix #\|) (eq? ch #\|) (read-char /dev/cssin)) (css-make-token srcloc css:delim #\tab)]
+          [(and (eq? ch #\=) (read-char /dev/cssin)) (css-make-token srcloc css:match prefix)]
           [(eq? prefix #\|) (css-make-token srcloc css:vbar prefix)]
           [else (css-make-token srcloc css:delim prefix)])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define css-consume-whitespace : (-> Input-Port Void)
-  (lambda [css]
-    (regexp-match #px"\\s*" css)
+  (lambda [/dev/cssin]
+    (regexp-match #px"\\s*" /dev/cssin)
     (void)))
   
 (define css-consume-name : (-> Input-Port (Option Char) String)
   ;;; https://drafts.csswg.org/css-syntax/#consume-a-name
-  (lambda [css ?head]
+  (lambda [/dev/cssin ?head]
     (let consume-name ([srahc : (Listof Char) (if ?head (list ?head) null)])
-      (define ch : (U EOF Char) (peek-char css))
-      (cond [(and (css-char-name? ch) (read-char css)) (consume-name (cons ch srahc))]
-            [(and (css-valid-escape? ch (peek-char css 1)) (read-char css)) (consume-name (cons (css-consume-escaped-char css) srahc))]
+      (define ch : (U EOF Char) (peek-char /dev/cssin))
+      (cond [(and (css-char-name? ch) (read-char /dev/cssin)) (consume-name (cons ch srahc))]
+            [(and (css-valid-escape? ch (peek-char /dev/cssin 1)) (read-char /dev/cssin))
+             (consume-name (cons (css-consume-escaped-char /dev/cssin) srahc))]
             [else (list->string (reverse srahc))]))))
 
 (define css-consume-number : (-> Input-Port Char (Values (U Flonum Integer) String))
   ;;; https://drafts.csswg.org/css-syntax/#consume-a-number
-  (lambda [css sign/digit]
+  (lambda [/dev/cssin sign/digit]
     (let consume-number ([chars (list sign/digit)])
-      (define ch : (U EOF Char) (peek-char css))
+      (define ch : (U EOF Char) (peek-char /dev/cssin))
       (cond [(and (char? ch)
                   (or (char-numeric? ch)
                       (char=? ch #\+) (char=? ch #\-)
-                      (css-decimal-point? ch (peek-char css 1))
-                      (css-scientific-notation? ch (peek-char css 1) (peek-char css 2)))
-                  (read-char css))
+                      (css-decimal-point? ch (peek-char /dev/cssin 1))
+                      (css-scientific-notation? ch (peek-char /dev/cssin 1) (peek-char /dev/cssin 2)))
+                  (read-char /dev/cssin))
              (consume-number (cons ch chars))]
             [else (let* ([representation : String (list->string (reverse chars))]
                          [?number : (Option Complex) (string->number representation)])
@@ -298,34 +299,34 @@
                           [else (values +nan.0 representation)]))]))))
 
 (define css-consume-hexadecimal : (->* (Input-Port Byte) (Fixnum #:\s?$? Boolean) (Values Fixnum Byte))
-  (lambda [css --count [result 0] #:\s?$? [eat-last-whitespace? #false]]
-    (define hex : (U EOF Char) (peek-char css))
+  (lambda [/dev/cssin --count [result 0] #:\s?$? [eat-last-whitespace? #false]]
+    (define hex : (U EOF Char) (peek-char /dev/cssin))
     (cond [(or (eof-object? hex) (not (char-hexdigit? hex)) (zero? --count))
-           (when (and eat-last-whitespace? (char? hex) (char-whitespace? hex)) (read-char css))
+           (when (and eat-last-whitespace? (char? hex) (char-whitespace? hex)) (read-char /dev/cssin))
            (values result --count)]
-          [else (read-char css) (css-consume-hexadecimal #:\s?$? eat-last-whitespace?
-                                                         css (fx- --count 1)
+          [else (read-char /dev/cssin) (css-consume-hexadecimal #:\s?$? eat-last-whitespace?
+                                                         /dev/cssin (fx- --count 1)
                                                          (fx+ (fxlshift result 4)
                                                               (char->hexadecimal hex)))])))
 
 (define css-consume-escaped-char : (-> Input-Port Char)
   ;;; https://drafts.csswg.org/css-syntax/#consume-an-escaped-code-point
-  (lambda [css]
-    (define esc : (U EOF Char) (read-char css))
+  (lambda [/dev/cssin]
+    (define esc : (U EOF Char) (read-char /dev/cssin))
     (cond [(eof-object? esc) #\uFFFD]
           [(not (char-hexdigit? esc)) esc]
-          [else (let-values ([(hex _) (css-consume-hexadecimal css (sub1 6) (char->hexadecimal esc) #:\s?$? #true)])
+          [else (let-values ([(hex _) (css-consume-hexadecimal /dev/cssin (sub1 6) (char->hexadecimal esc) #:\s?$? #true)])
                   (cond [(or (fx<= hex 0) (fx> hex #x10FFFF)) #\uFFFD] ; #\nul and max unicode
                         [(<= #xD800 hex #xDFFF) #\uFFFD] ; surrogate
                         [else (integer->char hex)]))])))
 
 (define css-consume-bad-url-remnants : (-> Input-Port CSS:Bad CSS:Bad)
   ;;; https://drafts.csswg.org/css-syntax/#consume-the-remnants-of-a-bad-url
-  (lambda [css bad-url-token]
-    (define ch : (U EOF Char) (read-char css))
+  (lambda [/dev/cssin bad-url-token]
+    (define ch : (U EOF Char) (read-char /dev/cssin))
     (cond [(or (eof-object? ch) (char=? ch #\))) bad-url-token]
-          [(and (char=? ch #\\) (read-char css)) (css-consume-bad-url-remnants css bad-url-token)]
-          [else (css-consume-bad-url-remnants css bad-url-token)])))
+          [(and (char=? ch #\\) (read-char /dev/cssin)) (css-consume-bad-url-remnants /dev/cssin bad-url-token)]
+          [else (css-consume-bad-url-remnants /dev/cssin bad-url-token)])))
   
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define char-hexdigit? : (-> (U EOF Char) Boolean : #:+ Char)
@@ -353,7 +354,7 @@
     (and (char? ch)
          (or (char-lower-case? ch)
              (char-upper-case? ch)
-             (char=? #\_  ch)
+             (char=? #\_ ch)
              (char>=? ch #\u0080)))))
 
 (define css-char-name? : (-> (U EOF Char) Boolean : #:+ Char)
