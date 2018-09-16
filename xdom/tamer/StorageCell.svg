@@ -1,0 +1,19 @@
+#lang xml
+
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 20000303 Stylable//EN"
+"http://www.w3.org/TR/2000/03/WD-SVG-20000303/DTD/svg-20000303-stylable.dtd">
+
+<svg width="1.9284in" height="1.4792in" viewBox="0 0 558 428">
+
+<path id="body" style="fill:#000;stroke:#000;stroke-width:2" d="M36,413 l485,0 0,-364 -485,0 0,364z" />
+<path id="seal-shadow" style="fill:#000;stroke:#7f7f7f;stroke-width:2" d="M29,79 l500,0 0,31 -500,0 0,-31z" />
+<path id="anode-base" style="fill:#000;stroke:#7f7f7f;stroke-width:2" d="M52,49 l30,0 0,-7 -30,0 0,7z" />
+<path id="cathode-base" style="fill:#000;stroke:#7f7f7f;stroke-width:2" d="M476,49 l30,0 0,-7 -30,0 0,7z" />
+<path id="seal-left" style="fill:#7f7f7f" d="M29,65 l-14,14 0,31 28,0 0,-31 -14,14 0,-28 -14,0 0,14z" />
+<path id="seal" style="fill:#7f7f7f" d="M543,79 l-14,-14 -500,0 0,28 500,0 -14,-14 28,0 0,-14 -14,0z" />
+<path id="seal-right" style="fill:#7f7f7f" d="M529,110 l14,0 0,-31 -28,0 0,31 14,0z" />
+<path id="cathode" style="fill:#7f7f7f;stroke:#000;stroke-width:2" d="M480,42 l22,0 0,-27 -22,0 0,27z" />
+<path id="anode" style="fill:#7f7f7f;stroke:#000;stroke-width:2" d="M56,42 l22,0 0,-27 -22,0 0,27z" />
+
+</svg>

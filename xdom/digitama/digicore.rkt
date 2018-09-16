@@ -22,51 +22,51 @@
   
 (define-syntax (define-token-interface stx)
   (syntax-case stx [:]
-    [(_ symbolic-prefix : Type id? id-datum #:+ CSS:ID #:eq? type=?)
+    [(_ symbolic-prefix : Type id? id-datum #:+ XML:ID #:eq? type=?)
      (with-syntax ([<id> (format-id #'symbolic-prefix "<~a>" (syntax-e #'symbolic-prefix))]
                    [id=<-? (format-id #'symbolic-prefix "~a=<-?" (syntax-e #'symbolic-prefix))]
                    [id=:=? (format-id #'symbolic-prefix "~a=:=?" (syntax-e #'symbolic-prefix))])
-       #'(begin (define id=<-? : (All (a) (case-> [Any (-> Type Boolean : #:+ a) -> (Option a) : #:+ CSS:ID]
-                                                  [Any (U (-> Type Boolean) (Listof Type)) -> (Option Type) : #:+ CSS:ID]))
+       #'(begin (define id=<-? : (All (a) (case-> [Any (-> Type Boolean : #:+ a) -> (Option a) : #:+ XML:ID]
+                                                  [Any (U (-> Type Boolean) (Listof Type)) -> (Option Type) : #:+ XML:ID]))
                   (lambda [token range?]
                     (and (id? token)
                          (let ([datum : Type (id-datum token)])
                            (cond [(procedure? range?) (and (range? datum) datum)]
                                  [else (and (member datum range? type=?) datum)])))))
 
-                (define <id> : (All (a) (case-> [(-> Type Boolean : #:+ a) -> (CSS:Filter a)]
-                                                [(U (-> Type Boolean) (Listof Type) Type) -> (CSS:Filter Type)]
-                                                [-> (CSS:Filter Type)]))
+                (define <id> : (All (a) (case-> [(-> Type Boolean : #:+ a) -> (XML:Filter a)]
+                                                [(U (-> Type Boolean) (Listof Type) Type) -> (XML:Filter Type)]
+                                                [-> (XML:Filter Type)]))
                   (case-lambda
-                    [() (λ [[t : CSS-Syntax-Any]] (and (id? t) (id-datum t)))]
+                    [() (λ [[t : XML-Syntax-Any]] (and (id? t) (id-datum t)))]
                     [(range?) (cond [(procedure? range?)
-                                     (λ [[t : CSS-Syntax-Any]]
+                                     (λ [[t : XML-Syntax-Any]]
                                        (and (id? t)
                                             (or (let ([d : Type (id-datum t)]) (and (range? d) d))
                                                 (make-exn:xml:range t))))]
                                     [(list? range?)
-                                     (λ [[t : CSS-Syntax-Any]]
+                                     (λ [[t : XML-Syntax-Any]]
                                        (and (id? t)
                                             (let ([d : Type (id-datum t)])
                                               (cond [(member d range? type=?) d]
                                                     [else (make-exn:xml:range t)]))))]
-                                    [else (λ [[t : CSS-Syntax-Any]]
+                                    [else (λ [[t : XML-Syntax-Any]]
                                             (and (id? t)
                                                  (let ([d : Type (id-datum t)])
                                                    (if (type=? d range?) d (make-exn:xml:range t)))))])]))
 
-                (define id=:=? : (-> Any Type (Option Type) : #:+ CSS:ID) #| for performance |#
+                (define id=:=? : (-> Any Type (Option Type) : #:+ XML:ID) #| for performance |#
                   (lambda [t v]
                     (and (id? t)
                          (let ([d : Type (id-datum t)])
                            (and (type=? d v) d)))))))]
-    [(_ numeric-prefix : Type id? id-datum #:+ CSS:ID #:= type=?)
+    [(_ numeric-prefix : Type id? id-datum #:+ XML:ID #:= type=?)
      (with-syntax ([<id> (format-id #'numeric-prefix "<~a>" (syntax-e #'numeric-prefix))]
                    [id=<-? (format-id #'numeric-prefix "~a=<-?" (syntax-e #'numeric-prefix))])
-       #'(begin (define id=<-? : (All (a) (case-> [Any (-> Type Boolean : #:+ a) -> (Option a) : #:+ CSS:ID]
-                                                  [Any (-> Type Type Boolean) Type -> (Option Type) : #:+ CSS:ID]
-                                                  [Any Type (-> Type Type Boolean) Type -> (Option Type) : #:+ CSS:ID]
-                                                  [Any (Listof Type) -> (Option Type) : #:+ CSS:ID]))
+       #'(begin (define id=<-? : (All (a) (case-> [Any (-> Type Boolean : #:+ a) -> (Option a) : #:+ XML:ID]
+                                                  [Any (-> Type Type Boolean) Type -> (Option Type) : #:+ XML:ID]
+                                                  [Any Type (-> Type Type Boolean) Type -> (Option Type) : #:+ XML:ID]
+                                                  [Any (Listof Type) -> (Option Type) : #:+ XML:ID]))
                   (case-lambda
                     [(token op n)   (and (id? token) (let ([d : Type (id-datum token)]) (and (op d n) d)))]
                     [(token l op r) (and (id? token) (let ([m : Type (id-datum token)]) (and (op l m) (op m r) m)))]
@@ -75,22 +75,22 @@
                                                              [else (for/or : (Option Type) ([v (in-list range?)])
                                                                      (and (type=? d v) d))])))]))
 
-                (define <id> : (All (a) (case-> [(-> Type Boolean : #:+ a) -> (CSS:Filter a)]
-                                                [(-> Type Type Boolean) Type -> (CSS:Filter Type)]
-                                                [Type (-> Type Type Boolean) Type -> (CSS:Filter Type)]
-                                                [(Listof Type) -> (CSS:Filter Type)]
-                                                [-> (CSS:Filter Type)]))
+                (define <id> : (All (a) (case-> [(-> Type Boolean : #:+ a) -> (XML:Filter a)]
+                                                [(-> Type Type Boolean) Type -> (XML:Filter Type)]
+                                                [Type (-> Type Type Boolean) Type -> (XML:Filter Type)]
+                                                [(Listof Type) -> (XML:Filter Type)]
+                                                [-> (XML:Filter Type)]))
                   (case-lambda
-                    [() (λ [[t : CSS-Syntax-Any]] (and (id? t) (id-datum t)))]
-                    [(op n) (λ [[t : CSS-Syntax-Any]]
+                    [() (λ [[t : XML-Syntax-Any]] (and (id? t) (id-datum t)))]
+                    [(op n) (λ [[t : XML-Syntax-Any]]
                               (and (id? t)
                                    (let ([d : Type (id-datum t)])
                                      (if (op d n) d (make-exn:xml:range t)))))]
-                    [(l op r) (λ [[t : CSS-Syntax-Any]]
+                    [(l op r) (λ [[t : XML-Syntax-Any]]
                                 (and (id? t)
                                      (let ([m : Type (id-datum t)])
                                        (if (and (op l m) (op m r)) m (make-exn:xml:range t)))))]
-                    [(range?) (λ [[t : CSS-Syntax-Any]]
+                    [(range?) (λ [[t : XML-Syntax-Any]]
                                 (and (id? t)
                                      (let ([d : Type (id-datum t)])
                                        (or (cond [(procedure? range?) (and (range? d) d)]
@@ -145,7 +145,7 @@
                     (for/list ([<id> (in-list (syntax->list #'(id ...)))])
                       (list (format-id <id> "~a?" (syntax-e <id>))
                             (format-id <id> "~a-copy" (syntax-e <id>))
-                            (if (eq? (syntax-e <id>) 'xml:url) #'CSS-URL-Modifier #'CSS-Token)))])
+                            (if (eq? (syntax-e <id>) 'xml:url) #'XML-URL-Modifier #'XML-Token)))])
        #'(begin (define-symbolic-tokens token #:+ Token [id #:+ ID #:as Type ... [components : (Listof Component)] [lazy? : Boolean]] ...)
 
                 (define id-copy : (-> ID (Listof Component) Boolean ID)
@@ -214,19 +214,19 @@
                 (struct exn:xml exn:fail:syntax ())
                 (struct subexn parent ()) ...
 
-                (define make-exn : (-> (U CSS-Syntax-Any (Listof CSS-Token)) CSS-Syntax-Error)
+                (define make-exn : (-> (U XML-Syntax-Any (Listof XML-Token)) XML-Syntax-Error)
                   (lambda [v]
                     (xml-make-syntax-error subexn v)))
                 ...
 
-                (define make+exn : (->* ((U CSS-Syntax-Any (Listof CSS-Token))) ((Option CSS:Ident) Log-Level) CSS-Syntax-Error)
+                (define make+exn : (->* ((U XML-Syntax-Any (Listof XML-Token))) ((Option XML:Ident) Log-Level) XML-Syntax-Error)
                   (lambda [v [property #false] [level 'warning]]
-                    (define errobj : CSS-Syntax-Error (xml-make-syntax-error subexn v))
+                    (define errobj : XML-Syntax-Error (xml-make-syntax-error subexn v))
                     (xml-log-syntax-error errobj property level)
                     errobj))
                 ...
 
-                (define throw-exn : (->* ((U CSS-Syntax-Any (Listof CSS-Token))) ((Option CSS:Ident) Log-Level) Nothing)
+                (define throw-exn : (->* ((U XML-Syntax-Any (Listof XML-Token))) ((Option XML:Ident) Log-Level) Nothing)
                   (lambda [v [property #false] [level 'warning]]
                     (raise (make+exn v property level))))
                 ...))]))
@@ -234,81 +234,81 @@
 ;;; https://drafts.xmlwg.org/xml-syntax/#tokenization
 ;; https://drafts.xmlwg.org/xml-syntax/#component-value
 ;; https://drafts.xmlwg.org/xml-syntax/#current-input-token
-(define-type CSS-URL-Modifier (U CSS:Ident CSS-Lazy-Token))
-(define-type CSS-Zero (U CSS:Zero CSS:Flzero))
-(define-type CSS-One (U CSS:One CSS:Flone))
+(define-type XML-URL-Modifier (U XML:Ident XML-Lazy-Token))
+(define-type XML-Zero (U XML:Zero XML:Flzero))
+(define-type XML-One (U XML:One XML:Flone))
 
-(define-tokens xml-token #:+ CSS-Token
+(define-tokens xml-token #:+ XML-Token
   ([source : (U String Symbol)]
    [line : Positive-Integer]
    [column : Natural]
    [start : Positive-Integer] ; `start` and `end` (instead of `position` and `span`) are required by color lexer.
    [end : Positive-Integer])
-  [[xml-numeric         #:+ CSS-Numeric         #:-> xml-token   ([representation : String])]
-   [xml:dimension       #:+ CSS:Dimension       #:-> xml-numeric ([datum : Flonum] [unit : Symbol])]]
+  [[xml-numeric         #:+ XML-Numeric         #:-> xml-token   ([representation : String])]
+   [xml:dimension       #:+ XML:Dimension       #:-> xml-numeric ([datum : Flonum] [unit : Symbol])]]
 
-  [[xml:one             #:+ CSS:One             #:-> xml:integer]
-   [xml:zero            #:+ CSS:Zero            #:-> xml:integer]
+  [[xml:one             #:+ XML:One             #:-> xml:integer]
+   [xml:zero            #:+ XML:Zero            #:-> xml:integer]
      
-   [xml:flone           #:+ CSS:Flone           #:-> xml:flonum]
-   [xml:flzero          #:+ CSS:Flzero          #:-> xml:flonum]
+   [xml:flone           #:+ XML:Flone           #:-> xml:flonum]
+   [xml:flzero          #:+ XML:Flzero          #:-> xml:flonum]
 
-   [xml:open            #:+ CSS:Open            #:-> xml:delim]
-   [xml:colon           #:+ CSS:Colon           #:-> xml:delim]
-   [xml:semicolon       #:+ CSS:Semicolon       #:-> xml:delim]
-   [xml:comma           #:+ CSS:Comma           #:-> xml:delim]
-   [xml:slash           #:+ CSS:Slash           #:-> xml:delim]
-   [xml:vbar            #:+ CSS:VBar            #:-> xml:delim]
-   [xml:cdo             #:+ CSS:CDO             #:-> xml:cd]
-   [xml:cdc             #:+ CSS:CDC             #:-> xml:cd]
+   [xml:open            #:+ XML:Open            #:-> xml:delim]
+   [xml:colon           #:+ XML:Colon           #:-> xml:delim]
+   [xml:semicolon       #:+ XML:Semicolon       #:-> xml:delim]
+   [xml:comma           #:+ XML:Comma           #:-> xml:delim]
+   [xml:slash           #:+ XML:Slash           #:-> xml:delim]
+   [xml:vbar            #:+ XML:VBar            #:-> xml:delim]
+   [xml:cdo             #:+ XML:CDO             #:-> xml:cd]
+   [xml:cdc             #:+ XML:CDC             #:-> xml:cd]
 
-   [xml:bad:eof         #:+ CSS:Bad:EOF         #:-> xml:bad]
-   [xml:bad:eol         #:+ CSS:Bad:EOL         #:-> xml:bad]
-   [xml:bad:char        #:+ CSS:Bad:Char        #:-> xml:bad]
-   [xml:bad:blank       #:+ CSS:Bad:Blank       #:-> xml:bad]
-   [xml:bad:range       #:+ CSS:Bad:Range       #:-> xml:bad]
-   [xml:bad:stdin       #:+ CSS:Bad:StdIn       #:-> xml:bad]]
+   [xml:bad:eof         #:+ XML:Bad:EOF         #:-> xml:bad]
+   [xml:bad:eol         #:+ XML:Bad:EOL         #:-> xml:bad]
+   [xml:bad:char        #:+ XML:Bad:Char        #:-> xml:bad]
+   [xml:bad:blank       #:+ XML:Bad:Blank       #:-> xml:bad]
+   [xml:bad:range       #:+ XML:Bad:Range       #:-> xml:bad]
+   [xml:bad:stdin       #:+ XML:Bad:StdIn       #:-> xml:bad]]
 
   ; WARNING: Carefully defining types to avoid happening to mess up '(list? datum)'. 
-  (define-symbolic-tokens xml-bad-token #:+ CSS-Bad-Token
-    [xml:bad            #:+ CSS:Bad             #:as String]
-    [xml:close          #:+ CSS:Close           #:as Char])
+  (define-symbolic-tokens xml-bad-token #:+ XML-Bad-Token
+    [xml:bad            #:+ XML:Bad             #:as String]
+    [xml:close          #:+ XML:Close           #:as Char])
     
   ; TODO: Typed Racket is buggy if there are more than 11 conditions
-  (define-symbolic-tokens xml-symbolic-token #:+ CSS-Symbolic-Token
-    [xml:delim          #:+ CSS:Delim           #:as Char]
-    [xml:ident          #:+ CSS:Ident           #:as Symbol            #:ci]
-    [xml:@keyword       #:+ CSS:@Keyword        #:as Keyword           #:ci]
-    [xml:hash           #:+ CSS:Hash            #:as Keyword]
-    [xml:string         #:+ CSS:String          #:as String]
-    [xml:match          #:+ CSS:Match           #:as Char]
-    [xml:cd             #:+ CSS:CD              #:as Symbol]
-    [xml:urange         #:+ CSS:URange          #:as (Pairof Index Index)]
-    [xml:whitespace     #:+ CSS:WhiteSpace      #:as (U String Char)])
+  (define-symbolic-tokens xml-symbolic-token #:+ XML-Symbolic-Token
+    [xml:delim          #:+ XML:Delim           #:as Char]
+    [xml:ident          #:+ XML:Ident           #:as Symbol            #:ci]
+    [xml:@keyword       #:+ XML:@Keyword        #:as Keyword           #:ci]
+    [xml:hash           #:+ XML:Hash            #:as Keyword]
+    [xml:string         #:+ XML:String          #:as String]
+    [xml:match          #:+ XML:Match           #:as Char]
+    [xml:cd             #:+ XML:CD              #:as Symbol]
+    [xml:urange         #:+ XML:URange          #:as (Pairof Index Index)]
+    [xml:whitespace     #:+ XML:WhiteSpace      #:as (U String Char)])
 
-  (define-lazy-tokens xml-lazy-token #:+ CSS-Lazy-Token
-    [xml:url            #:+ CSS:URL             #:with modifiers       #:as String]   ; "" means 'about:invalid
-    [xml:block          #:+ CSS:Block           #:with components      #:as Char]
-    [xml:function       #:+ CSS:Function        #:with arguments       #:as Symbol #:ci]
-    [xml:λracket        #:+ CSS:λRacket         #:with arguments       #:as Symbol]
-    [xml:var            #:+ CSS:Var             #:with fallback        #:as Symbol])
+  (define-lazy-tokens xml-lazy-token #:+ XML-Lazy-Token
+    [xml:url            #:+ XML:URL             #:with modifiers       #:as String]   ; "" means 'about:invalid
+    [xml:block          #:+ XML:Block           #:with components      #:as Char]
+    [xml:function       #:+ XML:Function        #:with arguments       #:as Symbol #:ci]
+    [xml:λracket        #:+ XML:λRacket         #:with arguments       #:as Symbol]
+    [xml:var            #:+ XML:Var             #:with fallback        #:as Symbol])
 
-  (define-numeric-tokens xml-number #:+ CSS-Number #:nan +nan.0
-    [xml:integer        #:+ CSS:Integer         #:as Integer]
-    [xml:flonum         #:+ CSS:Flonum          #:as Flonum])
+  (define-numeric-tokens xml-number #:+ XML-Number #:nan +nan.0
+    [xml:integer        #:+ XML:Integer         #:as Integer]
+    [xml:flonum         #:+ XML:Flonum          #:as Flonum])
 
-  (define-numeric-tokens xml-fraction #:+ CSS-Fraction #:nan +nan.f
-    [xml:percentage     #:+ CSS:Percentage      #:as Single-Flonum])
+  (define-numeric-tokens xml-fraction #:+ XML-Fraction #:nan +nan.f
+    [xml:percentage     #:+ XML:Percentage      #:as Single-Flonum])
 
-  (define-symbolic-tokens xml-unreadable-token #:+ CSS-Unreadable-Token
+  (define-symbolic-tokens xml-unreadable-token #:+ XML-Unreadable-Token
     ; These tokens are remade by the parser instead of being produced by the tokenizer.
-    [xml:ratio          #:+ CSS:Ratio           #:as Positive-Exact-Rational]
-    [xml:racket         #:+ CSS:Racket          #:as Symbol]
-    [xml:#:keyword      #:+ CSS:#:Keyword       #:as Keyword]))
+    [xml:ratio          #:+ XML:Ratio           #:as Positive-Exact-Rational]
+    [xml:racket         #:+ XML:Racket          #:as Symbol]
+    [xml:#:keyword      #:+ XML:#:Keyword       #:as Keyword]))
 
 ;; https://drafts.xmlwg.org/xml-syntax/#style-rules
 ;; https://drafts.xmlwg.org/selectors/#invalid
-(define-syntax-error exn:xml #:as CSS-Syntax-Error
+(define-syntax-error exn:xml #:as XML-Syntax-Error
   [exn:xml:resource           #:-> exn:xml]
   [exn:xml:deprecated         #:-> exn:xml]
   [exn:xml:cyclic             #:-> exn:xml]
@@ -335,10 +335,10 @@
   [exn:xml:missing-comma      #:-> exn:xml:missing-delimiter]
   [exn:xml:missing-slash      #:-> exn:xml:missing-delimiter])
 
-(define xml-zero? : (-> Any Boolean : #:+ CSS-Zero) (λ [v] (or (xml:zero? v) (xml:flzero? v))))
-(define xml-one? : (-> Any Boolean : #:+ CSS-One) (λ [v] (or (xml:one? v) (xml:flone? v))))
+(define xml-zero? : (-> Any Boolean : #:+ XML-Zero) (λ [v] (or (xml:zero? v) (xml:flzero? v))))
+(define xml-one? : (-> Any Boolean : #:+ XML-One) (λ [v] (or (xml:one? v) (xml:flone? v))))
 
-(define xml-nan? : (-> CSS-Numeric Boolean)
+(define xml-nan? : (-> XML-Numeric Boolean)
   (lambda [token]
     (or (and (xml:flonum? token) (eqv? (xml:flonum-datum token) +nan.0))
         (and (xml:dimension? token) (eqv? (xml:dimension-datum token) +nan.0))
@@ -353,13 +353,13 @@
     [(_ here-token make-xml:token datum ...)
      #'(xml-remake-token [here-token here-token] make-xml:token datum ...)]))
 
-(define xml-token->syntax : (-> CSS-Token Syntax)
+(define xml-token->syntax : (-> XML-Token Syntax)
   (lambda [instance]
     (datum->syntax #false (xml-token->datum instance)
                    (vector (xml-token-source instance) (xml-token-line instance) (xml-token-column instance)
                            (xml-token-start instance) (fx- (xml-token-end instance) (xml-token-start instance))))))
 
-(define xml-token-datum->string : (-> CSS-Token String)
+(define xml-token-datum->string : (-> XML-Token String)
   (lambda [instance]
     (cond [(xml:ident? instance) (symbol->string (xml:ident-datum instance))]
           [(xml-numeric? instance) (xml-numeric-representation instance)]
@@ -370,20 +370,20 @@
           [(xml:string? instance) (~s (xml:string-datum instance))]
           [else (~a (xml-token->datum instance))])))
   
-(define xml-token->string : (->* (CSS-Token) ((Option Any) (Option Any)) String)
+(define xml-token->string : (->* (XML-Token) ((Option Any) (Option Any)) String)
   (lambda [instance [alt-object #false] [alt-datum #false]]
     (format "~a:~a:~a: ~a: ~a" (xml-token-source instance) (xml-token-line instance) (add1 (xml-token-column instance))
             (or (object-name alt-object) (object-name instance))
             (or alt-datum (xml-token-datum->string instance)))))
 
-(define xml-make-syntax-error : (-> (-> String Continuation-Mark-Set (Listof Syntax) CSS-Syntax-Error)
-                                    (U CSS-Syntax-Any (Listof CSS-Token))
-                                    CSS-Syntax-Error)
+(define xml-make-syntax-error : (-> (-> String Continuation-Mark-Set (Listof Syntax) XML-Syntax-Error)
+                                    (U XML-Syntax-Any (Listof XML-Token))
+                                    XML-Syntax-Error)
   (let ([empty-stacks (continuation-marks #false)])
     (lambda [exn:xml any]
-      (define (token->exn [main : CSS-Token]) : CSS-Syntax-Error
+      (define (token->exn [main : XML-Token]) : XML-Syntax-Error
         (exn:xml (xml-token->string main exn:xml) empty-stacks (list (xml-token->syntax main))))
-      (define (tokens->exn [head : CSS-Token] [others : (Listof CSS-Token)]) : CSS-Syntax-Error
+      (define (tokens->exn [head : XML-Token] [others : (Listof XML-Token)]) : XML-Syntax-Error
         (exn:xml (format "~a ~a" (xml-token->string head exn:xml) (map xml-token-datum->string others))
                  empty-stacks (map xml-token->syntax (cons head others))))
       (match any
@@ -395,7 +395,7 @@
         [(? xml:block? main) (tokens->exn main (xml:block-components main))]
         [(? xml-token?) (token->exn any)]))))
   
-(define xml-log-syntax-error : (->* (CSS-Syntax-Error) ((Option CSS:Ident) Log-Level) Void)
+(define xml-log-syntax-error : (->* (XML-Syntax-Error) ((Option XML:Ident) Log-Level) Void)
   (lambda [errobj [property #false] [level 'warning]]
     (define logger : Logger (current-logger))
     (define topic : Symbol 'exn:xml:syntax)
@@ -408,9 +408,9 @@
 
 ;;; https://drafts.xmlwg.org/xml-syntax/#parsing
 ;; Parser Combinators and Syntax Sugars of dealing with declarations for client applications
-(define-type CSS-Syntax-Any (U CSS-Token EOF))
-(define-type (CSS-Option xml) (U xml CSS-Syntax-Error False))
-(define-type (CSS:Filter xml) (-> CSS-Syntax-Any (CSS-Option xml)))
+(define-type XML-Syntax-Any (U XML-Token EOF))
+(define-type (XML-Option xml) (U xml XML-Syntax-Error False))
+(define-type (XML:Filter xml) (-> XML-Syntax-Any (XML-Option xml)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-car/cdr : (All (a b) (case-> [(Pairof a b) -> (Values a b)]
@@ -428,7 +428,7 @@
                   (cond [(null? 2nd) (values 1st null eof null)]
                         [else (values 1st 2nd (car 2nd) (cdr 2nd))]))])))
 
-(define xml-car : (-> (Listof CSS-Token) (Values CSS-Syntax-Any (Listof CSS-Token)))
+(define xml-car : (-> (Listof XML-Token) (Values XML-Syntax-Any (Listof XML-Token)))
   (lambda [dirty]
     (let skip-whitespace ([rest dirty])
       (cond [(null? rest) (values eof null)]
@@ -450,7 +450,7 @@
   (lambda [dirty]
     (not (xml-pair? dirty))))
 
-(define xml-cons : (All (xml) (-> (U CSS-Syntax-Error xml) (Listof xml) (Listof xml)))
+(define xml-cons : (All (xml) (-> (U XML-Syntax-Error xml) (Listof xml) (Listof xml)))
   (lambda [item items]
     (cond [(exn? item) items]
           [else (cons item items)])))

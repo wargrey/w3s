@@ -5,9 +5,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (provide (all-defined-out))
-(provide (all-from-out "dom.rkt"))
-
-(require "dom.rkt")
 
 (module reader racket/base
   (provide (except-out (all-from-out racket/base) read read-syntax))
@@ -16,4 +13,4 @@
   (provide (rename-out [xml-read-syntax read-syntax]))
   (provide (rename-out [xml-info get-info]))
   
-  (require xml/village/hashlang/reader))
+  (require xdom/village/hashlang/reader))

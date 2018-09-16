@@ -21,7 +21,7 @@
    [line : Positive-Integer]
    [column : Natural]
    [position : Positive-Integer])
-  #:type-name CSS-Srcloc)
+  #:type-name XML-Srcloc)
 
 (define-syntax (xml-make-token stx)
   (syntax-case stx []
@@ -37,7 +37,7 @@
          (xml-log-read-error (xml-token->string bad))
          bad)]))
 
-(define xml-consume-token : (-> Input-Port (U String Symbol) (U EOF CSS-Token))
+(define xml-consume-token : (-> Input-Port (U String Symbol) (U EOF XML-Token))
   ;;; https://drafts.xmlwg.org/xml-syntax/#error-handling
   ;;; https://drafts.xmlwg.org/xml-syntax/#consume-a-token
   (lambda [/dev/xmlin source]
@@ -65,7 +65,7 @@
                   [(#\null) (xml-make-token srcloc xml:delim #\uFFFD)]
                   [else (xml-make-token srcloc xml:delim ch)])])))
 
-(define xml-consume-cd-token : (-> CSS-Srcloc Char CSS-Token)
+(define xml-consume-cd-token : (-> XML-Srcloc Char XML-Token)
   ;;; https://drafts.xmlwg.org/xml-syntax/#CDO-token-diagram
   ;;; https://drafts.xmlwg.org/xml-syntax/#CDC-token-diagram
   (lambda [srcloc open/close]
@@ -80,7 +80,7 @@
                 [(xml-identifier-prefix? #\- (string-ref cdc 0) (string-ref cdc 1)) (xml-consume-ident-token srcloc #\-)]
                 [else (xml-consume-numeric-token srcloc #\-)])))))
 
-(define xml-consume-comment-token : (-> CSS-Srcloc (U CSS:WhiteSpace CSS:Delim CSS:Bad))
+(define xml-consume-comment-token : (-> XML-Srcloc (U XML:WhiteSpace XML:Delim XML:Bad))
   (lambda [srcloc]
     (define xml : Input-Port (xml-srcloc-in srcloc))
     (define ch1 : (U EOF Char) (peek-char xml 0))
@@ -88,13 +88,13 @@
           [(regexp-match #px".*?((\\*/)|$)" xml) => (λ [**/] (xml-make-token srcloc xml:whitespace (format "/~a" (car **/))))]
           [else (xml-make-bad-token srcloc xml:bad:eof struct:xml:whitespace "/*")])))
 
-(define xml-consume-whitespace-token : (-> CSS-Srcloc CSS:WhiteSpace)
+(define xml-consume-whitespace-token : (-> XML-Srcloc XML:WhiteSpace)
   (lambda [srcloc]
     (define xml : Input-Port (xml-srcloc-in srcloc))
     (xml-consume-whitespace xml)
     (xml-make-token srcloc xml:whitespace #\space)))
   
-(define xml-consume-ident-token : (-> CSS-Srcloc Char (U CSS:Ident CSS:Function CSS:URL CSS:URange CSS:Bad))
+(define xml-consume-ident-token : (-> XML-Srcloc Char (U XML:Ident XML:Function XML:URL XML:URange XML:Bad))
   ;;; https://drafts.xmlwg.org/xml-syntax/#consume-an-ident-like-token
   ;;; https://drafts.xmlwg.org/xml-syntax/#urange-syntax
   ;;; https://drafts.xmlwg.org/xml-values/#urls
@@ -117,7 +117,7 @@
                          (xml-make-token srcloc xml:function (string->unreadable-symbol name) fnorm null #false)]
                         [else (read-char xml) (xml-consume-url-token srcloc)]))])))
 
-(define xml-consume-escaped-ident-token : (-> CSS-Srcloc (U CSS:Ident CSS:Delim CSS:Function CSS:URL CSS:URange CSS:Bad))
+(define xml-consume-escaped-ident-token : (-> XML-Srcloc (U XML:Ident XML:Delim XML:Function XML:URL XML:URange XML:Bad))
   ;;; https://drafts.xmlwg.org/xml-syntax/#consume-token (when #\\ is found at the beginning of a non-whitespace token)
   (lambda [srcloc]
     (define xml : Input-Port (xml-srcloc-in srcloc))
@@ -125,11 +125,11 @@
         (xml-consume-ident-token srcloc (xml-consume-escaped-char xml))
         (xml-remake-token (xml-make-bad-token srcloc xml:bad:char struct:xml:delim #\\) xml:delim #\\))))
 
-(define xml-consume-string-token : (-> CSS-Srcloc Char (U CSS:String CSS:Bad))
+(define xml-consume-string-token : (-> XML-Srcloc Char (U XML:String XML:Bad))
   ;;; https://drafts.xmlwg.org/xml-syntax/#consume-a-string-token
   (lambda [srcloc quotation]
     (define xml : Input-Port (xml-srcloc-in srcloc))
-    (let consume-string-token : (U CSS:String CSS:Bad) ([chars : (Listof Char) null])
+    (let consume-string-token : (U XML:String XML:Bad) ([chars : (Listof Char) null])
       (define ch : (U EOF Char) (read-char xml))
       (cond [(or (eof-object? ch) (char=? ch quotation))
              (when (eof-object? ch) (xml-make-bad-token srcloc xml:bad:eof struct:xml:string (list->string (reverse chars))))
@@ -141,7 +141,7 @@
                           [(and (char=? next #\newline) (read-char xml)) (consume-string-token (cons ch chars))]
                           [else (consume-string-token (cons (xml-consume-escaped-char xml) chars))]))]))))
 
-(define xml-consume-numeric-token : (-> CSS-Srcloc Char (U CSS-Numeric CSS:Delim CSS:Bad))
+(define xml-consume-numeric-token : (-> XML-Srcloc Char (U XML-Numeric XML:Delim XML:Bad))
   ;;; https://drafts.xmlwg.org/xml-syntax/#consume-a-number
   ;;; https://drafts.xmlwg.org/xml-values/#numeric-types
   (lambda [srcloc sign/digit]
@@ -164,7 +164,7 @@
                           [(= n 1) (xml-make-token srcloc xml:one representation n)]
                           [else (xml-make-token srcloc xml:integer representation n)])))])))
 
-(define xml-consume-url-token : (-> CSS-Srcloc (U CSS:URL CSS:Bad))
+(define xml-consume-url-token : (-> XML-Srcloc (U XML:URL XML:Bad))
   ;;; https://drafts.xmlwg.org/xml-syntax/#consume-a-url-token
   ;;; https://drafts.xmlwg.org/xml-values/#urls
   ;;; https://drafts.xmlwg.org/xml-values/#url-empty
@@ -188,7 +188,7 @@
              (xml-consume-bad-url-remnants xml (xml-make-bad-token srcloc xml:bad:char struct:xml:url ch))]
             [else (consume-url-token (cons ch srahc))]))))
 
-(define xml-consume-unicode-range-token : (-> CSS-Srcloc (U CSS:URange CSS:Bad))
+(define xml-consume-unicode-range-token : (-> XML-Srcloc (U XML:URange XML:Bad))
   ;;; https://drafts.xmlwg.org/xml-syntax/#urange-syntax
   (lambda [srcloc]
     (define xml : Input-Port (xml-srcloc-in srcloc))
@@ -213,7 +213,7 @@
           [(> end #x10FFFF) (xml-make-bad-token srcloc xml:bad:range struct:xml:urange end)]
           [else (xml-make-bad-token srcloc xml:bad:range struct:xml:urange (cons start end))])))
 
-(define xml-consume-hash-token : (-> CSS-Srcloc (U CSS:Hash CSS:Delim))
+(define xml-consume-hash-token : (-> XML-Srcloc (U XML:Hash XML:Delim))
   ;;; https://drafts.xmlwg.org/xml-syntax/#hash-token-diagram
   (lambda [srcloc]
     (define xml : Input-Port (xml-srcloc-in srcloc))
@@ -225,7 +225,7 @@
           (xml-make-token srcloc xml:hash (string->keyword name) #|(string->keyword (string-downcase name))|#))
         (xml-make-token srcloc xml:delim #\#))))
 
-(define xml-consume-@keyword-token : (-> CSS-Srcloc (U CSS:@Keyword CSS:Delim))
+(define xml-consume-@keyword-token : (-> XML-Srcloc (U XML:@Keyword XML:Delim))
   ;;; https://drafts.xmlwg.org/xml-syntax/#at-keyword-token-diagram
   (lambda [srcloc]
     (define xml : Input-Port (xml-srcloc-in srcloc))
@@ -237,7 +237,7 @@
           (xml-make-token srcloc xml:@keyword (string->keyword name) (string->keyword (string-downcase name))))
         (xml-make-token srcloc xml:delim #\@))))
 
-(define xml-consume-match-token : (-> CSS-Srcloc Char (U CSS:Match CSS:Delim))
+(define xml-consume-match-token : (-> XML-Srcloc Char (U XML:Match XML:Delim))
   ;;; https://drafts.xmlwg.org/xml-syntax/#include-match-token-diagram
   ;;; https://drafts.xmlwg.org/xml-syntax/#column-token-diagram
   (lambda [srcloc prefix]
@@ -303,7 +303,7 @@
                         [(<= #xD800 hex #xDFFF) #\uFFFD] ; surrogate
                         [else (integer->char hex)]))])))
 
-(define xml-consume-bad-url-remnants : (-> Input-Port CSS:Bad CSS:Bad)
+(define xml-consume-bad-url-remnants : (-> Input-Port XML:Bad XML:Bad)
   ;;; https://drafts.xmlwg.org/xml-syntax/#consume-the-remnants-of-a-bad-url
   (lambda [xml bad-url-token]
     (define ch : (U EOF Char) (read-char xml))

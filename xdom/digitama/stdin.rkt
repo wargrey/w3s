@@ -13,12 +13,12 @@
 
 (unsafe-require/typed
  racket/base ; the output is gauranteed by the caller, hence the explicitly requiring.
- [[read-byte-or-special xml-read-syntax] (->* (Input-Port) (U CSS-Token EOF))]
- [[peek-byte-or-special xml-peek-syntax] (->* (Input-Port Natural) (U CSS-Token EOF))])
+ [[read-byte-or-special xml-read-syntax] (->* (Input-Port) (U XML-Token EOF))]
+ [[peek-byte-or-special xml-peek-syntax] (->* (Input-Port Natural) (U XML-Token EOF))])
 
-(define-type CSS-StdIn (U Input-Port Path-String Bytes (Listof CSS-Token)))
+(define-type XML-StdIn (U Input-Port Path-String Bytes (Listof XML-Token)))
 
-(define xml-open-input-port : (-> CSS-StdIn Input-Port)
+(define xml-open-input-port : (-> XML-StdIn Input-Port)
   ;;; https://drafts.xmlwg.org/xml-syntax/#parser-entry-points
   (lambda [/dev/stdin]
     (if (list? /dev/stdin)
@@ -40,7 +40,7 @@
                                  [(bytes? /dev/stdin) (open-input-bytes /dev/stdin '/dev/xmlin/bytes)]
                                  [else (open-input-string (~s /dev/stdin) '/dev/xmlin/error)])]
                [/dev/xmlin : Input-Port (xml-fallback-encode-input-port /dev/rawin)]
-               [peek-pool : (Listof CSS-Syntax-Any) null])
+               [peek-pool : (Listof XML-Syntax-Any) null])
           (define portname : (U String Symbol)
             (let ([src (object-name /dev/xmlin)])
               (cond [(path? src) (path->string (simple-form-path src))]
@@ -63,15 +63,15 @@
                            (λ [] (port-next-location /dev/xmlin))
                            (λ [] (void (list xml-fallback-encode-input-port '|has already set it|))))))))
     
-(define xml-read-syntax/skip-whitespace : (-> Input-Port CSS-Syntax-Any)
+(define xml-read-syntax/skip-whitespace : (-> Input-Port XML-Syntax-Any)
   (lambda [xml]
     (define token (xml-read-syntax xml))
     (cond [(not (xml:whitespace? token)) token]
           [else (xml-read-syntax/skip-whitespace xml)])))
 
-(define xml-peek-syntax/skip-whitespace : (-> Input-Port CSS-Syntax-Any)
+(define xml-peek-syntax/skip-whitespace : (-> Input-Port XML-Syntax-Any)
   (lambda [xml]
-    (let peek/skip-whitespace : CSS-Syntax-Any ([skip : Nonnegative-Fixnum 0])
+    (let peek/skip-whitespace : XML-Syntax-Any ([skip : Nonnegative-Fixnum 0])
       (define token (xml-peek-syntax xml skip))
       (cond [(not (xml:whitespace? token)) token]
             [else (peek/skip-whitespace (fx+ skip 1))]))))
