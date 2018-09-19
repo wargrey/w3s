@@ -1,13 +1,11 @@
 #lang typed/racket/base
 
-(provide (all-from-out racket/flonum racket/fixnum racket/bool racket/list racket/format))
+(provide (all-from-out racket/bool racket/list racket/format))
 (provide (except-out (all-defined-out) xml-make-syntax-error
                      define-tokens define-token define-token-interface
-                     define-symbolic-tokens define-numeric-tokens
-                     define-syntax-error))
+                     define-symbolic-tokens define-syntax-error))
 
 (require racket/fixnum)
-(require racket/flonum)
 (require racket/list)
 (require racket/bool)
 (require racket/format)
@@ -137,45 +135,10 @@
                 (define-token id : ID token (Type rest ...) #:with id? id-datum) ...
                 (define-type Token-Datum (U Type ...))
                 (define (token->datum [t : Token]) : (Option Token-Datum) (cond [(id? t) (id-datum t)] ... [else #false]))))]))
-
-(define-syntax (define-lazy-tokens stx)
-  (syntax-parse stx
-    [(_ token #:+ Token [id #:+ ID #:with components #:as Type ...] ...)
-     (with-syntax ([([id? id-copy Component] ...)
-                    (for/list ([<id> (in-list (syntax->list #'(id ...)))])
-                      (list (format-id <id> "~a?" (syntax-e <id>))
-                            (format-id <id> "~a-copy" (syntax-e <id>))
-                            (if (eq? (syntax-e <id>) 'xml:url) #'XML-URL-Modifier #'XML-Token)))])
-       #'(begin (define-symbolic-tokens token #:+ Token [id #:+ ID #:as Type ... [components : (Listof Component)] [lazy? : Boolean]] ...)
-
-                (define id-copy : (-> ID (Listof Component) Boolean ID)
-                  (lambda [instance subcoms ?]
-                    (struct-copy id instance [components (if (xml-pair? subcoms) subcoms null)] [lazy? ?])))
-                ...))]))
-
-(define-syntax (define-numeric-tokens stx)
-  (syntax-case stx []
-    [(_ token #:+ Token #:nan nan [id #:+ ID #:as Type] ...)
-     (with-syntax ([token->datum (format-id #'token "~a->datum" (syntax-e #'token))]
-                   [([id? id=? id-datum type=?] ...)
-                    (for/list ([<id> (in-list (syntax->list #'(id ...)))]
-                               [<type> (in-list (syntax->list #'(Type ...)))])
-                      (list (format-id <id> "~a?" (syntax-e <id>))
-                            (format-id <id> "~a=?" (syntax-e <id>))
-                            (format-id <id> "~a-datum" (syntax-e <id>))
-                            (let ([type-name (symbol->string (syntax-e <type>))])
-                              (cond [(string-contains? type-name "Single-Flonum") #'=]
-                                    [(string-contains? type-name "Flonum") #'fl=]
-                                    [(string-contains? type-name "Fixnum") #'fx=]
-                                    [else #'=]))))])
-       #'(begin (struct token xml-numeric () #:transparent) (define-type Token token)
-                (define-token id : ID token #:as Type #:=? type=? #:with id? id-datum) ...
-                (define (token->datum [t : Token]) : (U Type ...) (cond [(id? t) (id-datum t)] ... [else nan]))))]))
   
 (define-syntax (define-tokens stx)
   (syntax-case stx []
     [(_ token #:+ Token header
-        [[ptoken #:+ PToken #:-> pparent pfields] ...]
         [[ctoken #:+ CToken #:-> cparent] ...]
         (define-typical-tokens group #:+ Group rest ...) ...)
      (with-syntax ([token->datum (format-id #'token "~a->datum" (syntax-e #'token))]
@@ -191,15 +154,13 @@
                                #:when (eq? (syntax-e <define>) 'define-symbolic-tokens))
                       (format-id <Type> "~a-Datum" (syntax-e <Type>)))])
        #'(begin (struct token header #:transparent) (define-type Token token)
-                (struct ptoken pparent pfields #:transparent) ...  (define-type PToken ptoken) ...
                 (define-typical-tokens group #:+ Group rest ...) ...
                 (struct ctoken cparent () #:transparent) ... (define-type CToken ctoken) ...
 
                 (define-type Token-Datum (U False Number (Pairof Number Symbol) Symbolic-Datum ...))
                 (define token->datum : (-> Token Token-Datum)
                   (lambda [instance]
-                    (cond [(xml:dimension? instance) (cons (xml:dimension-datum instance) (xml:dimension-unit instance))]
-                          [(type? instance) (type->datum instance)] ...
+                    (cond [(type? instance) (type->datum instance)] ...
                           [else (assert (object-name instance) symbol?)])))))]))
 
 (define-syntax (define-syntax-error stx)
@@ -234,31 +195,13 @@
 ;;; https://drafts.xmlwg.org/xml-syntax/#tokenization
 ;; https://drafts.xmlwg.org/xml-syntax/#component-value
 ;; https://drafts.xmlwg.org/xml-syntax/#current-input-token
-(define-type XML-URL-Modifier (U XML:Ident XML-Lazy-Token))
-(define-type XML-Zero (U XML:Zero XML:Flzero))
-(define-type XML-One (U XML:One XML:Flone))
-
 (define-tokens xml-token #:+ XML-Token
   ([source : (U String Symbol)]
    [line : Positive-Integer]
    [column : Natural]
    [start : Positive-Integer] ; `start` and `end` (instead of `position` and `span`) are required by color lexer.
    [end : Positive-Integer])
-  [[xml-numeric         #:+ XML-Numeric         #:-> xml-token   ([representation : String])]
-   [xml:dimension       #:+ XML:Dimension       #:-> xml-numeric ([datum : Flonum] [unit : Symbol])]]
-
-  [[xml:one             #:+ XML:One             #:-> xml:integer]
-   [xml:zero            #:+ XML:Zero            #:-> xml:integer]
-     
-   [xml:flone           #:+ XML:Flone           #:-> xml:flonum]
-   [xml:flzero          #:+ XML:Flzero          #:-> xml:flonum]
-
-   [xml:open            #:+ XML:Open            #:-> xml:delim]
-   [xml:colon           #:+ XML:Colon           #:-> xml:delim]
-   [xml:semicolon       #:+ XML:Semicolon       #:-> xml:delim]
-   [xml:comma           #:+ XML:Comma           #:-> xml:delim]
-   [xml:slash           #:+ XML:Slash           #:-> xml:delim]
-   [xml:vbar            #:+ XML:VBar            #:-> xml:delim]
+  [[xml:open            #:+ XML:Open            #:-> xml:delim]
    [xml:cdo             #:+ XML:CDO             #:-> xml:cd]
    [xml:cdc             #:+ XML:CDC             #:-> xml:cd]
 
@@ -278,33 +221,9 @@
   (define-symbolic-tokens xml-symbolic-token #:+ XML-Symbolic-Token
     [xml:delim          #:+ XML:Delim           #:as Char]
     [xml:ident          #:+ XML:Ident           #:as Symbol            #:ci]
-    [xml:@keyword       #:+ XML:@Keyword        #:as Keyword           #:ci]
-    [xml:hash           #:+ XML:Hash            #:as Keyword]
     [xml:string         #:+ XML:String          #:as String]
-    [xml:match          #:+ XML:Match           #:as Char]
     [xml:cd             #:+ XML:CD              #:as Symbol]
-    [xml:urange         #:+ XML:URange          #:as (Pairof Index Index)]
-    [xml:whitespace     #:+ XML:WhiteSpace      #:as (U String Char)])
-
-  (define-lazy-tokens xml-lazy-token #:+ XML-Lazy-Token
-    [xml:url            #:+ XML:URL             #:with modifiers       #:as String]   ; "" means 'about:invalid
-    [xml:block          #:+ XML:Block           #:with components      #:as Char]
-    [xml:function       #:+ XML:Function        #:with arguments       #:as Symbol #:ci]
-    [xml:λracket        #:+ XML:λRacket         #:with arguments       #:as Symbol]
-    [xml:var            #:+ XML:Var             #:with fallback        #:as Symbol])
-
-  (define-numeric-tokens xml-number #:+ XML-Number #:nan +nan.0
-    [xml:integer        #:+ XML:Integer         #:as Integer]
-    [xml:flonum         #:+ XML:Flonum          #:as Flonum])
-
-  (define-numeric-tokens xml-fraction #:+ XML-Fraction #:nan +nan.f
-    [xml:percentage     #:+ XML:Percentage      #:as Single-Flonum])
-
-  (define-symbolic-tokens xml-unreadable-token #:+ XML-Unreadable-Token
-    ; These tokens are remade by the parser instead of being produced by the tokenizer.
-    [xml:ratio          #:+ XML:Ratio           #:as Positive-Exact-Rational]
-    [xml:racket         #:+ XML:Racket          #:as Symbol]
-    [xml:#:keyword      #:+ XML:#:Keyword       #:as Keyword]))
+    [xml:whitespace     #:+ XML:WhiteSpace      #:as (U String Char)]))
 
 ;; https://drafts.xmlwg.org/xml-syntax/#style-rules
 ;; https://drafts.xmlwg.org/selectors/#invalid
@@ -335,15 +254,6 @@
   [exn:xml:missing-comma      #:-> exn:xml:missing-delimiter]
   [exn:xml:missing-slash      #:-> exn:xml:missing-delimiter])
 
-(define xml-zero? : (-> Any Boolean : #:+ XML-Zero) (λ [v] (or (xml:zero? v) (xml:flzero? v))))
-(define xml-one? : (-> Any Boolean : #:+ XML-One) (λ [v] (or (xml:one? v) (xml:flone? v))))
-
-(define xml-nan? : (-> XML-Numeric Boolean)
-  (lambda [token]
-    (or (and (xml:flonum? token) (eqv? (xml:flonum-datum token) +nan.0))
-        (and (xml:dimension? token) (eqv? (xml:dimension-datum token) +nan.0))
-        (and (xml:percentage? token) (eqv? (xml:percentage-datum token) +nan.f)))))
-
 (define-syntax (xml-remake-token stx)
   (syntax-case stx []
     [(_ [start-token end-token] make-xml:token datum extra ...)
@@ -362,10 +272,6 @@
 (define xml-token-datum->string : (-> XML-Token String)
   (lambda [instance]
     (cond [(xml:ident? instance) (symbol->string (xml:ident-datum instance))]
-          [(xml-numeric? instance) (xml-numeric-representation instance)]
-          [(xml:@keyword? instance) (keyword->string (xml:@keyword-datum instance))]
-          [(xml:hash? instance) (~a "#" (keyword->string (xml:hash-datum instance)))]
-          [(xml:match? instance) (~a (xml:match-datum instance) '=)]
           [(xml:delim=:=? instance #\tab) "||"]
           [(xml:string? instance) (~s (xml:string-datum instance))]
           [else (~a (xml-token->datum instance))])))
@@ -390,9 +296,6 @@
         [(or (? eof-object?) (list)) (exn:xml (~a eof) empty-stacks null)]
         [(list token) (token->exn token)]
         [(list main others ...) (tokens->exn main (filter-not xml:whitespace? others))]
-        [(? xml:function? main) (tokens->exn main (xml:function-arguments main))]
-        [(? xml:λracket? main) (tokens->exn main (xml:λracket-arguments main))]
-        [(? xml:block? main) (tokens->exn main (xml:block-components main))]
         [(? xml-token?) (token->exn any)]))))
   
 (define xml-log-syntax-error : (->* (XML-Syntax-Error) ((Option XML:Ident) Log-Level) Void)

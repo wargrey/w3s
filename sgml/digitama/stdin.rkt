@@ -5,6 +5,7 @@
 
 (require racket/path)
 (require racket/port)
+(require racket/fixnum)
 
 (require "digicore.rkt")
 (require "tokenizer.rkt")

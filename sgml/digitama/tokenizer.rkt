@@ -7,6 +7,8 @@
 (require "digicore.rkt")
 (require "misc.rkt")
 
+(require racket/fixnum)
+
 (require typed/racket/unsafe)
 
 (require (for-syntax racket/base))
@@ -46,21 +48,12 @@
     (define ch (read-char /dev/xmlin))
     (cond [(eof-object? ch) eof]
           [(char-whitespace? ch) (xml-consume-whitespace-token srcloc)]
-          [(char-numeric? ch) (xml-consume-numeric-token srcloc ch)]
           [(xml-char-name-prefix? ch) (xml-consume-ident-token srcloc ch)]
           [else (case ch
                   [(#\( #\[ #\{) (xml-make-token srcloc xml:open ch)]
                   [(#\) #\] #\}) (xml-make-token srcloc xml:close ch)]
                   [(#\' #\") (xml-consume-string-token srcloc ch)]
-                  [(#\+ #\.) (xml-consume-numeric-token srcloc ch)]
-                  [(#\^ #\$ #\| #\~ #\*) (xml-consume-match-token srcloc ch)]
-                  [(#\#) (xml-consume-hash-token srcloc)]
-                  [(#\@) (xml-consume-@keyword-token srcloc)]
-                  [(#\/) (xml-consume-comment-token srcloc)]
                   [(#\< #\-) (xml-consume-cd-token srcloc ch)]
-                  [(#\;) (xml-make-token srcloc xml:semicolon #\;)]
-                  [(#\,) (xml-make-token srcloc xml:comma #\,)]
-                  [(#\:) (xml-make-token srcloc xml:colon #\:)]
                   [(#\\) (xml-consume-escaped-ident-token srcloc)]
                   [(#\null) (xml-make-token srcloc xml:delim #\uFFFD)]
                   [else (xml-make-token srcloc xml:delim ch)])])))
@@ -77,16 +70,7 @@
         (let ([cdc : (U EOF String) (peek-string 2 0 xml)])
           (cond [(eof-object? cdc) (xml-make-token srcloc xml:delim #\-)]
                 [(string=? cdc "->") (read-string 2 xml) (xml-make-token srcloc xml:cdc '-->)]
-                [(xml-identifier-prefix? #\- (string-ref cdc 0) (string-ref cdc 1)) (xml-consume-ident-token srcloc #\-)]
-                [else (xml-consume-numeric-token srcloc #\-)])))))
-
-(define xml-consume-comment-token : (-> XML-Srcloc (U XML:WhiteSpace XML:Delim XML:Bad))
-  (lambda [srcloc]
-    (define xml : Input-Port (xml-srcloc-in srcloc))
-    (define ch1 : (U EOF Char) (peek-char xml 0))
-    (cond [(or (eof-object? ch1) (not (char=? ch1 #\*))) (xml-make-token srcloc xml:slash #\/)]
-          [(regexp-match #px".*?((\\*/)|$)" xml) => (λ [**/] (xml-make-token srcloc xml:whitespace (format "/~a" (car **/))))]
-          [else (xml-make-bad-token srcloc xml:bad:eof struct:xml:whitespace "/*")])))
+                [else (xml-consume-ident-token srcloc #\-)])))))
 
 (define xml-consume-whitespace-token : (-> XML-Srcloc XML:WhiteSpace)
   (lambda [srcloc]
@@ -94,7 +78,7 @@
     (xml-consume-whitespace xml)
     (xml-make-token srcloc xml:whitespace #\space)))
   
-(define xml-consume-ident-token : (-> XML-Srcloc Char (U XML:Ident XML:Function XML:URL XML:URange XML:Bad))
+(define xml-consume-ident-token : (-> XML-Srcloc Char (U XML:Ident XML:Bad))
   ;;; https://drafts.xmlwg.org/xml-syntax/#consume-an-ident-like-token
   ;;; https://drafts.xmlwg.org/xml-syntax/#urange-syntax
   ;;; https://drafts.xmlwg.org/xml-values/#urls
@@ -103,21 +87,11 @@
     (define xml : Input-Port (xml-srcloc-in srcloc))
     (define ch1 : (U EOF Char) (peek-char xml 0))
     (define ch2 : (U EOF Char) (peek-char xml 1))
-    (cond [(and (char-ci=? id0 #\u) (char? ch1) (char=? ch1 #\+)
-                (or (char-hexdigit? ch2) (and (char? ch2) (char=? ch2 #\?))))
-           (read-char xml) (xml-consume-unicode-range-token srcloc)]
-          [else (let ([name (xml-consume-name xml id0)])
-                  (define ch : (U EOF Char) (peek-char xml))
-                  (cond [(or (eof-object? ch) (not (char=? ch #\()))
-                         (if (and (char=? id0 #\-) (eqv? id0 ch1))
-                             (let ([--id (string->unreadable-symbol name)]) (xml-make-token srcloc xml:ident --id --id))
-                             (xml-make-token srcloc xml:ident (string->symbol name) (string->symbol (string-downcase name))))]
-                        [(and (or (not (string-ci=? name "url")) (regexp-match-peek #px"^.\\s*[\"']" xml)) (read-char xml))
-                         (define fnorm : Symbol (string->symbol (string-downcase name)))
-                         (xml-make-token srcloc xml:function (string->unreadable-symbol name) fnorm null #false)]
-                        [else (read-char xml) (xml-consume-url-token srcloc)]))])))
+    (define name : String (xml-consume-name xml id0))
+    (xml-make-token srcloc xml:ident (string->symbol name)
+                    (string->symbol (string-downcase name)))))
 
-(define xml-consume-escaped-ident-token : (-> XML-Srcloc (U XML:Ident XML:Delim XML:Function XML:URL XML:URange XML:Bad))
+(define xml-consume-escaped-ident-token : (-> XML-Srcloc (U XML:Ident XML:Delim XML:Bad))
   ;;; https://drafts.xmlwg.org/xml-syntax/#consume-token (when #\\ is found at the beginning of a non-whitespace token)
   (lambda [srcloc]
     (define xml : Input-Port (xml-srcloc-in srcloc))
@@ -141,112 +115,16 @@
                           [(and (char=? next #\newline) (read-char xml)) (consume-string-token (cons ch chars))]
                           [else (consume-string-token (cons (xml-consume-escaped-char xml) chars))]))]))))
 
-(define xml-consume-numeric-token : (-> XML-Srcloc Char (U XML-Numeric XML:Delim XML:Bad))
-  ;;; https://drafts.xmlwg.org/xml-syntax/#consume-a-number
-  ;;; https://drafts.xmlwg.org/xml-values/#numeric-types
-  (lambda [srcloc sign/digit]
-    (define xml : Input-Port (xml-srcloc-in srcloc))
-    (define ch1 : (U EOF Char) (peek-char xml 0))
-    (define ch2 : (U EOF Char) (peek-char xml 1))
-    (cond [(not (xml-number-prefix? sign/digit ch1 ch2)) (xml-make-token srcloc xml:delim sign/digit)]
-          [else (let-values ([(n representation) (xml-consume-number xml sign/digit)])
-                  (let ([ch1 : (U EOF Char) (peek-char xml 0)]
-                        [ch2 : (U EOF Char) (peek-char xml 1)]
-                        [ch3 : (U EOF Char) (peek-char xml 2)])
-                    (cond [(and (char? ch1) (char=? ch1 #\%) (read-char xml))
-                           (define n% : Single-Flonum (real->single-flonum (* n 0.01)))
-                           (xml-make-token srcloc xml:percentage (string-append representation "%") n%)]
-                          [(flonum? n)
-                           (cond [(zero? n) (xml-make-token srcloc xml:flzero representation n)]
-                                 [(fl= n 1.0) (xml-make-token srcloc xml:flone representation n)]
-                                 [else (xml-make-token srcloc xml:flonum representation n)])]
-                          [(zero? n) (xml-make-token srcloc xml:zero representation n)]
-                          [(= n 1) (xml-make-token srcloc xml:one representation n)]
-                          [else (xml-make-token srcloc xml:integer representation n)])))])))
-
-(define xml-consume-url-token : (-> XML-Srcloc (U XML:URL XML:Bad))
-  ;;; https://drafts.xmlwg.org/xml-syntax/#consume-a-url-token
-  ;;; https://drafts.xmlwg.org/xml-values/#urls
-  ;;; https://drafts.xmlwg.org/xml-values/#url-empty
-  ;;; https://drafts.xmlwg.org/xml-values/#about-invalid
-  (lambda [srcloc]
-    (define xml : Input-Port (xml-srcloc-in srcloc))
-    (xml-consume-whitespace xml)
-    (let consume-url-token ([srahc : (Listof Char) null])
-      (define ch : (U EOF Char) (read-char xml))
-      (cond [(or (eof-object? ch) (char=? ch #\)))
-             (define uri : String (list->string (reverse srahc)))
-             (when (eof-object? ch) (xml-make-bad-token srcloc xml:bad:eof struct:xml:url uri))
-             (xml-make-token srcloc xml:url uri null #false)]
-            [(and (char-whitespace? ch) (xml-consume-whitespace xml))
-             (define end : (U EOF Char) (read-char xml))
-             (define uri : String (list->string (reverse srahc)))
-             (cond [(or (eof-object? end) (char=? end #\))) (xml-make-token srcloc xml:url uri null #false)]
-                   [else (xml-consume-bad-url-remnants xml (xml-make-bad-token srcloc xml:bad:blank struct:xml:url uri))])]
-            [(xml-valid-escape? ch (peek-char xml)) (consume-url-token (cons (xml-consume-escaped-char xml) srahc))]
-            [(or (memq ch '(#\\ #\" #\' #\()) (xml-char-non-printable? ch))
-             (xml-consume-bad-url-remnants xml (xml-make-bad-token srcloc xml:bad:char struct:xml:url ch))]
-            [else (consume-url-token (cons ch srahc))]))))
-
-(define xml-consume-unicode-range-token : (-> XML-Srcloc (U XML:URange XML:Bad))
-  ;;; https://drafts.xmlwg.org/xml-syntax/#urange-syntax
-  (lambda [srcloc]
-    (define xml : Input-Port (xml-srcloc-in srcloc))
-    (define-values (n rest) (xml-consume-hexadecimal (xml-srcloc-in srcloc) 6))
-    (define-values (start0 end0)
-      (let consume-? : (Values Fixnum Fixnum) ([s : Fixnum n] [e : Fixnum n] [? : Fixnum rest])
-        (cond [(zero? ?) (values s e)]
-              [else (let ([ch : (U EOF Char) (peek-char xml)])
-                      (cond [(or (eof-object? ch) (not (char=? ch #\?))) (values s e)]
-                            [else (read-char xml) (consume-? (fxlshift s 4)
-                                                             (fxior (fxlshift e 4) #xF)
-                                                             (fx- ? 1))]))])))
-    (define-values (start end)
-      (cond [(not (fx= start0 end0)) (values start0 end0)]
-            [else (let ([ch1 (peek-char xml 0)]
-                        [ch2 (peek-char xml 1)])
-                    (cond [(and (char? ch1) (char=? ch1 #\-) (char-hexdigit? ch2) (read-char xml))
-                           (define-values (end _) (xml-consume-hexadecimal (xml-srcloc-in srcloc) 6))
-                           (values start0 end)]
-                          [else (values start0 start0)]))]))
-    (cond [(and (index? start) (index? end) (<= start end #x10FFFF)) (xml-make-token srcloc xml:urange (cons start end))]
-          [(> end #x10FFFF) (xml-make-bad-token srcloc xml:bad:range struct:xml:urange end)]
-          [else (xml-make-bad-token srcloc xml:bad:range struct:xml:urange (cons start end))])))
-
-(define xml-consume-hash-token : (-> XML-Srcloc (U XML:Hash XML:Delim))
-  ;;; https://drafts.xmlwg.org/xml-syntax/#hash-token-diagram
-  (lambda [srcloc]
-    (define xml : Input-Port (xml-srcloc-in srcloc))
-    (define ch1 : (U EOF Char) (peek-char xml 0))
-    (define ch2 : (U EOF Char) (peek-char xml 1))
-    (define ch3 : (U EOF Char) (peek-char xml 2))
-    (if (or (xml-char-name? ch1) (xml-valid-escape? ch1 ch2))
-        (let ([name (xml-consume-name (xml-srcloc-in srcloc) #false)])
-          (xml-make-token srcloc xml:hash (string->keyword name) #|(string->keyword (string-downcase name))|#))
-        (xml-make-token srcloc xml:delim #\#))))
-
-(define xml-consume-@keyword-token : (-> XML-Srcloc (U XML:@Keyword XML:Delim))
-  ;;; https://drafts.xmlwg.org/xml-syntax/#at-keyword-token-diagram
-  (lambda [srcloc]
-    (define xml : Input-Port (xml-srcloc-in srcloc))
-    (define ch1 : (U EOF Char) (peek-char xml 0))
-    (define ch2 : (U EOF Char) (peek-char xml 1))
-    (define ch3 : (U EOF Char) (peek-char xml 2))
-    (if (xml-identifier-prefix? ch1 ch2 ch3)
-        (let ([name (xml-consume-name (xml-srcloc-in srcloc) #\@)])
-          (xml-make-token srcloc xml:@keyword (string->keyword name) (string->keyword (string-downcase name))))
-        (xml-make-token srcloc xml:delim #\@))))
-
-(define xml-consume-match-token : (-> XML-Srcloc Char (U XML:Match XML:Delim))
-  ;;; https://drafts.xmlwg.org/xml-syntax/#include-match-token-diagram
-  ;;; https://drafts.xmlwg.org/xml-syntax/#column-token-diagram
-  (lambda [srcloc prefix]
-    (define xml : Input-Port (xml-srcloc-in srcloc))
-    (define ch : (U EOF Char) (peek-char xml))
-    (cond [(and (eq? prefix #\|) (eq? ch #\|) (read-char xml)) (xml-make-token srcloc xml:delim #\tab)]
-          [(and (eq? ch #\=) (read-char xml)) (xml-make-token srcloc xml:match prefix)]
-          [(eq? prefix #\|) (xml-make-token srcloc xml:vbar prefix)]
-          [else (xml-make-token srcloc xml:delim prefix)])))
+(define xml-consume-hexadecimal : (->* (Input-Port Byte) (Fixnum #:\s?$? Boolean) (Values Fixnum Byte))
+  (lambda [/dev/cssin --count [result 0] #:\s?$? [eat-last-whitespace? #false]]
+    (define hex : (U EOF Char) (peek-char /dev/cssin))
+    (cond [(or (eof-object? hex) (not (char-hexdigit? hex)) (zero? --count))
+           (when (and eat-last-whitespace? (char? hex) (char-whitespace? hex)) (read-char /dev/cssin))
+           (values result --count)]
+          [else (read-char /dev/cssin) (xml-consume-hexadecimal #:\s?$? eat-last-whitespace?
+                                                                /dev/cssin (fx- --count 1)
+                                                                (fx+ (fxlshift result 4)
+                                                                     (char->hexadecimal hex)))])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-consume-whitespace : (-> Input-Port Void)
@@ -262,35 +140,6 @@
       (cond [(and (xml-char-name? ch) (read-char xml)) (consume-name (cons ch srahc))]
             [(and (xml-valid-escape? ch (peek-char xml 1)) (read-char xml)) (consume-name (cons (xml-consume-escaped-char xml) srahc))]
             [else (list->string (reverse srahc))]))))
-
-(define xml-consume-number : (-> Input-Port Char (Values (U Flonum Integer) String))
-  ;;; https://drafts.xmlwg.org/xml-syntax/#consume-a-number
-  (lambda [xml sign/digit]
-    (let consume-number ([chars (list sign/digit)])
-      (define ch : (U EOF Char) (peek-char xml))
-      (cond [(and (char? ch)
-                  (or (char-numeric? ch)
-                      (char=? ch #\+) (char=? ch #\-)
-                      (xml-decimal-point? ch (peek-char xml 1))
-                      (xml-scientific-notation? ch (peek-char xml 1) (peek-char xml 2)))
-                  (read-char xml))
-             (consume-number (cons ch chars))]
-            [else (let* ([representation : String (list->string (reverse chars))]
-                         [?number : (Option Complex) (string->number representation)])
-                    (cond [(exact-integer? ?number) (values ?number representation)]
-                          [(flonum? ?number) (values ?number representation)]
-                          [else (values +nan.0 representation)]))]))))
-
-(define xml-consume-hexadecimal : (->* (Input-Port Byte) (Fixnum #:\s?$? Boolean) (Values Fixnum Byte))
-  (lambda [xml --count [result 0] #:\s?$? [eat-last-whitespace? #false]]
-    (define hex : (U EOF Char) (peek-char xml))
-    (cond [(or (eof-object? hex) (not (char-hexdigit? hex)) (zero? --count))
-           (when (and eat-last-whitespace? (char? hex) (char-whitespace? hex)) (read-char xml))
-           (values result --count)]
-          [else (read-char xml) (xml-consume-hexadecimal #:\s?$? eat-last-whitespace?
-                                                         xml (fx- --count 1)
-                                                         (fx+ (fxlshift result 4)
-                                                              (char->hexadecimal hex)))])))
 
 (define xml-consume-escaped-char : (-> Input-Port Char)
   ;;; https://drafts.xmlwg.org/xml-syntax/#consume-an-escaped-code-point
