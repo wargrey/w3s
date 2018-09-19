@@ -2,8 +2,8 @@
 
 (provide xml-lexer)
 
-(require xdom/digitama/digicore)
-(require xdom/digitama/tokenizer)
+(require sgml/digitama/digicore)
+(require sgml/digitama/tokenizer)
 
 (define xml-lexer ;: (-> Input-Port (Values (U String EOF) Symbol (Option Symbol) (Option Integer) (Option Integer)))
   (lambda [/dev/drin offset mode]

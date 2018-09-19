@@ -9,8 +9,8 @@
 
 (require syntax/strip-context)
 
-(require xdom/digitama/digicore)
-(require xdom/digitama/document)
+(require sgml/digitama/digicore)
+(require sgml/digitama/document)
 
 (define xml-read
   (lambda [[/dev/xmlin (current-input-port)]]
@@ -35,9 +35,9 @@
     (strip-context
      #`(module #,lang.xml typed/racket/base
          (provide #,lang.xml)
-         (provide (all-from-out xml/syntax))
+         (provide (all-from-out sgml/xml))
 
-         (require xml/syntax)
+         (require sgml/xml)
 
          ;;; NOTE
          ; Prefab structures can be handled at compile time, however reading the stylesheet is reasonably efficient,
@@ -47,7 +47,7 @@
                  [mem0 (current-memory-use)])
              (port-count-lines! /dev/rawin)
              (set-port-next-location! /dev/rawin #,line #,column #,position)
-             (define-values (&lang.xml cpu real gc) (time-apply read-xml-stylesheet (list /dev/rawin)))
+             (define-values (&lang.xml cpu real gc) (time-apply read-xml-document (list /dev/rawin)))
              (values (car &lang.xml) (/ (- (current-memory-use) mem0) 1024.0 1024.0) cpu real gc)))
 
          (module+ main
@@ -69,6 +69,6 @@
     (case key
       [(drracket:default-filters) '(["XML Sources" "*.xml"])]
       [(drracket:default-extension) "xml"]
-      [(drracket:indentation) (dynamic-require 'xml/village/hashlang/indentation 'xml-indentation)]
-      [(color-lexer) (dynamic-require 'xml/village/hashlang/highlight 'xml-lexer)]
+      [(drracket:indentation) (dynamic-require 'sgml/village/xmllang/indentation 'xml-indentation)]
+      [(color-lexer) (dynamic-require 'sgml/village/xmllang/highlight 'xml-lexer)]
       [else default])))
