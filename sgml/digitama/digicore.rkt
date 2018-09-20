@@ -163,6 +163,15 @@
                     (cond [(type? instance) (type->datum instance)] ...
                           [else (assert (object-name instance) symbol?)])))))]))
 
+(define-syntax (define-xml stx)
+  (syntax-case stx []
+    [(_ [token ...])
+     (with-syntax ([([line col] ...)
+                    (for/list ([<token> (in-list (syntax->list #'(token ...)))])
+                      (list (datum->syntax <token> (syntax-line <token>))
+                            (datum->syntax <token> (syntax-column <token>))))])
+     #'(begin (list 'token line col) ...))]))
+
 (define-syntax (define-syntax-error stx)
   (syntax-case stx []
     [(_ exn:xml #:as Syntax-Error [subexn #:-> parent] ...)
@@ -180,14 +189,14 @@
                     (xml-make-syntax-error subexn v)))
                 ...
 
-                (define make+exn : (->* ((U XML-Syntax-Any (Listof XML-Token))) ((Option XML:Ident) Log-Level) XML-Syntax-Error)
+                (define make+exn : (->* ((U XML-Syntax-Any (Listof XML-Token))) ((Option XML:Name) Log-Level) XML-Syntax-Error)
                   (lambda [v [property #false] [level 'warning]]
                     (define errobj : XML-Syntax-Error (xml-make-syntax-error subexn v))
                     (xml-log-syntax-error errobj property level)
                     errobj))
                 ...
 
-                (define throw-exn : (->* ((U XML-Syntax-Any (Listof XML-Token))) ((Option XML:Ident) Log-Level) Nothing)
+                (define throw-exn : (->* ((U XML-Syntax-Any (Listof XML-Token))) ((Option XML:Name) Log-Level) Nothing)
                   (lambda [v [property #false] [level 'warning]]
                     (raise (make+exn v property level))))
                 ...))]))
@@ -202,6 +211,8 @@
    [start : Positive-Integer] ; `start` and `end` (instead of `position` and `span`) are required by color lexer.
    [end : Positive-Integer])
   [[xml:open            #:+ XML:Open            #:-> xml:delim]
+   [xml:question        #:+ XML:Question        #:-> xml:delim]
+   [xml:exclamation     #:+ XML:Exclamation     #:-> xml:delim]
    [xml:cdo             #:+ XML:CDO             #:-> xml:cd]
    [xml:cdc             #:+ XML:CDC             #:-> xml:cd]
 
@@ -220,7 +231,7 @@
   ; TODO: Typed Racket is buggy if there are more than 11 conditions
   (define-symbolic-tokens xml-symbolic-token #:+ XML-Symbolic-Token
     [xml:delim          #:+ XML:Delim           #:as Char]
-    [xml:ident          #:+ XML:Ident           #:as Symbol            #:ci]
+    [xml:name           #:+ XML:Name            #:as Symbol]
     [xml:string         #:+ XML:String          #:as String]
     [xml:cd             #:+ XML:CD              #:as Symbol]
     [xml:whitespace     #:+ XML:WhiteSpace      #:as (U String Char)]))
@@ -271,7 +282,7 @@
 
 (define xml-token-datum->string : (-> XML-Token String)
   (lambda [instance]
-    (cond [(xml:ident? instance) (symbol->string (xml:ident-datum instance))]
+    (cond [(xml:name? instance) (symbol->string (xml:name-datum instance))]
           [(xml:delim=:=? instance #\tab) "||"]
           [(xml:string? instance) (~s (xml:string-datum instance))]
           [else (~a (xml-token->datum instance))])))
@@ -298,16 +309,16 @@
         [(list main others ...) (tokens->exn main (filter-not xml:whitespace? others))]
         [(? xml-token?) (token->exn any)]))))
   
-(define xml-log-syntax-error : (->* (XML-Syntax-Error) ((Option XML:Ident) Log-Level) Void)
+(define xml-log-syntax-error : (->* (XML-Syntax-Error) ((Option XML:Name) Log-Level) Void)
   (lambda [errobj [property #false] [level 'warning]]
     (define logger : Logger (current-logger))
     (define topic : Symbol 'exn:xml:syntax)
     (define msg : String (exn-message errobj))
     (define <eof>? : Boolean (regexp-match? #px"#<eof>" msg))
     (cond [(not property) (log-message logger level topic msg errobj)]
-          [(not <eof>?) (log-message logger level topic (format "~a @‹~a›" msg (xml:ident-datum property)) errobj)]
+          [(not <eof>?) (log-message logger level topic (format "~a @‹~a›" msg (xml:name-datum property)) errobj)]
           [else (let ([eof-msg (xml-token->string property errobj eof)])
-                  (log-message logger level topic (format "~a @‹~a›" eof-msg (xml:ident-datum property)) errobj))])))
+                  (log-message logger level topic (format "~a @‹~a›" eof-msg (xml:name-datum property)) errobj))])))
 
 ;;; https://drafts.xmlwg.org/xml-syntax/#parsing
 ;; Parser Combinators and Syntax Sugars of dealing with declarations for client applications

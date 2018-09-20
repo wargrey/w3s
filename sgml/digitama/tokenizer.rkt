@@ -48,7 +48,7 @@
     (define ch (read-char /dev/xmlin))
     (cond [(eof-object? ch) eof]
           [(char-whitespace? ch) (xml-consume-whitespace-token srcloc)]
-          [(xml-char-name-prefix? ch) (xml-consume-ident-token srcloc ch)]
+          [(xml-name-start-char? ch) (xml-consume-nmtoken srcloc ch)]
           [else (case ch
                   [(#\( #\[ #\{) (xml-make-token srcloc xml:open ch)]
                   [(#\) #\] #\}) (xml-make-token srcloc xml:close ch)]
@@ -56,6 +56,8 @@
                   [(#\< #\-) (xml-consume-cd-token srcloc ch)]
                   [(#\\) (xml-consume-escaped-ident-token srcloc)]
                   [(#\null) (xml-make-token srcloc xml:delim #\uFFFD)]
+                  [(#\?) (xml-make-token srcloc xml:question #\?)]
+                  [(#\!) (xml-make-token srcloc xml:exclamation #\!)]
                   [else (xml-make-token srcloc xml:delim ch)])])))
 
 (define xml-consume-cd-token : (-> XML-Srcloc Char XML-Token)
@@ -70,7 +72,7 @@
         (let ([cdc : (U EOF String) (peek-string 2 0 xml)])
           (cond [(eof-object? cdc) (xml-make-token srcloc xml:delim #\-)]
                 [(string=? cdc "->") (read-string 2 xml) (xml-make-token srcloc xml:cdc '-->)]
-                [else (xml-consume-ident-token srcloc #\-)])))))
+                [else (xml-consume-nmtoken srcloc #\-)])))))
 
 (define xml-consume-whitespace-token : (-> XML-Srcloc XML:WhiteSpace)
   (lambda [srcloc]
@@ -78,25 +80,20 @@
     (xml-consume-whitespace xml)
     (xml-make-token srcloc xml:whitespace #\space)))
   
-(define xml-consume-ident-token : (-> XML-Srcloc Char (U XML:Ident XML:Bad))
-  ;;; https://drafts.xmlwg.org/xml-syntax/#consume-an-ident-like-token
-  ;;; https://drafts.xmlwg.org/xml-syntax/#urange-syntax
-  ;;; https://drafts.xmlwg.org/xml-values/#urls
-  ;;; https://drafts.xmlwg.org/xml-variables/#defining-variables
+(define xml-consume-nmtoken : (-> XML-Srcloc Char (U XML:Name XML:Bad))
+  ;;; https://www.w3.org/TR/xml11/#sec-common-syn
+  ;;; https://www.w3.org/TR/xml11/#NT-Names
   (lambda [srcloc id0]
     (define xml : Input-Port (xml-srcloc-in srcloc))
-    (define ch1 : (U EOF Char) (peek-char xml 0))
-    (define ch2 : (U EOF Char) (peek-char xml 1))
     (define name : String (xml-consume-name xml id0))
-    (xml-make-token srcloc xml:ident (string->symbol name)
-                    (string->symbol (string-downcase name)))))
+    (xml-make-token srcloc xml:name (string->symbol name))))
 
-(define xml-consume-escaped-ident-token : (-> XML-Srcloc (U XML:Ident XML:Delim XML:Bad))
+(define xml-consume-escaped-ident-token : (-> XML-Srcloc (U XML:Name XML:Delim XML:Bad))
   ;;; https://drafts.xmlwg.org/xml-syntax/#consume-token (when #\\ is found at the beginning of a non-whitespace token)
   (lambda [srcloc]
     (define xml : Input-Port (xml-srcloc-in srcloc))
     (if (xml-valid-escape? #\\ (peek-char xml 1))
-        (xml-consume-ident-token srcloc (xml-consume-escaped-char xml))
+        (xml-consume-nmtoken srcloc (xml-consume-escaped-char xml))
         (xml-remake-token (xml-make-bad-token srcloc xml:bad:char struct:xml:delim #\\) xml:delim #\\))))
 
 (define xml-consume-string-token : (-> XML-Srcloc Char (U XML:String XML:Bad))
@@ -132,13 +129,12 @@
     (regexp-match #px"\\s*" xml)
     (void)))
   
-(define xml-consume-name : (-> Input-Port (Option Char) String)
+(define xml-consume-name : (-> Input-Port Char String)
   ;;; https://drafts.xmlwg.org/xml-syntax/#consume-a-name
-  (lambda [xml ?head]
-    (let consume-name ([srahc : (Listof Char) (if ?head (list ?head) null)])
+  (lambda [xml head]
+    (let consume-name ([srahc : (Listof Char) (list head)])
       (define ch : (U EOF Char) (peek-char xml))
-      (cond [(and (xml-char-name? ch) (read-char xml)) (consume-name (cons ch srahc))]
-            [(and (xml-valid-escape? ch (peek-char xml 1)) (read-char xml)) (consume-name (cons (xml-consume-escaped-char xml) srahc))]
+      (cond [(and (char? ch) (xml-name-char? ch) (read-char xml)) (consume-name (cons ch srahc))]
             [else (list->string (reverse srahc))]))))
 
 (define xml-consume-escaped-char : (-> Input-Port Char)
@@ -181,20 +177,33 @@
              (char<=? #\u000E ch #\u001F)
              (char=? ch #\rubout)))))
 
-(define xml-char-name-prefix? : (-> (U EOF Char) Boolean : #:+ Char)
+(define xml-name-start-char? : (-> Char Boolean)
   (lambda [ch]
-    (and (char? ch)
-         (or (char-lower-case? ch)
-             (char-upper-case? ch)
-             (char=? #\_  ch)
-             (char>=? ch #\u0080)))))
+    (or (char-alphabetic? ch)
+        (eq? ch #\:)
+        (eq? ch #\_)
+        (char<=? #\u00C0 ch #\u00D6)
+        (char<=? #\u00D8 ch #\u00F6)
+        (char<=? #\u00F8 ch #\u02FF)
+        (char<=? #\u0370 ch #\u037D)
+        (char<=? #\u037F ch #\u1FFF)
+        (char<=? #\u200C ch #\u200D)
+        (char<=? #\u2070 ch #\u218F)
+        (char<=? #\u2C00 ch #\u2FEF)
+        (char<=? #\u3001 ch #\uD7FF)
+        (char<=? #\uF900 ch #\uFDCF)
+        (char<=? #\uFDF0 ch #\uFFFD)
+        (char<=? #\U10000 ch #\UEFFFF))))
 
-(define xml-char-name? : (-> (U EOF Char) Boolean : #:+ Char)
+(define xml-name-char? : (-> Char Boolean)
   (lambda [ch]
-    (and (char? ch)
-         (or (xml-char-name-prefix? ch)
-             (char-numeric? ch)
-             (char=? #\- ch)))))
+    (or (xml-name-start-char? ch)
+        (char-numeric? ch)
+        (eq? ch #\-)
+        (eq? ch #\.)
+        (eq? ch #xB7)
+        (char<=? #\u0300 ch #\u036F)
+        (char<=? #\u203F ch #\u2040))))
   
 (define xml-valid-escape? : (-> (U EOF Char) (U EOF Char) Boolean : #:+ Char)
   ;;; https://drafts.xmlwg.org/xml-syntax/#escaping
@@ -204,16 +213,6 @@
          (char=? ch1 #\\)
          (or (eof-object? ch2)
              (not (char=? ch2 #\newline))))))
-
-(define xml-identifier-prefix? : (-> (U EOF Char) (U EOF Char) (U EOF Char) Boolean : #:+ Char)
-  ;;; https://drafts.xmlwg.org/xml-syntax/#would-start-an-identifier
-  (lambda [ch1 ch2 ch3]
-    (or (xml-char-name-prefix? ch1)
-        (xml-valid-escape? ch1 ch2)
-        (and (char? ch1) (char=? ch1 #\-)
-             (or (xml-char-name-prefix? ch2)
-                 (and (char? ch2) (char=? ch2 #\-))
-                 (xml-valid-escape? ch2 ch3))))))
 
 (define xml-number-prefix? : (-> (U EOF Char) (U EOF Char) (U EOF Char) Boolean : #:+ Char)
   ;;; https://drafts.xmlwg.org/xml-syntax/#starts-with-a-number

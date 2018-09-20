@@ -77,6 +77,8 @@
             [else (peek/skip-whitespace (fx+ skip 1))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define px:xml-declaration #px"^<[?][Xx][Mm][Ll][^?]+encoding\\s*=\\s*\"(.*?)\"[^?]*[?]>")
+
 (define xml-fallback-charset : (-> Bytes String)
   (lambda [from]
     (define CHARSET : String (string-upcase (bytes->string/utf-8 from)))
@@ -92,7 +94,7 @@
       ;; skip racket `#lang` line and blanks.
       (read-line /dev/rawin)
       (regexp-match #px"^\\s*" /dev/rawin))
-    (define magic : (Option (Pairof Bytes (Listof (Option Bytes)))) (regexp-match-peek #px"^@charset \"(.*?)\";" /dev/rawin))
+    (define magic : (Option (Pairof Bytes (Listof (Option Bytes)))) (regexp-match-peek px:xml-declaration /dev/rawin))
     (define charset : (Option Bytes) (and magic (let ([name (cdr magic)]) (and (pair? name) (car name)))))
     (define CHARSET : (Option String) (and charset (xml-fallback-charset charset)))
     (cond [(or (false? CHARSET) (string-ci=? CHARSET "UTF-8")) /dev/rawin]

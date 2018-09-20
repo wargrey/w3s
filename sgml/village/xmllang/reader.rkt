@@ -16,7 +16,7 @@
   (lambda [[/dev/xmlin (current-input-port)]]
     (regexp-match #px"^\\s*" /dev/xmlin) ; skip blanks between `#lang` and contents
     (read-xml-document /dev/xmlin)))
-  
+
 (define xml-read-syntax
   (lambda [[src #false] [/dev/xmlin (current-input-port)]]
     (regexp-match #px"^\\s*" /dev/xmlin) ; skip blanks before real xml content

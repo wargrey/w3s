@@ -10,7 +10,7 @@
     (define t #|: CSS-Syntax-Any|# (xml-consume-token /dev/drin '/dev/drin))
     (cond [(eof-object? t) (values eof 'eof #false #false #false 0 (not mode))]
           [(xml:whitespace? t) (xml-hlvalues t (if (string? (xml:whitespace-datum t)) 'comment 'white-space) #false mode)]
-          [(xml:ident? t) (xml-hlvalues t (xml-id->drtype (xml:ident-norm t)) #false mode)]
+          [(xml:name? t) (xml-hlvalues t (xml-id->drtype (xml:name-datum t)) #false mode)]
           [(xml:open? t) (xml-hlvalues t 'parenthesis (string->symbol (string (xml:delim-datum t))) mode)]
           [(xml:close? t) (xml-hlvalues t 'parenthesis (string->symbol (string (xml:close-datum t))) mode)]
           [(xml:delim? t) (xml-hlvalues t (xml-char->drtype (xml:delim-datum t)) #false mode)]
