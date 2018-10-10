@@ -50,28 +50,35 @@
           [(char-whitespace? ch) (xml-consume-whitespace-token srcloc)]
           [(xml-name-start-char? ch) (xml-consume-nmtoken srcloc ch)]
           [else (case ch
-                  [(#\( #\[ #\{) (xml-make-token srcloc xml:open ch)]
-                  [(#\) #\] #\}) (xml-make-token srcloc xml:close ch)]
+                  [(#\<) (xml-consume-open-token srcloc)]
+                  [(#\>) (xml-make-token srcloc xml:close ch)]
+                  [(#\=) (xml-make-token srcloc xml:eq ch)]
                   [(#\' #\") (xml-consume-string-token srcloc ch)]
-                  [(#\< #\-) (xml-consume-cd-token srcloc ch)]
-                  [(#\\) (xml-consume-escaped-ident-token srcloc)]
-                  [(#\null) (xml-make-token srcloc xml:delim #\uFFFD)]
-                  [(#\?) (xml-make-token srcloc xml:question #\?)]
-                  [(#\!) (xml-make-token srcloc xml:exclamation #\!)]
+                  [(#\?) (xml-make-token srcloc xml:delim #\?)]
                   [else (xml-make-token srcloc xml:delim ch)])])))
 
-(define xml-consume-cd-token : (-> XML-Srcloc Char XML-Token)
+(define xml-consume-open-token : (-> XML-Srcloc (U XML:Open XML:WhiteSpace XML:Bad))
+  (lambda [srcloc]
+    (define /dev/xmlin : Input-Port (xml-srcloc-in srcloc))
+    (define ch (peek-char /dev/xmlin))
+    (cond [(eof-object? ch) (xml-make-bad-token srcloc xml:bad:eof xml:delim #\<)]
+          [else (case ch
+                  [(#\?) (read-char /dev/xmlin) (xml-make-token srcloc xml:pi #\?)]
+                  [(#\!) (read-char /dev/xmlin) (xml-make-token srcloc xml:decl #\!)]
+                  [else (xml-make-token srcloc xml:open #\<)])])))
+
+#;(define xml-consume-cd-token : (-> XML-Srcloc Char XML-Token)
   ;;; https://drafts.xmlwg.org/xml-syntax/#CDO-token-diagram
   ;;; https://drafts.xmlwg.org/xml-syntax/#CDC-token-diagram
   (lambda [srcloc open/close]
-    (define xml : Input-Port (xml-srcloc-in srcloc))
+    (define /dev/xmlin : Input-Port (xml-srcloc-in srcloc))
     (if (char=? open/close #\<)
-        (let ([cdo : (U EOF String) (peek-string 3 0 xml)])
-          (cond [(and (string? cdo) (string=? cdo "!--")) (read-string 3 xml) (xml-make-token srcloc xml:cdo '<!--)]
+        (let ([cdo : (U EOF String) (peek-string 3 0 /dev/xmlin)])
+          (cond [(and (string? cdo) (string=? cdo "!--")) (read-string 3 /dev/xmlin) (xml-make-token srcloc xml:cdata '<!--)]
                 [else (xml-make-token srcloc xml:delim #\<)]))
-        (let ([cdc : (U EOF String) (peek-string 2 0 xml)])
+        (let ([cdc : (U EOF String) (peek-string 2 0 /dev/xmlin)])
           (cond [(eof-object? cdc) (xml-make-token srcloc xml:delim #\-)]
-                [(string=? cdc "->") (read-string 2 xml) (xml-make-token srcloc xml:cdc '-->)]
+                [(string=? cdc "->") (read-string 2 /dev/xmlin) (xml-make-token srcloc xml:cdata '-->)]
                 [else (xml-consume-nmtoken srcloc #\-)])))))
 
 (define xml-consume-whitespace-token : (-> XML-Srcloc XML:WhiteSpace)

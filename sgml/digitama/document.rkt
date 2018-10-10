@@ -14,7 +14,7 @@
 (struct XML-Document
   ([location : (U String Symbol)]
    [namespaces : (Listof (Pairof Symbol String))]
-   [tokens : (Listof XML-Syntax-Any)])
+   [tokens : (Listof Any)])
   #:transparent)
 
 (define xml-document-placeholder : XML-Document

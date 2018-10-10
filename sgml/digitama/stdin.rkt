@@ -86,8 +86,8 @@
           [else CHARSET])))
   
 (define xml-fallback-encode-input-port : (-> Input-Port Input-Port)
-  ;;; https://drafts.xmlwg.org/xml-syntax/#input-byte-stream
-  ;;; https://drafts.xmlwg.org/xml-syntax/#charset-rule
+  ;;; https://www.w3.org/TR/xml11/#charencoding
+  ;;; https://www.w3.org/TR/xml11/#sec-TextDecl
   (lambda [/dev/rawin]
     (unless (port-counts-lines? /dev/rawin) (port-count-lines! /dev/rawin))
     (when (regexp-match-peek #px"^#(lang|!)" /dev/rawin)

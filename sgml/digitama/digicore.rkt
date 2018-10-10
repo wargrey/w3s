@@ -211,11 +211,13 @@
    [start : Positive-Integer] ; `start` and `end` (instead of `position` and `span`) are required by color lexer.
    [end : Positive-Integer])
   [[xml:open            #:+ XML:Open            #:-> xml:delim]
-   [xml:question        #:+ XML:Question        #:-> xml:delim]
-   [xml:exclamation     #:+ XML:Exclamation     #:-> xml:delim]
-   [xml:cdo             #:+ XML:CDO             #:-> xml:cd]
-   [xml:cdc             #:+ XML:CDC             #:-> xml:cd]
-
+   [xml:close           #:+ XML:Close           #:-> xml:delim]
+   [xml:eq              #:+ XML:Eq              #:-> xml:delim]
+   
+   [xml:pi              #:+ XML:PI              #:-> xml:open]
+   [xml:decl            #:+ XML:Decl            #:-> xml:open]
+   [xml:cdata           #:+ XML:CDATA           #:-> xml:open]
+   
    [xml:bad:eof         #:+ XML:Bad:EOF         #:-> xml:bad]
    [xml:bad:eol         #:+ XML:Bad:EOL         #:-> xml:bad]
    [xml:bad:char        #:+ XML:Bad:Char        #:-> xml:bad]
@@ -225,15 +227,14 @@
 
   ; WARNING: Carefully defining types to avoid happening to mess up '(list? datum)'. 
   (define-symbolic-tokens xml-bad-token #:+ XML-Bad-Token
-    [xml:bad            #:+ XML:Bad             #:as String]
-    [xml:close          #:+ XML:Close           #:as Char])
+    [xml:bad            #:+ XML:Bad             #:as String])
     
   ; TODO: Typed Racket is buggy if there are more than 11 conditions
   (define-symbolic-tokens xml-symbolic-token #:+ XML-Symbolic-Token
     [xml:delim          #:+ XML:Delim           #:as Char]
     [xml:name           #:+ XML:Name            #:as Symbol]
     [xml:string         #:+ XML:String          #:as String]
-    [xml:cd             #:+ XML:CD              #:as Symbol]
+    [xml:keyword        #:+ XML:Keyword         #:as Keyword]
     [xml:whitespace     #:+ XML:WhiteSpace      #:as (U String Char)]))
 
 ;; https://drafts.xmlwg.org/xml-syntax/#style-rules
