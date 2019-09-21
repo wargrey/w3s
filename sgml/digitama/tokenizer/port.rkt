@@ -2,22 +2,24 @@
 
 ;;; https://drafts.xmlwg.org/xml-syntax/#tokenization
 
-(provide (except-out (all-defined-out) sof))
+(provide (all-defined-out))
 
 (require "characters.rkt")
 (require "../misc.rkt")
 
 (require racket/fixnum)
 
+;;; Performance Hint:
+;; 0. See schema/digitama/exchange/csv/reader/port.rkt
+;; 1. Checking empty file before reading makes it oscillates(500ms for 2.1MB xslx), weird
+
 (define-type XML-Error (Listof Char))
 (define-type XML-Datum (U Char Symbol String Keyword XML-WhiteSpace XML-Error))
 
 (struct XML-WhiteSpace ([raw : (Listof Char)]))
 
-(define sof : Keyword '#:||)
-
-#;(define in-xml-port : (-> Input-Port (U String Symbol) (Sequenceof XML-Datum))
-  (lambda [/dev/xmlin source]
+#;(define in-xml-port : (-> Input-Port (Sequenceof XML-Datum))
+  (lambda [/dev/xmlin]
     (define (read-xml [hint : XML-Datum]) : XML-Datum
       (define-values (maybe-row maybe-leader) (read-csv-row /dev/csvin n maybe-char dialect strict? trim-line? maybe-progress-handler topic))
       (cond [(and maybe-leader) (if (and maybe-row) (cons maybe-leader maybe-row) (read-with maybe-leader))]
@@ -33,38 +35,36 @@
                    #false
                    #false)))))
 
-(define read-xml/reverse : (-> Input-Port (U String Symbol) (Listof XML-Datum))
-  (lambda [/dev/xmlin source]
+(define read-xml/reverse : (-> Input-Port (Listof XML-Datum))
+  (lambda [/dev/xmlin]
     (let read-xml ([snekot : (Listof XML-Datum) null]
-                   [last-token : XML-Datum sof]
-                   [maybe-char : (U Char EOF) (read-char /dev/xmlin)])
-      (define-values (token maybe-leader) (xml-consume-token /dev/xmlin source last-token))
-      (cond [(not maybe-leader) (if (eq? token sof) snekot (cons token snekot))]
-            [(XML-WhiteSpace? token) (read-xml (cons token snekot) last-token maybe-char)]
-            [else (read-xml (cons token snekot) token maybe-char)]))))
+                   [maybe-char : (Option Char) (xml-read-char /dev/xmlin)])
+      (define-values (token maybe-leader) (xml-consume-token /dev/xmlin maybe-char))
+      (cond [(and maybe-leader) (read-xml (cons token snekot) maybe-leader)]
+            [(eq? token #\uFFFD) snekot]
+            [else (cons token snekot)]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-consume-token : (-> Input-Port (U String Symbol) XML-Datum (Values XML-Datum (Option Char)))
+(define xml-consume-token : (-> Input-Port (Option Char) (Values XML-Datum (Option Char)))
   ;;; https://drafts.xmlwg.org/xml-syntax/#error-handling
   ;;; https://drafts.xmlwg.org/xml-syntax/#consume-a-token
-  (lambda [/dev/xmlin source last-token]
-    (define maybe-ch (read-char /dev/xmlin))
-    (cond [(eof-object? maybe-ch) (values sof #false)]
-          [(char-whitespace? maybe-ch) (xml-consume-whitespace /dev/xmlin maybe-ch)]
-          [(xml-name-start-char? maybe-ch) (xml-consume-nmtoken /dev/xmlin maybe-ch)]
-          [else (case maybe-ch
+  (lambda [/dev/xmlin leading-char]
+    (cond [(not leading-char) (values #\uFFFD #false)]
+          [(char-whitespace? leading-char) (xml-consume-whitespace /dev/xmlin leading-char)]
+          [(xml-name-start-char? leading-char) (xml-consume-nmtoken /dev/xmlin leading-char)]
+          [else (case leading-char
                   [(#\<) (xml-consume-open-token /dev/xmlin)]
-                  [(#\' #\") (xml-consume-literal-token /dev/xmlin maybe-ch)]
-                  [else (values maybe-ch #false)])])))
+                  [(#\' #\") (xml-consume-literal-token /dev/xmlin leading-char)]
+                  [(#\=) (values '= (xml-read-char /dev/xmlin))]
+                  [else (values leading-char (xml-read-char /dev/xmlin))])])))
 
 (define xml-consume-open-token : (-> Input-Port (Values Symbol (Option Char)))
   (lambda [/dev/xmlin]
-    (define maybe-ch : (U Char EOF) (read-char /dev/xmlin))
-    (cond [(eof-object? maybe-ch) (values '< #false)]
-          [else (case maybe-ch
-                  [(#\?) (values '<? (xml-read-char /dev/xmlin))]
-                  [(#\!) (values '<! (xml-read-char /dev/xmlin))]
-                  [else (values '< maybe-ch)])])))
+    (define maybe-char : (Option Char) (xml-read-char /dev/xmlin))
+    (case maybe-char
+      [(#\?) (values '<? (xml-read-char /dev/xmlin))]
+      [(#\!) (values '<! (xml-read-char /dev/xmlin))]
+      [else (values '< maybe-char)])))
 
 #;(define xml-consume-cd-token : (-> XML-Srcloc Char XML-Datum)
   ;;; https://drafts.xmlwg.org/xml-syntax/#CDO-token-diagram

@@ -18,7 +18,7 @@
   (lambda [suitcased-name !]
     (define-css-disjoint-filter viewport-length-filter #:-> (U Symbol Nonnegative-Inexact-Real)
       (<css-keyword> 'auto)
-      (<css:percentage> nonnegative-single-flonum?)
+      (<css:percentage> nonnegative-flonum?)
       (<css+length>))
     (case suitcased-name
       [(width) (css-make-pair-parser (viewport-length-filter) 'min-width 'max-width)]

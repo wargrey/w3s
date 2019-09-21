@@ -22,7 +22,7 @@
     (regexp-match #px"^\\s*" /dev/xmlin) ; skip blanks before real xml content
     (define-values (line column position) (port-next-location /dev/xmlin))
     (define bytes-bag (port->bytes /dev/xmlin))
-    (define all-rules (read-xml-document bytes-bag))
+    (define all-rules (read-xml-document (open-input-bytes bytes-bag)))
     (define all-namespaces (XML-Document-namespaces all-rules))
     (define lang.xml
       (cond [(and (pair? all-namespaces) (not (eq? (caar all-namespaces) '||)))
@@ -39,9 +39,6 @@
 
          (require sgml/xml)
 
-         ;;; NOTE
-         ; Prefab structures can be handled at compile time, however reading the stylesheet is reasonably efficient,
-         ; therefore do not waste time in struggling to optimize the reading process.
          (define-values (#,lang.xml MB cpu real gc)
            (let ([/dev/rawin (open-input-bytes #,bytes-bag '#,src)]
                  [mem0 (current-memory-use)])

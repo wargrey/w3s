@@ -334,8 +334,8 @@
     [css:integer        #:+ CSS:Integer         #:as Integer]
     [css:flonum         #:+ CSS:Flonum          #:as Flonum])
 
-  (define-numeric-tokens css-fraction #:+ CSS-Fraction #:nan +nan.f
-    [css:percentage     #:+ CSS:Percentage      #:as Single-Flonum])
+  (define-numeric-tokens css-fraction #:+ CSS-Fraction #:nan +nan.0
+    [css:percentage     #:+ CSS:Percentage      #:as Flonum])
 
   (define-symbolic-tokens css-unreadable-token #:+ CSS-Unreadable-Token
     ; These tokens are remade by the parser instead of being produced by the tokenizer.
@@ -379,7 +379,7 @@
   (lambda [token]
     (or (and (css:flonum? token) (eqv? (css:flonum-datum token) +nan.0))
         (and (css:dimension? token) (eqv? (css:dimension-datum token) +nan.0))
-        (and (css:percentage? token) (eqv? (css:percentage-datum token) +nan.f)))))
+        (and (css:percentage? token) (eqv? (css:percentage-datum token) +nan.0)))))
 
 (define-syntax (css-remake-token stx)
   (syntax-case stx []

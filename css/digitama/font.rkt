@@ -40,10 +40,10 @@
            [longhand++ (hash-set longhand++ 'font-size (Font-size font))])
       (hash-set longhand++ 'font-family (list (font-face->family* (Font-face font)))))))
 
-(define-css-disjoint-filter <font-stretch> #:-> (U Symbol Nonnegative-Single-Flonum)
+(define-css-disjoint-filter <font-stretch> #:-> (U Symbol CSS+%)
   ;;; https://drafts.csswg.org/css-fonts-4/#font-stretch-prop
   (<css-keyword> css-font-stretch-options)
-  (<css:percentage> nonnegative-single-flonum?))
+  (<css+percentage>))
 
 (define-css-disjoint-filter <font-weight> #:-> (U Symbol Integer)
   ;;; https://drafts.csswg.org/css-fonts/#font-weight-prop
@@ -55,9 +55,11 @@
   (<css-size>)
   (<css-keyword> css-font-size-option?))
 
-(define-css-disjoint-filter <line-height> #:-> (U Symbol Nonnegative-Flonum Single-Flonum CSS:Length:Font CSS-Wide-Keyword)
+(define-css-disjoint-filter <line-height> #:-> (U Symbol Nonnegative-Flonum CSS+Unitless CSS+% CSS:Length:Font CSS-Wide-Keyword)
   ;;; http://www.w3.org/TR/CSS2/visudet.html#propdef-line-height
-  (<css-unitless-size>)
+  (<css+unitless>)
+  (<css+percentage>)
+  (<css+length:font>)
   (CSS:<~> (<css-keyword> '(normal inherit)) css-wide-keywords-filter-map))
 
 (define <:font-family:> : (CSS-Parser (Listof Any))
@@ -96,19 +98,19 @@
   (lambda [property value]
     (cond [(symbol? value) (generic-font-size-filter value (Font-size (unbox &font)) (Font-size (default-font)))]
           [(nonnegative-flonum? value) value]
-          [(nonnegative-single-flonum? value) (fl* (real->double-flonum value) (css-em))]
+          [(css+%? value) (fl* (css+%-value value) (css-em))]
           [(css+length? value) (css:length->scalar value #false)]
           [(eq? property 'min-font-size) 0.0]
           [(eq? property 'max-font-size) +inf.0]
           [(eq? value css:inherit) (css-em)]
           [else (generic-font-size-filter 'medium (Font-size (unbox &font)) (Font-size (default-font)))])))
 
-(define css->line-height : (-> Symbol Any (U Nonnegative-Flonum Negative-Single-Flonum))
+(define css->line-height : (-> Symbol Any (U Nonnegative-Flonum CSS+Unitless))
   (lambda [_ value]
     (cond [(css+length? value) (css:length->scalar value #false)]
           [(nonnegative-flonum? value) value #|computed value is the used value|#]
-          [(nonnegative-single-flonum? value) (fl* (real->double-flonum value) (css-em))]
-          [(negative-single-flonum? value) value #|computed value is *not* the used value|#]
+          [(css+%? value) (fl* (css+%-value value) (css-em))]
+          [(css+unitless? value) value #|computed value is *not* the used value|#]
           [else #|'normal|# +nan.0 #|computed value is *not* the used value|#])))
 
 (define font-weight*? : (-> Any Boolean : (U Symbol Nonnegative-Integer))

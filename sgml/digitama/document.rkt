@@ -7,9 +7,11 @@
 (require racket/string)
 (require racket/path)
 
-(require "digicore.rkt")
-(require "stdin.rkt")
-(require "misc.rkt")
+#;(require "digicore.rkt")
+#;(require "stdin.rkt")
+#;(require "misc.rkt")
+
+(require "tokenizer/port.rkt")
 
 (struct XML-Document
   ([location : (U String Symbol)]
@@ -21,8 +23,7 @@
   (XML-Document '/dev/null null null))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-xml-parser-entry read-xml-document #:-> XML-Document
+(define read-xml-document : (-> Input-Port XML-Document)
   (lambda [/dev/xmlin]
     (XML-Document '/dev/null null
-                  (for/list : (Listof XML-Syntax-Any) ([token (in-port xml-read-syntax /dev/xmlin)])
-                    token))))
+                  (reverse (read-xml/reverse /dev/xmlin)))))

@@ -50,18 +50,18 @@
   ;;; https://drafts.csswg.org/css-color/#the-hwb-notation
   [(rgba rgb) #:=> [(rgba [r ? flonum?] [g ? flonum?] [b ? flonum?] [alpha ? flonum?])]
    (make-parser <:rgb:> <:rgb:>)]
-  [(hsla hsl) #:=> [(hsl [h ? real?] [s ? single-flonum?] [l ? single-flonum?] [alpha ? flonum?])]
+  [(hsla hsl) #:=> [(hsl [h ? real?] [s ? flonum?] [l ? flonum?] [alpha ? flonum?])]
    (make-parser <:hue:> (CSS:<^> (<css:percentage>)))]
-  [(hsva hsv) #:=> [(hsv [h ? real?] [s ? single-flonum?] [v ? single-flonum?] [alpha ? flonum?])]
+  [(hsva hsv) #:=> [(hsv [h ? real?] [s ? flonum?] [v ? flonum?] [alpha ? flonum?])]
    (make-parser <:hue:> (CSS:<^> (<css:percentage>)))]
-  [(hsia hsi) #:=> [(hsi [h ? real?] [s ? single-flonum?] [i ? single-flonum?] [alpha ? flonum?])]
+  [(hsia hsi) #:=> [(hsi [h ? real?] [s ? flonum?] [i ? flonum?] [alpha ? flonum?])]
    (make-parser <:hue:> (CSS:<^> (<css:percentage>)))]
-  [(hwba hwb) #:=> [(hwb [h ? real?] [w ? single-flonum?] [b ? single-flonum?] [alpha ? flonum?])]
+  [(hwba hwb) #:=> [(hwb [h ? real?] [w ? flonum?] [b ? flonum?] [alpha ? flonum?])]
    (make-parser <:hue:> (CSS:<^> (<css:percentage>)))]
   #:where
   [(define-css-disjoint-filter <rgb-gamut> #:-> Flonum
      (CSS:<~> (<css:integer> byte?) byte->gamut)
-     (CSS:<~> (<css:percentage>) (λ [[% : Single-Flonum]] (fl* (real->double-flonum %) 255.0)))
+     (CSS:<~> (<css:percentage>) (λ [[% : Flonum]] (fl* % 255.0)))
      (CSS:<~> (<css:flonum>) (λ [[v : Flonum]] (fl/ v 255.0))))
 
    (define make-alpha-parser : (-> (-> (CSS:Filter Char)) (CSS-Parser (Listof Any)))

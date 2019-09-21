@@ -351,15 +351,17 @@
                                 [else (values n n)]))])])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(struct css-unitless ([value : Flonum]) #:type-name CSS-Unitless) ; for properties which computed value are not their used value
+(struct css+unitless css-unitless ([value : Nonnegative-Flonum]) #:type-name CSS+Unitless)
+
+(struct css-% ([value : Flonum]) #:type-name CSS-%)
+(struct css+% css-% ([value : Nonnegative-Flonum]) #:type-name CSS+%)
+
 (define positive-fixnum? : (-> Any Boolean : #:+ Positive-Fixnum) (λ [v] (and (fixnum? v) (fx> v 0))))
 (define nonnegative-fixnum? : (-> Any Boolean : #:+ Nonnegative-Fixnum) (λ [v] (and (fixnum? v) (fx>= v 0))))
 
 (define positive-flonum? : (-> Any Boolean : #:+ Positive-Flonum) (λ [v] (and (flonum? v) (fl> v 0.0))))
 (define nonnegative-flonum? : (-> Any Boolean : #:+ Nonnegative-Flonum) (λ [v] (and (flonum? v) (fl>= v 0.0))))
-
-(define positive-single-flonum? : (-> Any Boolean : #:+ Positive-Single-Flonum) (λ [v] (and (single-flonum? v) (> v 0.0f0))))
-(define negative-single-flonum? : (-> Any Boolean : #:+ Negative-Single-Flonum) (λ [v] (and (single-flonum? v) (< v 0.0f0))))
-(define nonnegative-single-flonum? : (-> Any Boolean : #:+ Nonnegative-Single-Flonum) (λ [v] (and (single-flonum? v) (>= v 0.0f0))))
 
 (define positive-byte? : (-> Any Boolean : #:+ Positive-Byte) (λ [v] (and (byte? v) (fx> v 0))))
 (define positive-index? : (-> Any Boolean : #:+ Positive-Index) (λ [v] (and (index? v) (fx> v 0))))
@@ -385,10 +387,10 @@
 
 (define-css-disjoint-filter <css+%real> #:-> (U Natural Nonnegative-Inexact-Real)
   #:with [[nonzero : (Option '#:nonzero) #false]]
-  (cond [nonzero (CSS:<+> (<css:percentage> positive-single-flonum?)
+  (cond [nonzero (CSS:<+> (<css:percentage> positive-flonum?)
                           (<css:flonum> positive-flonum?)
                           (<css:integer> exact-positive-integer?))]
-        [else    (CSS:<+> (<css:percentage> nonnegative-single-flonum?)
+        [else    (CSS:<+> (<css:percentage> nonnegative-flonum?)
                           (<css:flonum> nonnegative-flonum?)
                           (<css:integer> exact-nonnegative-integer?))]))
 
@@ -398,7 +400,7 @@
   (CSS:<=> (<css:integer> = 1) 1.0))
 
 (define-css-disjoint-filter <css-%flunit> #:-> Nonnegative-Flonum
-  (CSS:<~> (<css:percentage> 0f0 <= 1f0) flabs real->double-flonum)
+  (CSS:<~> (<css:percentage> 0.0 <= 1.0) flabs)
   (CSS:<~> (<css:flonum> 0.0 fl<= 1.0) flabs)
   (CSS:<=> (<css:integer> = 0) 0.0)
   (CSS:<=> (<css:integer> = 1) 1.0))
@@ -415,18 +417,14 @@
 (define (<css-comma>) : (CSS:Filter Char) (CSS:<?> (<css:delim> #\,) make-exn:css:missing-comma))
 (define (<css-slash>) : (CSS:Filter Char) (CSS:<?> (<css:delim> #\/) make-exn:css:missing-slash))
 
+(define (<css+unitless>) : (CSS:Filter CSS+Unitless) (CSS:<~> (<css+real>) (λ [[v : Nonnegative-Real]] (let ([flv (real->double-flonum v)]) (css+unitless flv flv)))))
+(define (<css-percentage>) : (CSS:Filter CSS-%) (CSS:<~> (<css:percentage>) (λ [[v : Flonum]] (css-% v))))
+(define (<css+percentage>) : (CSS:Filter CSS+%) (CSS:<~> (<css:percentage> nonnegative-flonum?) (λ [[v : Nonnegative-Flonum]] (css+% v v))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-css-disjoint-filter <css-size> #:-> (U Nonnegative-Inexact-Real CSS:Length:Font)
   (<css+length:font>)
   (CSS:<~> (<css+%real>) exact->inexact))
-
-(define-css-disjoint-filter <css-unitless-size> #:-> (U Nonnegative-Flonum Single-Flonum CSS:Length:Font)
-  ;;; NOTE
-  ; `unitless` means the computed value and used value are different,
-  ; hence the `negative single flonum` to tell the `css->*` the unitless value must be inheritable.
-  (CSS:<~> (<css+real>) (λ [[v : Nonnegative-Real]] (- (real->single-flonum v))))
-  (<css:percentage> nonnegative-single-flonum?)
-  (<css+length:font>))
 
 (define css-make-pair-parser
   : (case-> [(Listof+ (Pairof (CSS:Filter Any) (Listof+ Symbol))) -> CSS-Shorthand+Parser]
@@ -461,7 +459,7 @@
   (lambda [defval #:100% fl%]
     (λ [property datum]
       (cond [(nonnegative-flonum? datum) datum]
-            [(nonnegative-single-flonum? datum) (fl* (real->double-flonum datum) fl%)]
+            [(css+%? datum) (fl* (css+%-value datum) fl%)]
             [(css:length? datum) (css:length->scalar datum #false)]
             [else defval]))))
 
@@ -471,7 +469,7 @@
     (λ [property datum]
       (define size : Integer
         (cond [(flonum? datum) (-> datum)]
-              [(single-flonum? datum) (-> (* datum fl%))]
+              [(css-%? datum) (-> (* (css-%-value datum) fl%))]
               [(css:length? datum) (-> (css:length->scalar datum #false))]
               [else -1]))
       (if (pixels? size) size defval))))

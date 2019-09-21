@@ -79,9 +79,9 @@
         (css-rlh (css-lh)))
       font)))
 
-(define select-size : (->* ((U Nonnegative-Flonum Negative-Single-Flonum)) (Nonnegative-Flonum) Nonnegative-Flonum)
+(define select-size : (->* ((U Nonnegative-Flonum CSS+Unitless)) (Nonnegative-Flonum) Nonnegative-Flonum)
   (lambda [computed-value [normal (css-normal-line-height)]]
     (void 'see css->line-height)
-    (cond [(nan? computed-value) (fl* normal (css-em))]
-          [(nonnegative-flonum? computed-value) computed-value]
-          [else (flabs (fl* (real->double-flonum computed-value) (css-em)))])))
+    (cond [(css+unitless? computed-value) (fl* (css+unitless-value computed-value) (css-em))]
+          [(nan? computed-value) (fl* normal (css-em))]
+          [else computed-value])))
