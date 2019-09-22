@@ -201,8 +201,7 @@
                             (format-id <id> "~a=?" (syntax-e <id>))
                             (format-id <id> "~a-datum" (syntax-e <id>))
                             (let ([type-name (symbol->string (syntax-e <type>))])
-                              (cond [(string-contains? type-name "Single-Flonum") #'=]
-                                    [(string-contains? type-name "Flonum") #'fl=]
+                              (cond [(string-contains? type-name "Flonum") #'fl=]
                                     [(string-contains? type-name "Fixnum") #'fx=]
                                     [else #'=]))))])
        #'(begin (struct token css-numeric () #:transparent) (define-type Token token)

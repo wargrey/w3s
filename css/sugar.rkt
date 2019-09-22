@@ -23,9 +23,9 @@
      (with-syntax* ([(property-definitions ...)
                      (for/list ([<field-info> (in-list (syntax->list #'(field-info ...)))])
                        (syntax-parse <field-info> #:datum-literals [Unitless]
-                        [(p : Unitless #:= dv) #'[p : Nonnegative-Flonum #:= dv #:~> (U Nonnegative-Flonum Negative-Single-Flonum)
+                         #;[(p : Unitless #:= dv) #'[p : Nonnegative-Flonum #:= dv #:~> (U Nonnegative-Flonum Negative-Single-Flonum)
                                                     select-size]]
-                         [(p : Unitless #:= dv nv) #'[p : Nonnegative-Flonum #:= dv #:~> (U Nonnegative-Flonum Negative-Single-Flonum)
+                         #;[(p : Unitless #:= dv nv) #'[p : Nonnegative-Flonum #:= dv #:~> (U Nonnegative-Flonum Negative-Single-Flonum)
                                                         (λ [[v : (U Nonnegative-Flonum Negative-Single-Flonum)]]
                                                           (select-size v nv))]]
                          [_ <field-info>]))])
