@@ -109,17 +109,17 @@
           (css-colors-filter declared-values inherited-values))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define css-cascade-colors : (-> (Listof+ CSS-StyleSheet) (Listof+ CSS-Subject) (Option CSS-Values) (Pairof Color Color))
+(define css-cascade-colors : (-> (Listof+ CSS-Stylesheet) (Listof+ CSS-Subject) (Option CSS-Values) (Pairof Color Color))
   (lambda [stylesheets stcejbus inherited-values]
     (define-values ($ _) (css-cascade stylesheets stcejbus css-font+colors-parsers css-colors-filter inherited-values))
     $))
 
-(define css-cascade-font+color : (-> (Listof+ CSS-StyleSheet) (Listof+ CSS-Subject) (Option CSS-Values) Font+Color)
+(define css-cascade-font+color : (-> (Listof+ CSS-Stylesheet) (Listof+ CSS-Subject) (Option CSS-Values) Font+Color)
   (lambda [stylesheets stcejbus inherited-values]
     (define-values ($ _) (css-cascade stylesheets stcejbus css-font+colors-parsers css-font+color-filter inherited-values))
     $))
 
-(define css-cascade-font+colors : (-> (Listof+ CSS-StyleSheet) (Listof+ CSS-Subject) (Option CSS-Values) Font+Colors)
+(define css-cascade-font+colors : (-> (Listof+ CSS-Stylesheet) (Listof+ CSS-Subject) (Option CSS-Values) Font+Colors)
   (lambda [stylesheets stcejbus inherited-values]
     (define-values ($ _) (css-cascade stylesheets stcejbus css-font+colors-parsers css-font+colors-filter inherited-values))
     $))

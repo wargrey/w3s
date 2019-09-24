@@ -45,7 +45,7 @@
 (define css-extract-font : (->* (CSS-Values (Option CSS-Values)) (Font) Font)
   (lambda [declared-values inherited-values [basefont (default-font)]]
     (define ?font : Any (and inherited-values (css-ref inherited-values #false 'font)))
-    (define inherited-font : Font (if (Font? ?font) ?font basefont))
+    (define inherited-font : Font (if (font? ?font) ?font basefont))
     (define rem? : Boolean (positive? (css-rem)))
 
     (let call-with-inherited-font ()
@@ -65,8 +65,8 @@
       ;; as the `#true`s indicate, giving properties a chance to use their initial value if they are desired to. Also see (css-ref).
       (desc-font #:size (max (min max-size font-size) min-size)
                  #:family (css-ref declared-values #true 'font-family css->font-family)
-                 #:style (css-ref declared-values #true 'font-style symbol? 'normal (Font-style inherited-font))
-                 #:weight (css-ref declared-values #true 'font-weight font-weight*? 'normal (Font-weight inherited-font))
+                 #:style (css-ref declared-values #true 'font-style symbol? 'normal (font-style inherited-font))
+                 #:weight (css-ref declared-values #true 'font-weight font-weight*? 'normal (font-weight inherited-font))
                  #:stretch (css-ref declared-values inherited-values 'font-stretch symbol? 'normal)))
 
     (let call-with-current-element-font ()

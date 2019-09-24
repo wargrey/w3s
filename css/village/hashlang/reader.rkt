@@ -23,7 +23,7 @@
     (define-values (line column position) (port-next-location /dev/cssin))
     (define bytes-bag (port->bytes /dev/cssin))
     (define all-rules (read-css-stylesheet bytes-bag))
-    (define all-namespaces (CSS-StyleSheet-namespaces all-rules))
+    (define all-namespaces (css-stylesheet-namespaces all-rules))
     (define lang.css
       (cond [(and (pair? all-namespaces) (not (eq? (caar all-namespaces) '||)))
              (string->symbol (string-append (symbol->string (caar all-namespaces)) ".css"))]

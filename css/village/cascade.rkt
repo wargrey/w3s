@@ -14,21 +14,21 @@
 
 (define css-cascade*
   : (All (Preference Env)
-         (case-> [-> (Listof+ CSS-StyleSheet) (Listof+ CSS-Subject) CSS-Declaration-Parsers
+         (case-> [-> (Listof+ CSS-Stylesheet) (Listof+ CSS-Subject) CSS-Declaration-Parsers
                      (CSS-Cascaded-Value-Filter Preference) (Option CSS-Values)
                      (Values (Listof Preference) (Listof CSS-Values))]
-                 [-> (Listof+ CSS-StyleSheet) (Listof+ CSS-Subject) CSS-Declaration-Parsers
+                 [-> (Listof+ CSS-Stylesheet) (Listof+ CSS-Subject) CSS-Declaration-Parsers
                      (CSS-Cascaded-Value+Filter Preference Env) (Option CSS-Values) Env
                      (Values (Listof Preference) (Listof CSS-Values))]))
   (let ()
-    (define do-cascade* : (All (Preference) (-> (Listof+ CSS-StyleSheet) (Listof+ CSS-Subject) CSS-Declaration-Parsers
+    (define do-cascade* : (All (Preference) (-> (Listof+ CSS-Stylesheet) (Listof+ CSS-Subject) CSS-Declaration-Parsers
                                                 (Option CSS-Values) (-> CSS-Values Preference)
                                                 (Values (Listof Preference) (Listof CSS-Values))))
       (lambda [stylesheets stcejbus desc-parsers inherited-values do-value-filter]
         (hash-clear! !importants) ; TODO: if it is placed correctly, perhaps a specification for custom cascading process is required.
         (define-values (rotpircsed seulav)
           (let cascade-stylesheets* : (values (Listof Preference) (Listof CSS-Values))
-            ([batch : (Listof CSS-StyleSheet) stylesheets]
+            ([batch : (Listof CSS-Stylesheet) stylesheets]
              [all-rotpircsed : (Listof Preference) null]
              [all-seulav : (Listof CSS-Values) null])
             (for/fold ([descriptors++ : (Listof Preference) all-rotpircsed] [values++ : (Listof CSS-Values) all-seulav])
@@ -36,9 +36,9 @@
               (define-values (sub-rotpircsed sub-seulav)
                 (cascade-stylesheets* (css-select-children this-sheet desc-parsers) descriptors++ values++))
               (define this-values : (Listof CSS-Values)
-                (css-cascade-rules* (CSS-StyleSheet-grammars this-sheet) stcejbus desc-parsers
+                (css-cascade-rules* (css-stylesheet-grammars this-sheet) stcejbus desc-parsers
                                     (css-cascade-viewport (default-css-media-features)
-                                                          (CSS-StyleSheet-viewports this-sheet))))
+                                                          (css-stylesheet-viewports this-sheet))))
               (for/fold ([this-rotpircsed : (Listof Preference) sub-rotpircsed]
                          [this-seulav : (Listof CSS-Values) sub-seulav])
                         ([declared-values : CSS-Values (in-list this-values)])

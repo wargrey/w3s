@@ -43,12 +43,12 @@
                     declared-vars)]))
     (when ?declared-vars
       (for ([(--var --value) (in-hash ?declared-vars)])
-        (when (and (CSS-Declaration? --value) (CSS-Declaration-lazy? --value))
-          (define property : CSS:Ident (CSS-Declaration-name --value))
-          (define --values : (Listof+ CSS-Token) (CSS-Declaration-values --value))
+        (when (and (css-declaration? --value) (css-declaration-lazy? --value))
+          (define property : CSS:Ident (css-declaration-name --value))
+          (define --values : (Listof+ CSS-Token) (css-declaration-values --value))
           (define flat-values : (Listof CSS-Token) (css-variable-substitute property --values ?declared-vars (list --var)))
           (hash-set! ?declared-vars --var
-                     (cond [(pair? flat-values) (struct-copy CSS-Declaration --value [values flat-values] [lazy? #false])]
+                     (cond [(pair? flat-values) (struct-copy css-declaration --value [values flat-values] [lazy? #false])]
                            [else null])))))
     declared-values))
 
@@ -80,7 +80,7 @@
                     (define --value : (U CSS-Declaration Null) (if (not varbase) null (hash-ref varbase --var (λ [] null))))
                     (define-values (--vs lazy?)
                       (cond [(null? --value) (values (css:var-fallback head) (css:var-lazy? head))]
-                            [else (values (CSS-Declaration-values --value) (CSS-Declaration-lazy? --value))]))
+                            [else (values (css-declaration-values --value) (css-declaration-lazy? --value))]))
                     (cond [(null? --vs) (make+exn:css:missing-value head property 'debug) null]
                           [(not lazy?) (var-fold (append (reverse --vs) seulav) tail)]
                           [else (let ([vs (css-variable-substitute property --vs varbase (cons --var refpath))])

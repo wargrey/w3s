@@ -17,8 +17,8 @@
 ;; https://drafts.csswg.org/selectors/#data-model
 (define-syntax (define-selectors stx)
   (syntax-case stx []
-    [(_ [S-ID rest ...] ...)
-     #'(begin (struct S-ID rest ... #:transparent) ...)]))
+    [(_ [id : S-ID rest ...] ...)
+     #'(begin (struct id rest ... #:transparent #:type-name S-ID) ...)]))
 
 (define-syntax (define-exclusive-:classes stx)
   (syntax-case stx []
@@ -33,7 +33,7 @@
 (define-type CSS-Attribute-Value (U (U String Symbol (Listof (U String Symbol)))
                                     (Vector Symbol (U String Symbol (Listof (U String Symbol))))))
 
-(define-preference CSS-Subject
+(define-preference css-subject
   ([combinator : CSS-Selector-Combinator                #:= '>]
    [type : Symbol                                       #:= (css-root-element-type)]
    [id : (U Keyword (Listof+ Keyword))                  #:= (css-root-element-id)]
@@ -42,16 +42,18 @@
    [attributes : (HashTable Symbol CSS-Attribute-Value) #:= (make-hasheq)]
    [:classes : (Listof Symbol)                          #:= null]
    [lang : (U Symbol String)                            #:= ""])
-  #:transparent)
+  #:transparent
+  #:type-name CSS-Subject)
 
 (define-selectors
-  [CSS-Attribute-Selector ([name : Symbol] [quirk : Symbol] [namespace : (U Symbol Boolean)])]
-  [CSS-Attribute~Selector CSS-Attribute-Selector ([type : Char] [value : (U Symbol String)] [i? : Boolean])]  
+  [css-attribute-selector : CSS-Attribute-Selector ([name : Symbol] [quirk : Symbol] [namespace : (U Symbol Boolean)])]
+  [css-attribute~selector : CSS-Attribute~Selector css-attribute-selector ([type : Char] [value : (U Symbol String)] [i? : Boolean])]  
 
-  [CSS-:Class-Selector ([name : Symbol] [arguments : (Option (Listof Any))])]
-  [CSS-::Element-Selector ([name : Symbol] [arguments : (Option (Listof Any))] [:classes : (Listof CSS-:Class-Selector)])]
+  [css-:class-selector : CSS-:Class-Selector ([name : Symbol] [arguments : (Option (Listof Any))])]
+  [css-::element-selector : CSS-::Element-Selector ([name : Symbol] [arguments : (Option (Listof Any))] [:classes : (Listof CSS-:Class-Selector)])]
 
-  [CSS-Compound-Selector ([combinator : (Option CSS-Selector-Combinator)]
+  [css-compound-selector : CSS-Compound-Selector
+                         ([combinator : (Option CSS-Selector-Combinator)]
                           [namespace : (U Symbol Boolean)]
                           [type : (U Symbol True)]
                           [ids : (Listof Keyword)]
@@ -72,7 +74,7 @@
                    [srotceles : (Listof CSS-Compound-Selector) (cdr srotceles)]
                    [stcejbus : (Listof CSS-Subject) (cdr stnemele)]
                    [specificity : Natural 0])
-      (define root? : Boolean (eq? (CSS-Subject-type element) root))
+      (define root? : Boolean (eq? (css-subject-type element) root))
       (define specificity++ : (Option Natural) (css-compound-selector-match selector element root?))
       (and specificity++
            (cond [(null? stcejbus) (and (null? srotceles) (fx+ specificity specificity++))]
@@ -84,23 +86,23 @@
   ;;; https://drafts.csswg.org/selectors/#subject-of-a-selector
   ;;; https://drafts.csswg.org/selectors/#case-sensitive
   (lambda [selector element root?]
-    (and (css-combinator-match? (CSS-Compound-Selector-combinator selector) (CSS-Subject-combinator element))
-         (css-namespace-match? (CSS-Compound-Selector-namespace selector) (CSS-Subject-namespace element))
-         (let ([s:type : (U Symbol True) (CSS-Compound-Selector-type selector)])
-           (or (eq? s:type #true) (eq? s:type (CSS-Subject-type element))))
-         (let ([s:ids : (Listof Keyword) (CSS-Compound-Selector-ids selector)]
-               [id : (U Keyword (Listof+ Keyword)) (CSS-Subject-id element)])
+    (and (css-combinator-match? (css-compound-selector-combinator selector) (css-subject-combinator element))
+         (css-namespace-match? (css-compound-selector-namespace selector) (css-subject-namespace element))
+         (let ([s:type : (U Symbol True) (css-compound-selector-type selector)])
+           (or (eq? s:type #true) (eq? s:type (css-subject-type element))))
+         (let ([s:ids : (Listof Keyword) (css-compound-selector-ids selector)]
+               [id : (U Keyword (Listof+ Keyword)) (css-subject-id element)])
            (cond [(null? s:ids) #true]
                  [(keyword? id) (and (null? (cdr s:ids)) (eq? (car s:ids) id))]
                  [else (and (list? s:ids) (set=? (list->set s:ids) (list->set id)))]))
-         (let ([s:classes : (Listof Symbol) (CSS-Compound-Selector-classes selector)]
-               [classes : (Listof Symbol) (CSS-Subject-classes element)])
+         (let ([s:classes : (Listof Symbol) (css-compound-selector-classes selector)]
+               [classes : (Listof Symbol) (css-subject-classes element)])
            (for/and : Boolean ([s:c (in-list s:classes)]) (and (memq s:c classes) #true)))
-         (let ([s:attrs : (Listof CSS-Attribute-Selector) (CSS-Compound-Selector-attributes selector)]
-               [attrs : (HashTable Symbol CSS-Attribute-Value) (CSS-Subject-attributes element)])
+         (let ([s:attrs : (Listof CSS-Attribute-Selector) (css-compound-selector-attributes selector)]
+               [attrs : (HashTable Symbol CSS-Attribute-Value) (css-subject-attributes element)])
            (css-attribute-match? s:attrs attrs))
-         (let ([s:classes : (Listof CSS-:Class-Selector) (CSS-Compound-Selector-:classes selector)]
-               [:classes : (Listof Symbol) (CSS-Subject-:classes element)])
+         (let ([s:classes : (Listof CSS-:Class-Selector) (css-compound-selector-:classes selector)]
+               [:classes : (Listof Symbol) (css-subject-:classes element)])
            (or (null? s:classes)
                (and root? (css-:classes-match? s:classes (cons 'root :classes)))
                (and (pair? :classes) (css-:classes-match? s:classes :classes))))
@@ -110,12 +112,12 @@
 (define css-compound-selector-abc : (-> CSS-Compound-Selector (values Natural Natural Natural))
   ;;; https://drafts.csswg.org/selectors/#specificity-rules
   (lambda [static-unit]
-    (values (length (CSS-Compound-Selector-ids static-unit))
-            (fx+ (length (CSS-Compound-Selector-classes static-unit))
-                 (fx+ (length (CSS-Compound-Selector-:classes static-unit))
-                      (length (CSS-Compound-Selector-attributes static-unit))))
-            (fx+ (if (CSS-Compound-Selector-::element static-unit) 1 0)
-                 (if (symbol? (CSS-Compound-Selector-type static-unit)) 1 0)))))
+    (values (length (css-compound-selector-ids static-unit))
+            (fx+ (length (css-compound-selector-classes static-unit))
+                 (fx+ (length (css-compound-selector-:classes static-unit))
+                      (length (css-compound-selector-attributes static-unit))))
+            (fx+ (if (css-compound-selector-::element static-unit) 1 0)
+                 (if (symbol? (css-compound-selector-type static-unit)) 1 0)))))
 
 (define css-declared-namespace : (-> CSS-Namespace-Hint (U CSS:Ident CSS:Delim Symbol) (U Symbol Boolean))
   (lambda [namespaces namespace]
@@ -169,17 +171,17 @@
 (define css-attribute-match? : (-> (Listof CSS-Attribute-Selector) (HashTable Symbol CSS-Attribute-Value) Boolean)
   (lambda [s:attrs attrs]
     (for/and : Boolean ([attr : CSS-Attribute-Selector (in-list s:attrs)])
-      (and (hash-has-key? attrs (CSS-Attribute-Selector-name attr))
-           (let*-values ([(ns.val) (hash-ref attrs (CSS-Attribute-Selector-name attr))]
+      (and (hash-has-key? attrs (css-attribute-selector-name attr))
+           (let*-values ([(ns.val) (hash-ref attrs (css-attribute-selector-name attr))]
                          [(ns datum) (cond [(not (vector? ns.val)) (values #false ns.val)]
                                            [else (values (vector-ref ns.val 0) (vector-ref ns.val 1))])])
-             (and (css-namespace-match? (CSS-Attribute-Selector-namespace attr) ns)
-                  (or (not (CSS-Attribute~Selector? attr)) ; [attr]
-                      (let* ([px:val : String (regexp-quote (~a (CSS-Attribute~Selector-value attr)))]
-                             [mode : String (if (CSS-Attribute~Selector-i? attr) "i" "-i")]
+             (and (css-namespace-match? (css-attribute-selector-namespace attr) ns)
+                  (or (not (css-attribute~selector? attr)) ; [attr]
+                      (let* ([px:val : String (regexp-quote (~a (css-attribute~selector-value attr)))]
+                             [mode : String (if (css-attribute~selector-i? attr) "i" "-i")]
                              [val : String (if (list? datum) (string-join ((inst map String Any) ~a datum)) (~a datum))])
                         (and (non-empty-string? px:val)
-                             (case (CSS-Attribute~Selector-type attr)
+                             (case (css-attribute~selector-type attr)
                                [(#\=) (regexp-match? (pregexp (format "(?~a:^~a$)" mode px:val)) val)]
                                [(#\~) (regexp-match? (pregexp (format "(?~a:\\b~a\\b)" mode px:val)) val)]
                                [(#\|) (regexp-match? (pregexp (format "(?~a:^~a(-|$))" mode px:val)) val)]
@@ -193,8 +195,8 @@
     (define excluded : (Listof Symbol) (filter-map (λ [[:c : Symbol]] (hash-ref css-exclusive-:classes :c (λ _ #false))) :classes))
     (and (or (null? excluded)
              (for/and : Boolean ([s:c (in-list s:classes)])
-               (not (memq (CSS-:Class-Selector-name s:c) excluded))))
+               (not (memq (css-:class-selector-name s:c) excluded))))
          (for/or : Any ([s:c (in-list s:classes)])
            ; TODO: deal with functional (especially dynamical) pseudo classes
-           (memq (CSS-:Class-Selector-name s:c) :classes))
+           (memq (css-:class-selector-name s:c) :classes))
          #true)))

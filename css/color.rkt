@@ -25,7 +25,7 @@
 
 (define css->color : (CSS->Racket (U FlColor CSS-Wide-Keyword 'currentcolor))
   (lambda [desc-name color]
-    (cond [(FlColor? color) color]
+    (cond [(flcolor? color) color]
           [(eq? color 'currentcolor) color #| evaluated at used-value time |#]
           [(symbol? color) (rgb* color)]
           [(exact-integer? color) (rgb* color)]

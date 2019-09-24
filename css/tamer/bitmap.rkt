@@ -68,8 +68,8 @@
                                              (cond [(memq property Btest:color-properties) desc++]
                                                    [else (cons (cons property (box this-datum)) desc++)]))))))
 
-(define ~module : CSS-Subject (CSS-Subject* #:type 'module #:classes '(main)))
-(define ~btest : CSS-Subject (CSS-Subject* #:type 'bitmap-paragraph #:classes '(test)))
+(define ~module : CSS-Subject (css-subject* #:type 'module #:classes '(main)))
+(define ~btest : CSS-Subject (css-subject* #:type 'bitmap-paragraph #:classes '(test)))
 
 (define *root : CSS-Values (make-css-values))
 (define $root : Btest
@@ -98,8 +98,8 @@
                                                            (bitmap-text "bitmap-paragraph" #:color (Btest-symbol-color $bt))
                                                            (bitmap-text (~s32 words) #:color (Btest-string-color $bt))
                                                            (bitmap-text (~a max-width) #:color (Btest-number-color $bt))
-                                                           (bitmap-text (~s (Font-face font)) #:color (Btest-string-color $bt))
-                                                           (bitmap-text (~a (Font-size font)) #:color (Btest-number-color $bt)))
+                                                           (bitmap-text (~s (font-face font)) #:color (Btest-string-color $bt))
+                                                           (bitmap-text (~a (font-size font)) #:color (Btest-number-color $bt)))
                                          (bitmap-text ")" #:color (Btest-paren-color $bt)))
                             (bitmap-text (format "- : (Bitmap ~a ~a)" desc-width height) #:color rcolor)
                             (bitmap-frame desc #:border (Btest-border $bt) #:padding (list 0 (max (- max-width desc-width) 0) 0 0))))

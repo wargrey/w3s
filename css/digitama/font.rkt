@@ -34,11 +34,11 @@
 
 (define css-font->longhand-properties : (->* (Font) ((HashTable Symbol Any)) (HashTable Symbol Any))
   (lambda [font [longhand css-longhand]]
-    (let* ([longhand++ (hash-set longhand 'font-stretch (Font-stretch font))]
-           [longhand++ (hash-set longhand++ 'font-weight (Font-weight font))]
-           [longhand++ (hash-set longhand++ 'font-style (Font-style font))]
-           [longhand++ (hash-set longhand++ 'font-size (Font-size font))])
-      (hash-set longhand++ 'font-family (list (font-face->family* (Font-face font)))))))
+    (let* ([longhand++ (hash-set longhand 'font-stretch (font-stretch font))]
+           [longhand++ (hash-set longhand++ 'font-weight (font-weight font))]
+           [longhand++ (hash-set longhand++ 'font-style (font-style font))]
+           [longhand++ (hash-set longhand++ 'font-size (font-size font))])
+      (hash-set longhand++ 'font-family (list (font-face->family* (font-face font)))))))
 
 (define-css-disjoint-filter <font-stretch> #:-> (U Symbol CSS+%)
   ;;; https://drafts.csswg.org/css-fonts-4/#font-stretch-prop
@@ -87,7 +87,7 @@
 (define css->font-family : (CSS->Racket (U String Font-Family))
   (lambda [_ value]
     (let select ([families (if (list? value) value null)])
-      (cond [(null? families) (let ([pfont (unbox &font)]) (font-face->family* (Font-face pfont)))]
+      (cond [(null? families) (let ([pfont (unbox &font)]) (font-face->family* (font-face pfont)))]
             [else (let ([family (car families)])
                     (or (and (css-font-generic-family? family) family)
                         (and (string? family) (face-filter family))
@@ -96,14 +96,14 @@
 
 (define css->font-size : (CSS->Racket Nonnegative-Real)
   (lambda [property value]
-    (cond [(symbol? value) (generic-font-size-filter value (Font-size (unbox &font)) (Font-size (default-font)))]
+    (cond [(symbol? value) (generic-font-size-filter value (font-size (unbox &font)) (font-size (default-font)))]
           [(nonnegative-flonum? value) value]
           [(css+%? value) (fl* (css+%-value value) (css-em))]
           [(css+length? value) (css:length->scalar value #false)]
           [(eq? property 'min-font-size) 0.0]
           [(eq? property 'max-font-size) +inf.0]
           [(eq? value css:inherit) (css-em)]
-          [else (generic-font-size-filter 'medium (Font-size (unbox &font)) (Font-size (default-font)))])))
+          [else (generic-font-size-filter 'medium (font-size (unbox &font)) (font-size (default-font)))])))
 
 (define css->line-height : (-> Symbol Any (U Nonnegative-Flonum CSS+Unitless))
   (lambda [_ value]

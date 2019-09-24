@@ -1,7 +1,8 @@
 #lang typed/racket/base
 
 (provide (all-from-out racket/flonum racket/fixnum racket/bool racket/list racket/format))
-(provide (except-out (all-defined-out) css-make-syntax-error css-tee-computed-value css-ref-raw
+(provide (except-out (all-defined-out)
+                     css-make-syntax-error css-tee-computed-value css-ref-raw
                      define-tokens define-token define-token-interface
                      define-symbolic-tokens define-numeric-tokens
                      define-prefab-keyword define-syntax-error))
@@ -453,8 +454,9 @@
 (define-type CSS-Shorthand+Parser (Pairof (CSS-Parser (HashTable Symbol Any)) (Listof+ Symbol)))
 (define-type CSS-Shorthand-Parser (CSS-Parser (HashTable Symbol Any)))
 (define-type CSS-Longhand-Update (-> Symbol Any Any Any))
+(define-type CSS-Declaration css-declaration)
 
-(struct CSS-Declaration
+(struct css-declaration
   ([name : CSS:Ident]
    [values : (Listof+ CSS-Token)]
    [important? : Boolean]

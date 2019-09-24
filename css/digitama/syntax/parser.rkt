@@ -143,7 +143,7 @@
   (lambda [css]
     (define rules : (Listof CSS-Syntax-Rule) (css-consume-rules css #true))
     (define rule : (Option CSS-Syntax-Rule) (and (pair? rules) (car rules)))
-    (if (and (CSS-@Rule? rule) (css:@keyword-norm=:=? (CSS-@Rule-name rule) '#:@charset))
+    (if (and (css-@rule? rule) (css:@keyword-norm=:=? (css-@rule-name rule) '#:@charset))
         (cdr rules)
         rules)))
   
@@ -163,14 +163,14 @@
   ;;; https://drafts.csswg.org/css-syntax/#consume-an-at-rule
   (lambda [css reconsumed-at-token]
     (define-values (prelude ?block) (css-consume-rule-item css #:@rule? #true))
-    (CSS-@Rule reconsumed-at-token prelude ?block)))
+    (css-@rule reconsumed-at-token prelude ?block)))
 
 (define css-consume-qualified-rule : (-> Input-Port CSS-Token (U CSS-Qualified-Rule CSS-@Rule CSS-Syntax-Error))
   ;;; https://drafts.csswg.org/css-syntax/#qualified-rule
   (lambda [css reconsumed]
     (define head (css-consume-component-value css reconsumed))
     (define-values (prelude ?block) (css-consume-rule-item css #:@rule? #false))
-    (cond [(css:block? ?block) (CSS-Qualified-Rule (cons head prelude) ?block)]
+    (cond [(css:block? ?block) (css-qualified-rule (cons head prelude) ?block)]
           [else (make+exn:css:missing-block (cons head prelude))])))
 
 (define css-consume-component-value : (-> Input-Port CSS-Token CSS-Token)
@@ -189,8 +189,8 @@
           [else reconsumed])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(struct CSS-@Rule ([name : CSS:@Keyword] [prelude : (Listof CSS-Token)] [block : (Option CSS:Block)]) #:transparent)
-(struct CSS-Qualified-Rule ([prelude : (Listof+ CSS-Token)] [block : CSS:Block]) #:transparent)
+(struct css-@rule ([name : CSS:@Keyword] [prelude : (Listof CSS-Token)] [block : (Option CSS:Block)]) #:transparent #:type-name CSS-@Rule)
+(struct css-qualified-rule ([prelude : (Listof+ CSS-Token)] [block : CSS:Block]) #:transparent #:type-name CSS-Qualified-Rule)
 
 (define css-consume-rule-item : (-> Input-Port #:@rule? Boolean (Values (Listof CSS-Token) (Option CSS:Block)))
   ;;; https://drafts.csswg.org/css-syntax/#qualified-rule
@@ -285,7 +285,7 @@
     (cond [(not (css:colon? ?:)) (make+exn:css:missing-colon id-token)]
           [else (let ([var? (and (css:ident=<-? id-token symbol-unreadable?) #true)])
                   (define-values (?values important? lazy?) (css-any->declaration-value id-token value-list var?))
-                  (if (exn? ?values) ?values (CSS-Declaration id-token ?values important? lazy?)))])))
+                  (if (exn? ?values) ?values (css-declaration id-token ?values important? lazy?)))])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define css-components->media-type+query : (-> CSS:Ident Boolean (Listof CSS-Token) CSS-Media-Query)
@@ -391,10 +391,10 @@
 (define css-declaration->media-query : (-> CSS-Declaration CSS:Block CSS-Feature-Query)
   ;;; https://drafts.csswg.org/mediaqueries/#mq-features
   (lambda [property broken-condition]
-    (define-values (media-value rest) (css-car-media-value (CSS-Declaration-values property)))
+    (define-values (media-value rest) (css-car-media-value (css-declaration-values property)))
     (cond [(eof-object? media-value) (throw-exn:css:enclosed broken-condition)]
           [(css-pair? rest) (throw-exn:css:enclosed broken-condition)]
-          [else (css-make-media-feature (CSS-Declaration-name property) media-value #\: #false)])))
+          [else (css-make-media-feature (css-declaration-name property) media-value #\: #false)])))
 
 (define css-car-comparison-operator : (-> (Listof CSS-Token) (Values (U CSS:Delim EOF) Char Char (Listof CSS-Token)))
   ;;; https://drafts.csswg.org/mediaqueries/#mq-range-context
@@ -522,8 +522,8 @@
              (cond [(null? ?pseudo-classes) (throw-exn:css:misplaced (list token (car tokens)))]
                    [else (let ([pclass (car ?pseudo-classes)])
                            (define pelement : CSS-::Element-Selector
-                             (CSS-::Element-Selector (CSS-:Class-Selector-name pclass)
-                                                     (CSS-:Class-Selector-arguments pclass)
+                             (CSS-::Element-Selector (css-:class-selector-name pclass)
+                                                     (css-:class-selector-arguments pclass)
                                                      (cdr ?pseudo-classes)))
                            (extract-simple-selector sessalc sdi setubirtta pelement ?rest))])]
             [(css:block=:=? token #\[)

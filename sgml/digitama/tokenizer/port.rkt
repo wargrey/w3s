@@ -14,9 +14,9 @@
 ;; 1. Checking empty file before reading makes it oscillates(500ms for 2.1MB xslx), weird
 
 (define-type XML-Error (Listof Char))
-(define-type XML-Datum (U Char Symbol String Keyword XML-WhiteSpace XML-Error))
+(define-type XML-Datum (U Char Symbol String Keyword XML-White-Space XML-Error))
 
-(struct XML-WhiteSpace ([raw : (Listof Char)]))
+(struct xml-white-space ([raw : (Listof Char)]) #:type-name XML-White-Space)
 
 #;(define in-xml-port : (-> Input-Port (Sequenceof XML-Datum))
   (lambda [/dev/xmlin]
@@ -106,16 +106,16 @@
                                                                      (char->hexadecimal hex)))])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-consume-whitespace : (-> Input-Port Char (Values XML-WhiteSpace (Option Char)))
+(define xml-consume-whitespace : (-> Input-Port Char (Values XML-White-Space (Option Char)))
   ;;; https://www.w3.org/TR/xml11/#NT-S
   ;;; https://www.w3.org/TR/xml11/#sec-line-ends
   (lambda [/dev/xmlin leader]
     ;; NOTE: The clients take responsibility for normalizing the End-of-Lines if required
     (let read-whitespace ([secaps : (Listof Char) (list leader)])
       (define maybe-space : (U Char EOF) (read-char /dev/xmlin))
-      (cond [(eof-object? maybe-space) (values (XML-WhiteSpace (reverse secaps)) #false)]
+      (cond [(eof-object? maybe-space) (values (xml-white-space (reverse secaps)) #false)]
             [(char-whitespace? maybe-space) (read-whitespace (cons maybe-space secaps))]
-            [else (values (XML-WhiteSpace (reverse secaps)) maybe-space)]))))
+            [else (values (xml-white-space (reverse secaps)) maybe-space)]))))
   
 (define xml-consume-namechars : (-> Input-Port Char (Values String (Option Char)))
   ;;; https://www.w3.org/TR/xml11/#NT-NameChar

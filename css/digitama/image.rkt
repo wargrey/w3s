@@ -35,8 +35,8 @@
 (define-css-function-filter <css-image-notation> #:-> CSS-Image
   ;;; https://drafts.csswg.org/css-images/#image-notation
   ;;; https://drafts.csswg.org/css-images/#image-set-notation
-  [(image) #:=> [(image "" [fallback ? index? symbol? FlColor?])
-                 (image [content ? css-image? string?] [fallback ? symbol? index? FlColor?])]
+  [(image) #:=> [(image "" [fallback ? index? symbol? flcolor?])
+                 (image [content ? css-image? string?] [fallback ? symbol? index? flcolor?])]
    (CSS<+> (CSS:<^> (<css-color>)) ; NOTE: both color and url accept strings, however their domains are not intersective.
            (CSS<&> (CSS:<^> (CSS:<+> (<css-image>) (<css:string>)))
                    (CSS<$> (CSS<?> [(<css-comma>) (CSS:<^> (<css-color>))]) 'transparent)))]
@@ -55,7 +55,7 @@
 (define make-image-normalizer : (case-> [Nonnegative-Real Positive-Flonum (-> Bitmap) -> (-> (CSS-Maybe Bitmap) Bitmap)]
                                         [Nonnegative-Real Positive-Flonum -> (-> (CSS-Maybe Bitmap) (CSS-Maybe Bitmap))])
   (let ([normalize (λ [[h : Nonnegative-Real] [d : Positive-Flonum] [b : Bitmap]]
-                     (bitmap-scale (bitmap-alter-density b d) (/ h (Bitmap-height b))))])
+                     (bitmap-scale (bitmap-alter-density b d) (/ h (bitmap-height b))))])
     (case-lambda
       [(height density)
        (λ [[raw : (CSS-Maybe Bitmap)]]
@@ -64,7 +64,7 @@
        (λ [[raw : (CSS-Maybe Bitmap)]]
          (cond [(bitmap? raw) (normalize height density raw)]
                [else (let ([alt-image : Bitmap (mk-image)])
-                       (cond [(> (Bitmap-height alt-image) height) (normalize height density alt-image)]
+                       (cond [(> (bitmap-height alt-image) height) (normalize height density alt-image)]
                              [else (bitmap-cc-superimpose (bitmap-blank height height #:density density)
                                                           (bitmap-alter-density alt-image density))]))]))])))
 
@@ -77,7 +77,7 @@
            (define bmp : Bitmap (image->bitmap (image-content img)))
            (cond [(bitmap-invalid? bmp) bmp]
                  [else (let ([color (css->color '_ (image-fallback img))])
-                         (bitmap-solid (if (or (FlColor? color) (symbol? color)) color 'transparent)))])]
+                         (bitmap-solid (if (or (flcolor? color) (symbol? color)) color 'transparent)))])]
           [(image-set? img)
            (define-values (src density)
              (for/fold ([the-src : CSS-Image-Datum ""]

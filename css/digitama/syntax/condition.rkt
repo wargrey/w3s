@@ -36,15 +36,15 @@
 (define-type CSS-Feature-Query (U CSS-Not CSS-And CSS-Or CSS-Media-Feature-Query CSS-Declaration Symbol CSS-Syntax-Error))
 (define-type CSS-Condition (U CSS-Media-Query CSS-Feature-Query))
 
-(struct CSS-Not ([condition : CSS-Condition]) #:transparent)
-(struct CSS-And ([conditions : (Listof CSS-Condition)]) #:transparent)
-(struct CSS-Or ([conditions : (Listof CSS-Condition)]) #:transparent)
+(struct css-not ([condition : CSS-Condition]) #:transparent #:type-name CSS-Not)
+(struct css-and ([conditions : (Listof CSS-Condition)]) #:transparent #:type-name CSS-And)
+(struct css-or ([conditions : (Listof CSS-Condition)]) #:transparent #:type-name CSS-Or)
 
 (define css-condition-okay? : (-> CSS-Media-Query (-> CSS-Condition Boolean) Boolean)
   (lambda [query okay?]
-    (cond [(CSS-Not? query) (not (css-condition-okay? (CSS-Not-condition query) okay?))]
-          [(CSS-And? query) (andmap (λ [[q : CSS-Condition]] (css-condition-okay? q okay?)) (CSS-And-conditions query))]
-          [(CSS-Or? query) (ormap (λ [[q : CSS-Condition]] (css-condition-okay? q okay?)) (CSS-Or-conditions query))]
+    (cond [(css-not? query) (not (css-condition-okay? (css-not-condition query) okay?))]
+          [(css-and? query) (andmap (λ [[q : CSS-Condition]] (css-condition-okay? q okay?)) (css-and-conditions query))]
+          [(css-or? query) (ormap (λ [[q : CSS-Condition]] (css-condition-okay? q okay?)) (css-or-conditions query))]
           [else (okay? query)])))
 
 ;; https://drafts.csswg.org/mediaqueries/#media-descriptor-table

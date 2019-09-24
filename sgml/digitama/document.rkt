@@ -13,17 +13,18 @@
 
 (require "tokenizer/port.rkt")
 
-(struct XML-Document
+(struct xml-document
   ([location : (U String Symbol)]
    [namespaces : (Listof (Pairof Symbol String))]
    [tokens : (Listof Any)])
-  #:transparent)
+  #:transparent
+  #:type-name XML-Document)
 
 (define xml-document-placeholder : XML-Document
-  (XML-Document '/dev/null null null))
+  (xml-document '/dev/null null null))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define read-xml-document : (-> Input-Port XML-Document)
   (lambda [/dev/xmlin]
-    (XML-Document '/dev/null null
+    (xml-document '/dev/null null
                   (reverse (read-xml/reverse /dev/xmlin)))))

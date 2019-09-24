@@ -55,8 +55,8 @@
             #:border (css-extract-border declared-values inherited-values 'border-top)
             #:brush (css-extract-background declared-values inherited-values)))))
 
-(define ~root:n : CSS-Subject (CSS-Subject* #::classes '(root)))
-(define ~root:s : CSS-Subject (CSS-Subject* #::classes '(selected)))
+(define ~root:n : CSS-Subject (css-subject* #::classes '(root)))
+(define ~root:s : CSS-Subject (css-subject* #::classes '(selected)))
 (define-values ($root:n *root:n) (css-cascade (list media.css) (list ~root:n) box-parsers box-filter #false))
 (define-values ($root:s *root:s) (css-cascade (list media.css) (list ~root:s) box-parsers box-filter #false))
 
