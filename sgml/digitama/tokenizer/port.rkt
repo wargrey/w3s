@@ -38,32 +38,48 @@
 (define read-xml/reverse : (-> Input-Port (Listof XML-Datum))
   (lambda [/dev/xmlin]
     (let read-xml ([snekot : (Listof XML-Datum) null]
-                   [maybe-char : (Option Char) (xml-read-char /dev/xmlin)])
+                   [maybe-char : (U Char EOF) (read-char /dev/xmlin)])
       (define-values (token maybe-leader) (xml-consume-token /dev/xmlin maybe-char))
-      (cond [(and maybe-leader) (read-xml (cons token snekot) maybe-leader)]
+      (cond [(char? maybe-leader) (read-xml (cons token snekot) maybe-leader)]
             [(eq? token #\uFFFD) snekot]
             [else (cons token snekot)]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-consume-token : (-> Input-Port (Option Char) (Values XML-Datum (Option Char)))
+(define xml-stream-valid? : (-> Input-Port Boolean)
+  (lambda [/dev/xmlin]
+    (and (regexp-match-peek #px"^\\s*<[?]xml\\s" /dev/xmlin)
+         #true)))
+
+(define xml-consume-declaration : (-> Input-Port (Values (Option Positive-Flonum) (Option String) Boolean))
+  (lambda [/dev/xmlin]
+    (regexp-match #px"^\\s*" /dev/xmlin)
+    
+    (let ([ch (read-char /dev/xmlin)])
+      (let*-values ([(open nch) (xml-consume-token /dev/xmlin ch)]
+                    [(name nch) (xml-consume-token /dev/xmlin nch)])
+        (displayln (cons open name))
+        (values 1.0 "UTF-8" #true)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define xml-consume-token : (-> Input-Port (U Char EOF) (Values XML-Datum (U Char EOF)))
   ;;; https://drafts.xmlwg.org/xml-syntax/#error-handling
   ;;; https://drafts.xmlwg.org/xml-syntax/#consume-a-token
   (lambda [/dev/xmlin leading-char]
-    (cond [(not leading-char) (values #\uFFFD #false)]
+    (cond [(eof-object? leading-char) (values #\uFFFD eof)]
           [(char-whitespace? leading-char) (xml-consume-whitespace /dev/xmlin leading-char)]
           [(xml-name-start-char? leading-char) (xml-consume-nmtoken /dev/xmlin leading-char)]
           [else (case leading-char
                   [(#\<) (xml-consume-open-token /dev/xmlin)]
                   [(#\' #\") (xml-consume-literal-token /dev/xmlin leading-char)]
-                  [(#\=) (values '= (xml-read-char /dev/xmlin))]
-                  [else (values leading-char (xml-read-char /dev/xmlin))])])))
+                  [(#\=) (values '= (read-char /dev/xmlin))]
+                  [else (values leading-char (read-char /dev/xmlin))])])))
 
-(define xml-consume-open-token : (-> Input-Port (Values Symbol (Option Char)))
+(define xml-consume-open-token : (-> Input-Port (Values Symbol (U Char EOF)))
   (lambda [/dev/xmlin]
-    (define maybe-char : (Option Char) (xml-read-char /dev/xmlin))
+    (define maybe-char : (U Char EOF) (read-char /dev/xmlin))
     (case maybe-char
-      [(#\?) (values '<? (xml-read-char /dev/xmlin))]
-      [(#\!) (values '<! (xml-read-char /dev/xmlin))]
+      [(#\?) (values '<? (read-char /dev/xmlin))]
+      [(#\!) (values '<! (read-char /dev/xmlin))]
       [else (values '< maybe-char)])))
 
 #;(define xml-consume-cd-token : (-> XML-Srcloc Char XML-Datum)
@@ -80,7 +96,7 @@
                 [(string=? cdc "->") (read-string 2 /dev/xmlin) (xml-make-token srcloc xml:cdata '-->)]
                 [else (xml-consume-nmtoken srcloc #\-)])))))
   
-(define xml-consume-nmtoken : (-> Input-Port Char (Values Symbol (Option Char)))
+(define xml-consume-nmtoken : (-> Input-Port Char (Values Symbol (U Char EOF)))
   ;;; https://www.w3.org/TR/xml11/#sec-common-syn
   ;;; https://www.w3.org/TR/xml11/#NT-Names
   ;;; https://www.w3.org/TR/xml11/#NT-Nmtokens
@@ -88,11 +104,11 @@
     (define-values (name maybe-next) (xml-consume-namechars /dev/xmlin leader))
     (values (string->symbol name) maybe-next)))
 
-(define xml-consume-literal-token : (-> Input-Port Char (Values (U String XML-Error) (Option Char)))
+(define xml-consume-literal-token : (-> Input-Port Char (Values (U String XML-Error) (U Char EOF)))
   ;;; https://www.w3.org/TR/xml11/#NT-SystemLiteral
   (lambda [/dev/xmlin quote]
     (define literal : (U String XML-Error) (xml-consume-system-literal /dev/xmlin quote))
-    (values literal (xml-read-char /dev/xmlin))))
+    (values literal (read-char /dev/xmlin))))
 
 (define xml-consume-hexadecimal : (->* (Input-Port Byte) (Fixnum #:\s?$? Boolean) (Values Fixnum Byte))
   (lambda [/dev/cssin --count [result 0] #:\s?$? [eat-last-whitespace? #false]]
@@ -106,23 +122,23 @@
                                                                      (char->hexadecimal hex)))])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-consume-whitespace : (-> Input-Port Char (Values XML-White-Space (Option Char)))
+(define xml-consume-whitespace : (-> Input-Port Char (Values XML-White-Space (U Char EOF)))
   ;;; https://www.w3.org/TR/xml11/#NT-S
   ;;; https://www.w3.org/TR/xml11/#sec-line-ends
   (lambda [/dev/xmlin leader]
     ;; NOTE: The clients take responsibility for normalizing the End-of-Lines if required
     (let read-whitespace ([secaps : (Listof Char) (list leader)])
       (define maybe-space : (U Char EOF) (read-char /dev/xmlin))
-      (cond [(eof-object? maybe-space) (values (xml-white-space (reverse secaps)) #false)]
+      (cond [(eof-object? maybe-space) (values (xml-white-space (reverse secaps)) eof)]
             [(char-whitespace? maybe-space) (read-whitespace (cons maybe-space secaps))]
             [else (values (xml-white-space (reverse secaps)) maybe-space)]))))
   
-(define xml-consume-namechars : (-> Input-Port Char (Values String (Option Char)))
+(define xml-consume-namechars : (-> Input-Port Char (Values String (U Char EOF)))
   ;;; https://www.w3.org/TR/xml11/#NT-NameChar
   (lambda [/dev/xmlin leader]
     (let consume-name ([srahc : (Listof Char) (list leader)])
       (define ch : (U EOF Char) (read-char /dev/xmlin))
-      (cond [(eof-object? ch) (values (list->string (reverse srahc)) #false)]
+      (cond [(eof-object? ch) (values (list->string (reverse srahc)) eof)]
             [(xml-name-char? ch) (consume-name (cons ch srahc))]
             [else (values (list->string (reverse srahc)) ch)]))))
 
@@ -157,11 +173,6 @@
                         [else (integer->char hex)]))])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-read-char : (-> Input-Port (Option Char))
-  (lambda [/dev/xmlin]
-    (define maybe-next : (U Char EOF) (read-char /dev/xmlin))
-    (and (char? maybe-next) maybe-next)))
-
 (define xml-consume-error-literal : (-> Input-Port Char (Listof Char) (U String XML-Error))
   (lambda [/dev/xmlin quote chars]
     (let consume-literal ([srahc : (Listof Char) chars])
