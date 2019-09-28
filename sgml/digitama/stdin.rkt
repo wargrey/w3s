@@ -5,7 +5,7 @@
 
 (require racket/path)
 (require racket/port)
-(require racket/fixnum)
+(require racket/unsafe/ops)
 
 (require "digicore.rkt")
 (require "tokenizer.rkt")
@@ -74,7 +74,7 @@
     (let peek/skip-whitespace : XML-Syntax-Any ([skip : Nonnegative-Fixnum 0])
       (define token (xml-peek-syntax xml skip))
       (cond [(not (xml:whitespace? token)) token]
-            [else (peek/skip-whitespace (fx+ skip 1))]))))
+            [else (peek/skip-whitespace (unsafe-fx+ skip 1))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define px:xml-declaration #px"^<[?][Xx][Mm][Ll][^?]+encoding\\s*=\\s*\"(.*?)\"[^?]*[?]>")

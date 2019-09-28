@@ -1,11 +1,10 @@
 #lang typed/racket/base
 
-;;; https://drafts.xmlwg.org/xml-syntax/#tokenization
+;;; https://www.w3.org/TR/xml11/
 
 (provide (all-defined-out))
 
 (require "characters.rkt")
-(require "../misc.rkt")
 
 (require racket/fixnum)
 
@@ -15,64 +14,52 @@
 
 (define-type XML-Error (Listof Char))
 (define-type XML-Datum (U Char Symbol String Keyword XML-White-Space XML-Error))
+(define-type XML-Literals (U 'Entity 'Attribute 'System 'Public))
 
 (struct xml-white-space ([raw : (Listof Char)]) #:type-name XML-White-Space)
 
-#;(define in-xml-port : (-> Input-Port (Sequenceof XML-Datum))
-  (lambda [/dev/xmlin]
-    (define (read-xml [hint : XML-Datum]) : XML-Datum
-      (define-values (maybe-row maybe-leader) (read-csv-row /dev/csvin n maybe-char dialect strict? trim-line? maybe-progress-handler topic))
-      (cond [(and maybe-leader) (if (and maybe-row) (cons maybe-leader maybe-row) (read-with maybe-leader))]
-            [(not maybe-row) (csv-report-final-progress /dev/csvin maybe-progress-handler topic #true) sentinel]
-            [else (cons eof maybe-row)]))
+(define xml-empty-attributes : (Immutable-HashTable Symbol XML-Datum) (make-immutable-hasheq))
 
-    (unless (not skip-header?) (read-line /dev/csvin))
-    ((inst make-do-sequence (Pairof (U Char EOF) (Vectorof CSV-Field)) (Vectorof CSV-Field))
-     (λ [] (values unsafe-cdr
-                   read-csv
-                   (read-csv (cons (read-char /dev/csvin) empty-row))
-                   (λ [v] (not (eq? v sentinel)))
-                   #false
-                   #false)))))
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define read-xml/reverse : (-> Input-Port (Listof XML-Datum))
   (lambda [/dev/xmlin]
     (let read-xml ([snekot : (Listof XML-Datum) null]
-                   [maybe-char : (U Char EOF) (read-char /dev/xmlin)])
-      (define-values (token maybe-leader) (xml-consume-token /dev/xmlin maybe-char))
-      (cond [(char? maybe-leader) (read-xml (cons token snekot) maybe-leader)]
-            [(eq? token #\uFFFD) snekot]
-            [else (cons token snekot)]))))
+                   [maybe-char : (U Char EOF) (read-char /dev/xmlin)]
+                   [literal-type : XML-Literals 'Attribute])
+      (define-values (token maybe-leader) (xml-consume-token /dev/xmlin maybe-char literal-type))
+      (if (char? maybe-leader)
+          (read-xml (cons token snekot) maybe-leader
+                    (cond [(xml-white-space? token) literal-type]
+                          [(or (eq? token '=) (eq? token '>)) 'Attribute]
+                          [(or (eq? token 'SYSTEM) (eq? literal-type 'Public)) 'System]
+                          [(eq? token 'PUBLIC) 'Public]
+                          [(eq? token 'ENTITY) 'Entity]
+                          [else literal-type]))
+          (cond [(eq? token #\uFFFD) snekot]
+                [else (cons token snekot)])))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-stream-valid? : (-> Input-Port Boolean)
-  (lambda [/dev/xmlin]
-    (and (regexp-match-peek #px"^\\s*<[?]xml\\s" /dev/xmlin)
-         #true)))
-
-(define xml-consume-declaration : (-> Input-Port (Values (Option Positive-Flonum) (Option String) Boolean))
-  (lambda [/dev/xmlin]
-    (regexp-match #px"^\\s*" /dev/xmlin)
-    
-    (let ([ch (read-char /dev/xmlin)])
-      (let*-values ([(open nch) (xml-consume-token /dev/xmlin ch)]
-                    [(name nch) (xml-consume-token /dev/xmlin nch)])
-        (displayln (cons open name))
-        (values 1.0 "UTF-8" #true)))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-consume-token : (-> Input-Port (U Char EOF) (Values XML-Datum (U Char EOF)))
-  ;;; https://drafts.xmlwg.org/xml-syntax/#error-handling
-  ;;; https://drafts.xmlwg.org/xml-syntax/#consume-a-token
-  (lambda [/dev/xmlin leading-char]
+(define xml-consume-token : (->* (Input-Port (U Char EOF)) (XML-Literals) (Values XML-Datum (U Char EOF)))
+  ;;; https://www.w3.org/TR/xml11/#sec-common-syn
+  (lambda [/dev/xmlin leading-char [literals 'Attribute]]
     (cond [(eof-object? leading-char) (values #\uFFFD eof)]
           [(char-whitespace? leading-char) (xml-consume-whitespace /dev/xmlin leading-char)]
           [(xml-name-start-char? leading-char) (xml-consume-nmtoken /dev/xmlin leading-char)]
           [else (case leading-char
                   [(#\<) (xml-consume-open-token /dev/xmlin)]
-                  [(#\' #\") (xml-consume-literal-token /dev/xmlin leading-char)]
+                  [(#\? #\/) (xml-consume-close-token /dev/xmlin leading-char)]
+                  [(#\' #\") (xml-consume-literal-token /dev/xmlin leading-char literals)]
                   [(#\=) (values '= (read-char /dev/xmlin))]
+                  [(#\>) (values '> (read-char /dev/xmlin))]
                   [else (values leading-char (read-char /dev/xmlin))])])))
+
+(define xml-consume-token/skip-whitespace : (->* (Input-Port (U Char EOF)) (XML-Literals) (Values XML-Datum (U Char EOF)))
+  ;;; https://www.w3.org/TR/xml11/#sec-common-syn
+  (lambda [/dev/xmlin leading-char [literals 'Attribute]]
+    (define-values (token maybe-char) (xml-consume-token /dev/xmlin leading-char literals))
+
+    (cond [(xml-white-space? token) (xml-consume-token /dev/xmlin maybe-char literals)]
+          [else (values token maybe-char)])))
 
 (define xml-consume-open-token : (-> Input-Port (Values Symbol (U Char EOF)))
   (lambda [/dev/xmlin]
@@ -80,7 +67,15 @@
     (case maybe-char
       [(#\?) (values '<? (read-char /dev/xmlin))]
       [(#\!) (values '<! (read-char /dev/xmlin))]
+      [(#\/) (values '</ (read-char /dev/xmlin))]
       [else (values '< maybe-char)])))
+
+(define xml-consume-close-token : (-> Input-Port Char (Values (U Symbol Char) (U Char EOF)))
+  (lambda [/dev/xmlin leading-char]
+    (define maybe-char : (U Char EOF) (read-char /dev/xmlin))
+    (cond [(not (eq? maybe-char #\>)) (values leading-char maybe-char)]
+          [(eq? leading-char #\?) (values '?> (read-char /dev/xmlin))]
+          [else (values '/> (read-char /dev/xmlin))])))
 
 #;(define xml-consume-cd-token : (-> XML-Srcloc Char XML-Datum)
   ;;; https://drafts.xmlwg.org/xml-syntax/#CDO-token-diagram
@@ -104,10 +99,15 @@
     (define-values (name maybe-next) (xml-consume-namechars /dev/xmlin leader))
     (values (string->symbol name) maybe-next)))
 
-(define xml-consume-literal-token : (-> Input-Port Char (Values (U String XML-Error) (U Char EOF)))
+(define xml-consume-literal-token : (-> Input-Port Char XML-Literals (Values (U String XML-Error) (U Char EOF)))
   ;;; https://www.w3.org/TR/xml11/#NT-SystemLiteral
-  (lambda [/dev/xmlin quote]
-    (define literal : (U String XML-Error) (xml-consume-system-literal /dev/xmlin quote))
+  (lambda [/dev/xmlin quote type]
+    (define literal : (U String XML-Error)
+      (case type
+        [(Attribute) (xml-consume-attribute-value /dev/xmlin quote)]
+        [(Entity) (xml-consume-entity-value /dev/xmlin quote)]
+        [(Public) (xml-consume-pubid-literal /dev/xmlin quote)]
+        [else (xml-consume-system-literal /dev/xmlin quote)]))
     (values literal (read-char /dev/xmlin))))
 
 (define xml-consume-hexadecimal : (->* (Input-Port Byte) (Fixnum #:\s?$? Boolean) (Values Fixnum Byte))
@@ -141,6 +141,24 @@
       (cond [(eof-object? ch) (values (list->string (reverse srahc)) eof)]
             [(xml-name-char? ch) (consume-name (cons ch srahc))]
             [else (values (list->string (reverse srahc)) ch)]))))
+
+(define xml-consume-entity-value : (-> Input-Port Char (U String XML-Error))
+  ;;; https://www.w3.org/TR/xml11/#NT-EntityValue
+  (lambda [/dev/xmlin quote]
+    (let consume-literal ([srahc : (Listof Char) null])
+      (define ch : (U EOF Char) (read-char /dev/xmlin))
+      (cond [(eof-object? ch) (reverse srahc)]
+            [(eq? ch quote) (list->string (reverse srahc))]
+            [else (consume-literal (cons ch srahc))]))))
+
+(define xml-consume-attribute-value : (-> Input-Port Char (U String XML-Error))
+  ;;; https://www.w3.org/TR/xml11/#NT-AttValue
+  (lambda [/dev/xmlin quote]
+    (let consume-literal ([srahc : (Listof Char) null])
+      (define ch : (U EOF Char) (read-char /dev/xmlin))
+      (cond [(eof-object? ch) (reverse srahc)]
+            [(eq? ch quote) (list->string (reverse srahc))]
+            [else (consume-literal (cons ch srahc))]))))
 
 (define xml-consume-system-literal : (-> Input-Port Char (U String XML-Error))
   ;;; https://www.w3.org/TR/xml11/#NT-SystemLiteral
