@@ -100,7 +100,4 @@
     (cond [(or (false? CHARSET) (string-ci=? CHARSET "UTF-8")) /dev/rawin]
           [else (with-handlers ([exn? (λ _ /dev/rawin)])
                   (reencode-input-port /dev/rawin CHARSET (car (assert magic pair?))
-                                       #false (object-name /dev/rawin) #true
-                                       (λ [[msg : String] [port : Input-Port]] : Nothing
-                                         (error 'css-fallback-encode-input-port
-                                                (string-append msg ": ~e") port))))])))
+                                       #false (object-name /dev/rawin) #true))])))
