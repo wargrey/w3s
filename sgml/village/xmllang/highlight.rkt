@@ -7,7 +7,7 @@
 
 (define xml-lexer ;: (-> Input-Port (Values (U String EOF) Symbol (Option Symbol) (Option Integer) (Option Integer)))
   (lambda [/dev/drin offset mode]
-    (define t #|: CSS-Syntax-Any|# (xml-consume-token /dev/drin '/dev/drin))
+    (define t #|: XML-Syntax-Any|# (xml-consume-token /dev/drin '/dev/drin))
     (cond [(eof-object? t) (values eof 'eof #false #false #false 0 (not mode))]
           [(xml:whitespace? t) (xml-hlvalues t (if (string? (xml:whitespace-datum t)) 'comment 'white-space) #false mode)]
           [(xml:name? t) (xml-hlvalues t (xml-id->drtype (xml:name-datum t)) #false mode)]

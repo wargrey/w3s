@@ -12,7 +12,7 @@
 #;(require "misc.rkt")
 
 (require "tokenizer/port.rkt")
-(require "parser.rkt")
+;(require "parser.rkt")
 
 (struct xml-document
   ([location : (U String Symbol)]
