@@ -10,11 +10,11 @@
 
 ;;; Performance Hint:
 ;; 0. See schema/digitama/exchange/csv/reader/port.rkt
-;; 1. Checking empty file before reading makes it oscillates(500ms for 2.1MB xslx), weird
+;; 1. Checking empty file before reading makes it oscillate(500ms for 2.1MB xslx), weird
 
 (define-type XML-Error (Listof Char))
 (define-type XML-Datum (U Char Symbol String Keyword XML-White-Space XML-Error))
-(define-type XML-Literals (U 'Entity 'Attribute 'System 'Public))
+(define-type XML-Literal (U 'Entity 'Attribute 'System 'Public))
 
 (struct xml-white-space ([raw : (Listof Char)]) #:type-name XML-White-Space)
 
@@ -25,21 +25,15 @@
   (lambda [/dev/xmlin]
     (let read-xml ([snekot : (Listof XML-Datum) null]
                    [maybe-char : (U Char EOF) (read-char /dev/xmlin)]
-                   [literal-type : XML-Literals 'Attribute])
+                   [literal-type : XML-Literal 'Attribute])
       (define-values (token maybe-leader) (xml-consume-token /dev/xmlin maybe-char literal-type))
       (if (char? maybe-leader)
-          (read-xml (cons token snekot) maybe-leader
-                    (cond [(xml-white-space? token) literal-type]
-                          [(or (eq? token '=) (eq? token '>)) 'Attribute]
-                          [(or (eq? token 'SYSTEM) (eq? literal-type 'Public)) 'System]
-                          [(eq? token 'PUBLIC) 'Public]
-                          [(eq? token 'ENTITY) 'Entity]
-                          [else literal-type]))
+          (read-xml (cons token snekot) maybe-leader (xml-next-literal-type token literal-type))
           (cond [(eq? token #\uFFFD) snekot]
                 [else (cons token snekot)])))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-consume-token : (->* (Input-Port (U Char EOF)) (XML-Literals) (Values XML-Datum (U Char EOF)))
+(define xml-consume-token : (->* (Input-Port (U Char EOF)) (XML-Literal) (Values XML-Datum (U Char EOF)))
   ;;; https://www.w3.org/TR/xml11/#sec-common-syn
   (lambda [/dev/xmlin leading-char [literals 'Attribute]]
     (cond [(eof-object? leading-char) (values #\uFFFD eof)]
@@ -53,7 +47,7 @@
                   [(#\>) (values '> (read-char /dev/xmlin))]
                   [else (values leading-char (read-char /dev/xmlin))])])))
 
-(define xml-consume-token/skip-whitespace : (->* (Input-Port (U Char EOF)) (XML-Literals) (Values XML-Datum (U Char EOF)))
+(define xml-consume-token/skip-whitespace : (->* (Input-Port (U Char EOF)) (XML-Literal) (Values XML-Datum (U Char EOF)))
   ;;; https://www.w3.org/TR/xml11/#sec-common-syn
   (lambda [/dev/xmlin leading-char [literals 'Attribute]]
     (define-values (token maybe-char) (xml-consume-token /dev/xmlin leading-char literals))
@@ -99,7 +93,7 @@
     (define-values (name maybe-next) (xml-consume-namechars /dev/xmlin leader))
     (values (string->symbol name) maybe-next)))
 
-(define xml-consume-literal-token : (-> Input-Port Char XML-Literals (Values (U String XML-Error) (U Char EOF)))
+(define xml-consume-literal-token : (-> Input-Port Char XML-Literal (Values (U String XML-Error) (U Char EOF)))
   ;;; https://www.w3.org/TR/xml11/#NT-SystemLiteral
   (lambda [/dev/xmlin quote type]
     (define literal : (U String XML-Error)
@@ -191,6 +185,15 @@
                         [else (integer->char hex)]))])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define xml-next-literal-type : (-> XML-Datum XML-Literal XML-Literal)
+  (lambda [token prev-type]
+    (cond [(xml-white-space? token) prev-type]
+          [(or (eq? token '=) (eq? token '>)) 'Attribute]
+          [(or (eq? token 'SYSTEM) (eq? prev-type 'Public)) 'System]
+          [(eq? token 'PUBLIC) 'Public]
+          [(eq? token 'ENTITY) 'Entity]
+          [else prev-type])))
+
 (define xml-consume-error-literal : (-> Input-Port Char (Listof Char) (U String XML-Error))
   (lambda [/dev/xmlin quote chars]
     (let consume-literal ([srahc : (Listof Char) chars])

@@ -5,7 +5,7 @@
 (require css/digitama/syntax/digicore)
 (require css/digitama/syntax/tokenizer)
 
-(define css-lexer ;: (-> Input-Port (Values (U String EOF) Symbol (Option Symbol) (Option Integer) (Option Integer)))
+(define css-lexer ;: (-> Input-Port Natural Any (Values (U String EOF) Symbol (Option Symbol) (Option Integer) (Option Integer) Natural Any))
   (lambda [/dev/drin offset mode]
     (define t #|: CSS-Syntax-Any|# (css-consume-token /dev/drin '/dev/drin))
     (cond [(eof-object? t) (values eof 'eof #false #false #false 0 (not mode))]
@@ -46,6 +46,6 @@
           [(css:bad? token) 'error]
           [else 'other])))
 
-(define css-hlvalues ;: (-> CSS-Token Symbol (Option Symbol) (Values String Symbol (Option Symbol) (Option Integer) (Option Integer)))
+(define css-hlvalues ;: (-> CSS-Token Symbol (Option Symbol) Any (Values String Symbol (Option Symbol) (Option Integer) (Option Integer) Natural Any))
   (lambda [t type subtype mode]
     (values "" type subtype (css-token-start t) (css-token-end t) 0 (not mode))))
