@@ -4,10 +4,10 @@
 
 (require sgml/digitama/digicore)
 (require sgml/digitama/tokenizer)
+(require sgml/digitama/delimiter)
 
 (define xml-lexer ;: (-> Input-Port Natural XML-Parser-Mode (Values (U String EOF) Symbol (Option Symbol) (Option Integer) (Option Integer) Natural XML-Parser-Mode))
   (lambda [/dev/drin offset mode]
-    (log-message (current-logger) 'debug 'exn:ssh (~a (list offset mode (peek-bytes 8 0 /dev/drin))))
     (define-values (t next-mode) (xml-consume-token* /dev/drin '/dev/drin mode))
     (cond [(eof-object? t) (values eof 'eof #false #false #false 0 next-mode)]
           [(xml:whitespace? t) (xml-hlvalues t (if (string? (xml:whitespace-datum t)) 'comment 'white-space) #false next-mode)]
@@ -21,8 +21,7 @@
 (define xml-char->drtype ;: (-> Char Symbol)
   (lambda [delim]
     (case delim
-      [(#\: #\, #\;) 'sexp-comment]
-      [(#\+ #\- #\* #\/) 'symbol]
+      [(#\=) 'keyword]
       [else 'constant])))
   
 (define xml-id->drtype ;: (-> Symbol Symbol)

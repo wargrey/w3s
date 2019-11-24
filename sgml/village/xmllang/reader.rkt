@@ -18,9 +18,10 @@
 
 (define xml-read-syntax
   (lambda [[src #false] [/dev/xmlin (current-input-port)]]
+    (regexp-match #px"^\\s*" /dev/xmlin) ; skip blanks before real css content
+    (define-values (line column position) (port-next-location /dev/xmlin))
     (define bytes-bag (port->bytes /dev/xmlin))
-    (define all-rules (read-xml-document (open-input-bytes bytes-bag)))
-    (define all-namespaces (xml-document-namespaces all-rules))
+    (define all-namespaces null)
     (define lang.xml
       (cond [(and (pair? all-namespaces) (not (eq? (caar all-namespaces) '||)))
              (string->symbol (string-append (symbol->string (caar all-namespaces)) ".xml"))]
@@ -40,7 +41,8 @@
            (let ([/dev/rawin (open-input-bytes #,bytes-bag '#,src)]
                  [mem0 (current-memory-use)])
              (port-count-lines! /dev/rawin)
-             (define-values (&lang.xml cpu real gc) (time-apply read-xml-document (list /dev/rawin)))
+             (set-port-next-location! /dev/rawin #,line #,column #,position)
+             (define-values (&lang.xml cpu real gc) (time-apply read-xml-document* (list /dev/rawin)))
              (values (car &lang.xml) (/ (- (current-memory-use) mem0) 1024.0 1024.0) cpu real gc)))
 
          (module+ main

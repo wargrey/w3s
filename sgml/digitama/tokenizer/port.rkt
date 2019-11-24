@@ -5,6 +5,7 @@
 (provide (all-defined-out))
 
 (require "characters.rkt")
+(require "../delimiter.rkt")
 
 (require racket/fixnum)
 
@@ -16,27 +17,27 @@
 (define-type XML-Datum (U Char Symbol String Keyword XML-White-Space XML-Error))
 (define-type XML-Literal (U 'Entity 'Attribute 'System 'Public))
 
+(define ch:eof : Char #\uFFFD)
+
 (struct xml-white-space ([raw : (Listof Char)]) #:type-name XML-White-Space)
 
 (define xml-empty-attributes : (Immutable-HashTable Symbol XML-Datum) (make-immutable-hasheq))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define read-xml/reverse : (-> Input-Port (Listof XML-Datum))
+(define read-xml-tokens : (-> Input-Port (Listof XML-Datum))
   (lambda [/dev/xmlin]
     (let read-xml ([snekot : (Listof XML-Datum) null]
                    [maybe-char : (U Char EOF) (read-char /dev/xmlin)]
                    [literal-type : XML-Literal 'Attribute])
       (define-values (token maybe-leader) (xml-consume-token /dev/xmlin maybe-char literal-type))
-      (if (char? maybe-leader)
-          (read-xml (cons token snekot) maybe-leader (xml-next-literal-type token literal-type))
-          (cond [(eq? token #\uFFFD) snekot]
-                [else (cons token snekot)])))))
+      (cond [(char? maybe-leader) (read-xml (cons token snekot) maybe-leader (xml-next-literal-type token literal-type))]
+            [else (reverse (if (eq? token ch:eof) snekot (cons token snekot)))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-consume-token : (->* (Input-Port (U Char EOF)) (XML-Literal) (Values XML-Datum (U Char EOF)))
   ;;; https://www.w3.org/TR/xml11/#sec-common-syn
   (lambda [/dev/xmlin leading-char [literals 'Attribute]]
-    (cond [(eof-object? leading-char) (values #\uFFFD eof)]
+    (cond [(eof-object? leading-char) (values ch:eof eof)]
           [(char-whitespace? leading-char) (xml-consume-whitespace /dev/xmlin leading-char)]
           [(xml-name-start-char? leading-char) (xml-consume-nmtoken /dev/xmlin leading-char)]
           [else (case leading-char
@@ -55,21 +56,21 @@
     (cond [(xml-white-space? token) (xml-consume-token /dev/xmlin maybe-char literals)]
           [else (values token maybe-char)])))
 
-(define xml-consume-open-token : (-> Input-Port (Values Symbol (U Char EOF)))
+(define xml-consume-open-token : (-> Input-Port (Values Char (U Char EOF)))
   (lambda [/dev/xmlin]
     (define maybe-char : (U Char EOF) (read-char /dev/xmlin))
     (case maybe-char
-      [(#\?) (values '<? (read-char /dev/xmlin))]
-      [(#\!) (values '<! (read-char /dev/xmlin))]
-      [(#\/) (values '</ (read-char /dev/xmlin))]
-      [else (values '< maybe-char)])))
+      [(#\?) (values <? (read-char /dev/xmlin))]
+      [(#\!) (values <! (read-char /dev/xmlin))]
+      [(#\/) (values </ (read-char /dev/xmlin))]
+      [else (values #\< maybe-char)])))
 
 (define xml-consume-close-token : (-> Input-Port Char (Values (U Symbol Char) (U Char EOF)))
   (lambda [/dev/xmlin leading-char]
     (define maybe-char : (U Char EOF) (read-char /dev/xmlin))
     (cond [(not (eq? maybe-char #\>)) (values leading-char maybe-char)]
-          [(eq? leading-char #\?) (values '?> (read-char /dev/xmlin))]
-          [else (values '/> (read-char /dev/xmlin))])))
+          [(eq? leading-char #\?) (values ?> (read-char /dev/xmlin))]
+          [else (values /> (read-char /dev/xmlin))])))
 
 #;(define xml-consume-cd-token : (-> XML-Srcloc Char XML-Datum)
   ;;; https://drafts.xmlwg.org/xml-syntax/#CDO-token-diagram

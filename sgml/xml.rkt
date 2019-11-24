@@ -6,7 +6,7 @@
 
 (provide (all-defined-out))
 (provide (struct-out XML-Document))
-(provide read-xml-document)
+(provide read-xml-document read-xml-document*)
 
 (require "digitama/document.rkt")
 

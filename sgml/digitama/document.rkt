@@ -12,7 +12,7 @@
 #;(require "misc.rkt")
 
 (require "tokenizer/port.rkt")
-;(require "parser.rkt")
+(require "tokenizer.rkt")
 
 (struct xml-document
   ([location : (U String Symbol)]
@@ -30,7 +30,15 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define read-xml-document : (-> XML-StdIn XML-Document)
   (lambda [/dev/rawin]
-    (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin))
-    
+    (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin #false))
+
     (xml-document '/dev/null null version encoding standalone?
-                  (reverse (read-xml/reverse /dev/xmlin)))))
+                  (read-xml-tokens /dev/xmlin))))
+
+(define read-xml-document* : (-> XML-StdIn XML-Document)
+  (lambda [/dev/rawin]
+    (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin #true))
+
+    (displayln (port-counts-lines? /dev/xmlin))
+    (xml-document '/dev/null null version encoding standalone?
+                  (read-xml-tokens* /dev/xmlin))))
