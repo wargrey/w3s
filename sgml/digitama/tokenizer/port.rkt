@@ -5,7 +5,6 @@
 (provide (all-defined-out))
 
 (require "characters.rkt")
-(require "../delimiter.rkt")
 
 (require racket/unsafe/ops)
 
@@ -57,17 +56,17 @@
   (lambda [/dev/xmlin]
     (define maybe-char : (U Char EOF) (peek-char /dev/xmlin 0))
     (case maybe-char
-      [(#\?) (read-char /dev/xmlin) <?]
-      [(#\!) (read-char /dev/xmlin) <!]
-      [(#\/) (read-char /dev/xmlin) </]
+      [(#\?) (read-char /dev/xmlin) #\?]
+      [(#\!) (read-char /dev/xmlin) #\!]
+      [(#\/) (read-char /dev/xmlin) #\/]
       [else #\<])))
 
 (define xml-consume-close-token : (-> Input-Port Char Char)
   (lambda [/dev/xmlin leading-char]
     (define maybe-char : (U Char EOF) (peek-char /dev/xmlin 0))
     (cond [(not (eq? maybe-char #\>)) leading-char]
-          [(eq? leading-char #\?) (read-char /dev/xmlin) ?>]
-          [else (read-char /dev/xmlin) />])))
+          [(eq? leading-char #\?) (read-char /dev/xmlin) #\?]
+          [else (read-char /dev/xmlin) #\/])))
 
 #;(define xml-consume-cd-token : (-> XML-Srcloc Char XML-Datum)
   ;;; https://drafts.xmlwg.org/xml-syntax/#CDO-token-diagram

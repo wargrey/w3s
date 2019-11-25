@@ -5,7 +5,6 @@
 (provide (all-defined-out))
 
 (require "digicore.rkt")
-(require "delimiter.rkt")
 (require "stdin.rkt")
 (require "misc.rkt")
 
@@ -33,6 +32,8 @@
 
 (struct xml-parser-mode
   ([literal-type : XML-Literal]
+   [open-type : (Option Char)]
+   [error? : Boolean]
    [line : Positive-Integer]
    [column : Natural]
    [position : Positive-Integer])
@@ -55,21 +56,39 @@
     (define prev-mode : XML-Parser-Mode
       (cond [(xml-parser-mode? mode) mode]
             [else (let-values ([(line column position) (port-next-location /dev/xmlin)])
-                    (xml-parser-mode 'Attribute line column position))]))
+                    (xml-parser-mode 'Attribute #false #false line column position))]))
     (define prev-type : XML-Literal (xml-parser-mode-literal-type prev-mode))
+    (define self-open : (Option Char) (xml-parser-mode-open-type prev-mode))
     (define datum : (U XML-Datum EOF) (xml-consume-token /dev/xmlin prev-type))
+    (define literal-type : XML-Literal (xml-next-literal-type datum prev-type))
     (define-values (line column end) (port-next-location /dev/xmlin))
 
-    (values (cond [(eof-object? datum) eof]
-                  [(xml-white-space? datum) (xml-make-token source prev-mode end xml:whitespace (xml-white-space-raw datum))]
-                  [(char? datum)
-                   (case datum
-                     [(<! <? </ #\<) (xml-make-token source prev-mode end xml:open datum)]
-                     [(!> ?> /> #\>) (xml-make-token source prev-mode end xml:close datum)]
-                     [(#\=) (xml-make-token source prev-mode end xml:eq datum)]
-                     [else (xml-make-token source prev-mode end xml:delim datum)])]
-                  [(symbol? datum) (xml-make-token source prev-mode end xml:name datum)]
-                  [(string? datum) (xml-make-token source prev-mode end xml:string datum)]
-                  [(keyword? datum) (xml-make-token source prev-mode end xml:keyword datum)]
-                  [else (xml-make-bad-token source prev-mode end xml:bad:stdin xml:cdata datum)])
-            (xml-parser-mode (xml-next-literal-type datum prev-type) line column end))))
+    (if (not (char? datum))
+        (values (cond [(xml-white-space? datum) (xml-make-token source prev-mode end xml:whitespace (xml-white-space-raw datum))]
+                      [(symbol? datum) (xml-make-token source prev-mode end xml:name datum)]
+                      [(string? datum) (xml-make-token source prev-mode end xml:string datum)]
+                      [(keyword? datum) (xml-make-token source prev-mode end xml:keyword datum)]
+                      [(eof-object? datum) eof]
+                      [else (xml-make-bad-token source prev-mode end xml:bad:stdin xml:string (list->string datum))])
+                (xml-parser-mode literal-type self-open #false line column end))
+        (case datum
+          [(#\<) (values (xml-make-token source prev-mode end xml:open datum)
+                         (xml-parser-mode literal-type #\< (not (not self-open)) line column end))]
+          [(#\>) (values (xml-make-token source prev-mode end xml:close datum)
+                         (xml-parser-mode literal-type #false (not (or (eq? self-open #\<) (eq? self-open #\!) (eq? self-open #\/))) line column end))]
+          [(#\=) (values (xml-make-token source prev-mode end xml:eq datum)
+                         (xml-parser-mode literal-type self-open #false line column end))]
+          [(#\/) (if (not self-open)
+                     (values (xml-make-token source prev-mode end xml:open datum)
+                             (xml-parser-mode literal-type #\/ #false line column end))
+                     (values (xml-make-token source prev-mode end xml:close datum)
+                             (xml-parser-mode literal-type #false (not (eq? self-open #\<)) line column end)))]
+          [(#\!) (values (xml-make-token source prev-mode end xml:decl datum)
+                         (xml-parser-mode literal-type #\! (not (not self-open)) line column end))]
+          [(#\?) (if (not self-open)
+                     (values (xml-make-token source prev-mode end xml:pi datum)
+                             (xml-parser-mode literal-type #\? #false line column end))
+                     (values (xml-make-token source prev-mode end xml:close datum)
+                             (xml-parser-mode literal-type #false (not (eq? self-open #\?)) line column end)))]
+          [else (values (xml-make-token source prev-mode end xml:delim datum)
+                        (xml-parser-mode literal-type self-open #false line column end))]))))

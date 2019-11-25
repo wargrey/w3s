@@ -22,4 +22,5 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-hlvalues ;: (-> XML-Token Symbol (Option Symbol) XML-Parser-Mode (Values String Symbol (Option Symbol) (Option Integer) (Option Integer) Natural XML-Parser-Mode))
   (lambda [t type subtype mode]
-    (values "" type subtype (xml-token-start t) (xml-token-end t) 0 mode)))
+    (values "" (if (xml-parser-mode-error? mode) 'error type) subtype
+            (xml-token-start t) (xml-token-end t) 0 mode)))
