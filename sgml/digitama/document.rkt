@@ -39,6 +39,5 @@
   (lambda [/dev/rawin]
     (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin #true))
 
-    (displayln (port-counts-lines? /dev/xmlin))
     (xml-document '/dev/null null version encoding standalone?
                   (read-xml-tokens* /dev/xmlin))))

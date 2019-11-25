@@ -85,7 +85,7 @@
                   (define name=value (regexp-try-match #px"^([-a-zA-Z0-9]+)\\s*=\\s*[\"']([^\"'>]+)[\"']\\s*" /dev/xmlin))
                   (define name.value (and name=value (filter bytes? (cdr name=value))))
                   (if (not name.value)
-                      (let ([?> (regexp-match #px"[^>]*[?]>" /dev/xmlin)])
+                      (let ([?> (regexp-match #px"[^>]*[?]>\\s*" /dev/xmlin)])
                         (values (and (real? version) (positive? version) (real->double-flonum version)) encoding standalone?))
                       (let ([name (unsafe-car name.value)]
                             [value (unsafe-car (unsafe-cdr name.value))])
