@@ -231,8 +231,10 @@
     
   ; TODO: Typed Racket is buggy if there are more than 11 conditions
   (define-symbolic-tokens xml-symbolic-token #:+ XML-Symbolic-Token
-    [xml:delim          #:+ XML:Delim           #:as Char]
+    [xml:delim          #:+ XML:Delim           #:as Symbol]
     [xml:name           #:+ XML:Name            #:as Symbol]
+    [xml:entity         #:+ XML:Entity          #:as Symbol]
+    [xml:char           #:+ XML:Char            #:as Char]
     [xml:string         #:+ XML:String          #:as String]
     [xml:keyword        #:+ XML:Keyword         #:as Keyword]
     [xml:whitespace     #:+ XML:WhiteSpace      #:as (U String Char)]))
@@ -284,7 +286,6 @@
 (define xml-token-datum->string : (-> XML-Token String)
   (lambda [instance]
     (cond [(xml:name? instance) (symbol->string (xml:name-datum instance))]
-          [(xml:delim=:=? instance #\tab) "||"]
           [(xml:string? instance) (~s (xml:string-datum instance))]
           [else (~a (xml-token->datum instance))])))
   

@@ -5,6 +5,7 @@
 (provide (all-defined-out))
 
 (require "characters.rkt")
+(require "../delimiter.rkt")
 
 (require racket/unsafe/ops)
 
@@ -40,8 +41,11 @@
           [(xml-name-start-char? ch) (xml-consume-nmtoken /dev/xmlin ch)]
           [else (case ch
                   [(#\<) (xml-consume-open-token /dev/xmlin)]
-                  [(#\? #\/) (xml-consume-close-token /dev/xmlin ch)]
+                  [(#\>) _>]
+                  [(#\=) :=]
                   [(#\' #\") (xml-consume-literal-token /dev/xmlin ch literals)]
+                  [(#\? #\/) (xml-consume-close-token /dev/xmlin ch)]
+                  [(#\& #\%) (xml-consume-reference /dev/xmlin ch)]
                   [else ch])])))
 
 #;(define xml-consume-token/skip-whitespace : (->* (Input-Port (U Char EOF)) (XML-Literal) (Values XML-Datum (U Char EOF)))
@@ -52,21 +56,21 @@
     (cond [(xml-white-space? token) (xml-consume-token /dev/xmlin maybe-char literals)]
           [else (values token maybe-char)])))
 
-(define xml-consume-open-token : (-> Input-Port Char)
+(define xml-consume-open-token : (-> Input-Port Symbol)
   (lambda [/dev/xmlin]
     (define maybe-char : (U Char EOF) (peek-char /dev/xmlin 0))
     (case maybe-char
-      [(#\?) (read-char /dev/xmlin) #\?]
-      [(#\!) (read-char /dev/xmlin) #\!]
-      [(#\/) (read-char /dev/xmlin) #\/]
-      [else #\<])))
+      [(#\?) (read-char /dev/xmlin) <?]
+      [(#\!) (read-char /dev/xmlin) <!]
+      [(#\/) (read-char /dev/xmlin) </]
+      [else <_])))
 
-(define xml-consume-close-token : (-> Input-Port Char Char)
+(define xml-consume-close-token : (-> Input-Port Char (U Symbol XML-Error))
   (lambda [/dev/xmlin leading-char]
     (define maybe-char : (U Char EOF) (peek-char /dev/xmlin 0))
-    (cond [(not (eq? maybe-char #\>)) leading-char]
-          [(eq? leading-char #\?) (read-char /dev/xmlin) #\?]
-          [else (read-char /dev/xmlin) #\/])))
+    (cond [(not (eq? maybe-char #\>)) (list leading-char)]
+          [(eq? leading-char #\?) (read-char /dev/xmlin) ?>]
+          [else (read-char /dev/xmlin) />])))
 
 #;(define xml-consume-cd-token : (-> XML-Srcloc Char XML-Datum)
   ;;; https://drafts.xmlwg.org/xml-syntax/#CDO-token-diagram
@@ -83,6 +87,13 @@
                 [else (xml-consume-nmtoken srcloc #\-)])))))
   
 (define xml-consume-nmtoken : (-> Input-Port Char Symbol)
+  ;;; https://www.w3.org/TR/xml11/#sec-common-syn
+  ;;; https://www.w3.org/TR/xml11/#NT-Names
+  ;;; https://www.w3.org/TR/xml11/#NT-Nmtokens
+  (lambda [/dev/xmlin leader]
+    (string->symbol (xml-consume-namechars /dev/xmlin leader))))
+
+(define xml-consume-reference-token : (-> Input-Port Char Symbol)
   ;;; https://www.w3.org/TR/xml11/#sec-common-syn
   ;;; https://www.w3.org/TR/xml11/#NT-Names
   ;;; https://www.w3.org/TR/xml11/#NT-Nmtokens
@@ -129,6 +140,11 @@
       (cond [(eof-object? ch) (xml-read-string /dev/xmlin span leader)]
             [(xml-name-char? ch) (consume-name (unsafe-fx+ span 1))]
             [else (xml-read-string /dev/xmlin span leader)]))))
+
+(define xml-consume-reference : (-> Input-Port Char Char)
+  ;;; https://www.w3.org/TR/xml11/#sec-references
+  (lambda [/dev/xmlin type]
+    type))
 
 (define xml-consume-entity-value : (-> Input-Port Char (U String XML-Error))
   ;;; https://www.w3.org/TR/xml11/#NT-EntityValue
@@ -182,7 +198,7 @@
 (define xml-next-literal-type : (-> (U XML-Datum EOF) XML-Literal XML-Literal)
   (lambda [token prev-type]
     (cond [(xml-white-space? token) prev-type]
-          [(or (eq? token #\=) (eq? token #\>)) 'Attribute]
+          [(or (eq? token :=) (eq? token _>)) 'Attribute]
           [(or (eq? token 'SYSTEM) (eq? prev-type 'Public)) 'System]
           [(eq? token 'PUBLIC) 'Public]
           [(eq? token 'ENTITY) 'Entity]

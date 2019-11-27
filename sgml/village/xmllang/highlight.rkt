@@ -14,7 +14,9 @@
           [(xml:string? t) (xml-hlvalues t 'string #false next-mode)]
           [(xml:open? t) (xml-hlvalues t 'parenthesis '|(| next-mode)]
           [(xml:close? t) (xml-hlvalues t 'parenthesis '|)| next-mode)]
-          [(xml:delim? t) (xml-hlvalues t 'constant #false next-mode)]
+          [(xml:eq? t) (xml-hlvalues t 'constant #false next-mode)]
+          [(xml:char? t) (xml-hlvalues t 'constant #false next-mode)]
+          [(xml:delim? t) (xml-hlvalues t 'error #false next-mode)]
           [(xml:keyword? t) (xml-hlvalues t 'keyword #false next-mode)]
           [(xml:bad? t) (xml-hlvalues t 'error #false next-mode)]
           [else (xml-hlvalues t 'other #false next-mode)])))
@@ -22,5 +24,4 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-hlvalues ;: (-> XML-Token Symbol (Option Symbol) XML-Parser-Mode (Values String Symbol (Option Symbol) (Option Integer) (Option Integer) Natural XML-Parser-Mode))
   (lambda [t type subtype mode]
-    (values "" (if (xml-parser-mode-error? mode) 'error type) subtype
-            (xml-token-start t) (xml-token-end t) 0 mode)))
+    (values "" type subtype (xml-token-start t) (xml-token-end t) 0 mode)))
