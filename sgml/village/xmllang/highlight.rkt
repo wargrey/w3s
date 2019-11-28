@@ -16,7 +16,7 @@
           [(xml:close? t) (xml-hlvalues t 'parenthesis '|)| next-mode)]
           [(xml:eq? t) (xml-hlvalues t 'constant #false next-mode)]
           [(xml:char? t) (xml-hlvalues t 'constant #false next-mode)]
-          [(xml:delim? t) (xml-hlvalues t 'error #false next-mode)]
+          [(xml:entity? t) (xml-hlvalues t 'constant #false next-mode)]
           [(xml:keyword? t) (xml-hlvalues t 'keyword #false next-mode)]
           [(xml:bad? t) (xml-hlvalues t 'error #false next-mode)]
           [else (xml-hlvalues t 'other #false next-mode)])))

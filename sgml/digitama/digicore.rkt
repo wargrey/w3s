@@ -237,6 +237,7 @@
     [xml:char           #:+ XML:Char            #:as Char]
     [xml:string         #:+ XML:String          #:as String]
     [xml:keyword        #:+ XML:Keyword         #:as Keyword]
+    [xml:text           #:+ XML:Text            #:as String]
     [xml:whitespace     #:+ XML:WhiteSpace      #:as (U String Char)]))
 
 ;; https://drafts.xmlwg.org/xml-syntax/#style-rules

@@ -69,7 +69,7 @@
                          [(or (eq? datum <_) (eq? datum </) (eq? datum <!) (eq? datum <?)) (xml-make-token source prev-mode end xml:open datum)]
                          [(or (eq? datum _>) (eq? datum />) (eq? datum ?>)) (xml-make-token source prev-mode end xml:close datum)]
                          [(eq? datum :=) (xml-make-token source prev-mode end xml:eq datum)]
-                         [else (xml-make-token source prev-mode end xml:delim datum)])]
+                         [else (xml-make-token source prev-mode end xml:entity datum)])]
                   [(string? datum) (xml-make-token source prev-mode end xml:string datum)]
                   [(char? datum) (xml-make-token source prev-mode end xml:char datum)]
                   [(keyword? datum) (xml-make-token source prev-mode end xml:keyword datum)]
