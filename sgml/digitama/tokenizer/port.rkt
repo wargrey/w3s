@@ -45,7 +45,7 @@
                   [(#\=) :=]
                   [(#\' #\") (xml-consume-literal-token /dev/xmlin ch literals)]
                   [(#\? #\/) (xml-consume-close-token /dev/xmlin ch)]
-                  [(#\& #\%) (xml-consume-reference /dev/xmlin ch)]
+                  [(#\& #\%) (xml-consume-reference-token /dev/xmlin ch)]
                   [else ch])])))
 
 #;(define xml-consume-token/skip-whitespace : (->* (Input-Port (U Char EOF)) (XML-Literal) (Values XML-Datum (U Char EOF)))
@@ -93,12 +93,18 @@
   (lambda [/dev/xmlin leader]
     (string->symbol (xml-consume-namechars /dev/xmlin leader))))
 
-(define xml-consume-reference-token : (-> Input-Port Char Symbol)
-  ;;; https://www.w3.org/TR/xml11/#sec-common-syn
-  ;;; https://www.w3.org/TR/xml11/#NT-Names
-  ;;; https://www.w3.org/TR/xml11/#NT-Nmtokens
+(define xml-consume-reference-token : (-> Input-Port Char (U Char Symbol XML-Error))
+  ;;; https://www.w3.org/TR/xml11/#sec-references
   (lambda [/dev/xmlin leader]
-    (string->symbol (xml-consume-namechars /dev/xmlin leader))))
+    (cond [(eq? leader #\%) (xml-consume-entity-reference /dev/xmlin #false)]
+          [else (let ([entity-leader (read-char /dev/xmlin)])
+                  (cond [(eof-object? entity-leader) leader]
+                        [(eq? entity-leader #\;) (list leader entity-leader)]
+                        [(not (eq? entity-leader #\#)) (string->symbol (xml-consume-namechars /dev/xmlin leader))]
+                        [else (let ([char-leader (read-char /dev/xmlin)])
+                                (cond [(eof-object? char-leader) (list leader entity-leader)]
+                                      [(eq? char-leader #\x) (xml-consume-char-reference /dev/xmlin #false)]
+                                      [else (xml-consume-char-reference /dev/xmlin char-leader)]))]))])))
 
 (define xml-consume-literal-token : (-> Input-Port Char XML-Literal (U String XML-Error))
   ;;; https://www.w3.org/TR/xml11/#NT-SystemLiteral
@@ -141,10 +147,23 @@
             [(xml-name-char? ch) (consume-name (unsafe-fx+ span 1))]
             [else (xml-read-string /dev/xmlin span leader)]))))
 
-(define xml-consume-reference : (-> Input-Port Char Char)
-  ;;; https://www.w3.org/TR/xml11/#sec-references
-  (lambda [/dev/xmlin type]
-    type))
+(define xml-consume-char-reference : (-> Input-Port (Option Char) (U Char XML-Error))
+  ;;; https://www.w3.org/TR/xml11/#NT-CharRef
+  (lambda [/dev/xmlin maybe-leader]
+    (define-values (base char-digit?) (if (not maybe-leader) (values 16 char-hexdigit?) (values 10 char-numeric?)))
+    
+    (let read-char-reference ([ch : (U EOF Char) (or maybe-leader (read-char /dev/xmlin))]
+                              [srahc : (Listof Char) (if maybe-leader (list #\# #\&) (list #\x #\# #\&))]
+                              [code : Fixnum 0])
+      (cond [(eof-object? ch) (reverse srahc)]
+            [(char-digit? ch) (read-char-reference (read-char /dev/xmlin) (cons ch srahc) (unsafe-fx+ (unsafe-fx* code base) (char->hexadecimal ch)))]
+            [(eq? ch #\;) (natural->char code)]
+            [else (xml-consume-error-literal /dev/xmlin #\; (cons ch srahc))]))))
+
+(define xml-consume-entity-reference : (-> Input-Port (Option Char) Symbol)
+  ;;; https://www.w3.org/TR/xml11/#NT-EntityRef
+  (lambda [/dev/xmlin maybe-leader]
+    'null))
 
 (define xml-consume-entity-value : (-> Input-Port Char (U String XML-Error))
   ;;; https://www.w3.org/TR/xml11/#NT-EntityValue
@@ -183,17 +202,6 @@
             [(xml-pubid-char? ch) (consume-literal (cons ch srahc))]
             [else (xml-consume-error-literal /dev/xmlin quote (cons ch srahc))]))))
 
-(define xml-consume-escaped-char : (-> Input-Port Char)
-  ;;; https://drafts.xmlwg.org/xml-syntax/#consume-an-escaped-code-point
-  (lambda [xml]
-    (define esc : (U EOF Char) (read-char xml))
-    (cond [(eof-object? esc) #\uFFFD]
-          [(not (char-hexdigit? esc)) esc]
-          [else (let-values ([(hex _) (xml-consume-hexadecimal xml (sub1 6) (char->hexadecimal esc) #:\s?$? #true)])
-                  (cond [(> hex #x10FFFF) #\uFFFD] ; #\nul and max unicode
-                        [(<= #xD800 hex #xDFFF) #\uFFFD] ; surrogate
-                        [else (integer->char hex)]))])))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-next-literal-type : (-> (U XML-Datum EOF) XML-Literal XML-Literal)
   (lambda [token prev-type]
@@ -204,7 +212,7 @@
           [(eq? token 'ENTITY) 'Entity]
           [else prev-type])))
 
-(define xml-consume-error-literal : (-> Input-Port Char (Listof Char) (U String XML-Error))
+(define xml-consume-error-literal : (-> Input-Port Char (Listof Char) XML-Error)
   (lambda [/dev/xmlin quote chars]
     (let consume-literal ([srahc : (Listof Char) chars])
       (define ch : (U EOF Char) (read-char /dev/xmlin))

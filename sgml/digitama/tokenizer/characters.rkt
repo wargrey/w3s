@@ -4,11 +4,10 @@
 
 (provide (all-defined-out))
 
-(define char-hexdigit? : (-> (U EOF Char) Boolean : #:+ Char)
+(define char-hexdigit? : (-> Char Boolean)
   (lambda [ch]
-    (and (char? ch)
-         (or (char-numeric? ch)
-             (char-ci<=? #\a ch #\f)))))
+    (or (char-numeric? ch)
+        (char-ci<=? #\a ch #\f))))
 
 (define char->hexadecimal : (-> Char Fixnum)
   (lambda [hexch]
@@ -16,13 +15,12 @@
           [(char<=? #\A hexch) (- (char->integer hexch) #x37)]
           [else (- (char->integer hexch) #x30)])))
 
-(define xml-char-non-printable? : (-> (U EOF Char) Boolean : #:+ Char)
-  (lambda [ch]
-    (and (char? ch)
-         (or (char<=? #\null ch #\backspace)
-             (char=? ch #\vtab)
-             (char<=? #\u000E ch #\u001F)
-             (char=? ch #\rubout)))))
+(define natural->char : (-> Fixnum Char)
+  (lambda [n]
+    (cond [(<= #x1 n #xD7FF) (integer->char n)]
+          [(<= #xE000 n #xFFFD) (integer->char n)]
+          [(<= #x10000 n #x10FFFF) (integer->char n)]
+          [else #\uFFFD])))
 
 (define xml-name-start-char? : (-> Char Boolean)
   (lambda [ch]
