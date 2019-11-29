@@ -1,3 +1,5 @@
+#lang sgml/xml
+
 <!DOCTYPE testdoc [
 <!--* test swi: check to see how SWI handles non-ASCII characters
     * in Unicode.  Named entities, numeric character references,

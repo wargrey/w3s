@@ -1,3 +1,5 @@
+#lang sgml/xml
+
 <?xml version="1.0" encoding="utf-8"?>
 
 <!-- The ü below is a single character #xFC in NFC

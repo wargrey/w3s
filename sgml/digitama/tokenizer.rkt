@@ -32,7 +32,7 @@
          bad)]))
 
 (struct xml-parser-mode
-  ([literal-type : XML-Literal]
+  ([scope : XML-Scope]
    [open-type : (Option Char)]
    [line : Positive-Integer]
    [column : Natural]
@@ -56,14 +56,16 @@
     (define prev-mode : XML-Parser-Mode
       (cond [(xml-parser-mode? mode) mode]
             [else (let-values ([(line column position) (port-next-location /dev/xmlin)])
-                    (xml-parser-mode 'Attribute #false line column position))]))
-    (define prev-type : XML-Literal (xml-parser-mode-literal-type prev-mode))
+                    (xml-parser-mode 'TopLevel #false line column position))]))
+    (define prev-scope : XML-Scope (xml-parser-mode-scope prev-mode))
     (define self-open : (Option Char) (xml-parser-mode-open-type prev-mode))
-    (define datum : (U XML-Datum EOF) (xml-consume-token /dev/xmlin prev-type))
-    (define literal-type : XML-Literal (xml-next-literal-type datum prev-type))
+    (define-values (datum next-scope) (xml-consume-token /dev/xmlin prev-scope))
     (define-values (line column end) (port-next-location /dev/xmlin))
 
-    (values (cond [(xml-white-space? datum) (xml-make-token source prev-mode end xml:whitespace (xml-white-space-raw datum))]
+    (values (cond [(xml-white-space? datum)
+                   (if (xml-comment? datum)
+                       (xml-make-token source prev-mode end xml:comment (xml-white-space-raw datum))
+                       (xml-make-token source prev-mode end xml:whitespace (xml-white-space-raw datum)))]
                   [(symbol? datum)
                    (cond [(symbol-interned? datum) (xml-make-token source prev-mode end xml:name datum)]
                          [(or (eq? datum <_) (eq? datum </) (eq? datum <!) (eq? datum <?)) (xml-make-token source prev-mode end xml:open datum)]
@@ -75,4 +77,4 @@
                   [(keyword? datum) (xml-make-token source prev-mode end xml:keyword datum)]
                   [(eof-object? datum) eof]
                   [else (xml-make-bad-token source prev-mode end xml:bad:stdin xml:string (list->string datum))])
-            (xml-parser-mode literal-type self-open line column end))))
+            (xml-parser-mode next-scope self-open line column end))))

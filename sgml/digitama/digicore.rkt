@@ -217,6 +217,8 @@
    [xml:pi              #:+ XML:PI              #:-> xml:open]
    [xml:decl            #:+ XML:Decl            #:-> xml:open]
    [xml:cdata           #:+ XML:CDATA           #:-> xml:open]
+
+   [xml:comment         #:+ XML:Comment         #:-> xml:whitespace]
    
    [xml:bad:eof         #:+ XML:Bad:EOF         #:-> xml:bad]
    [xml:bad:eol         #:+ XML:Bad:EOL         #:-> xml:bad]
@@ -238,7 +240,7 @@
     [xml:string         #:+ XML:String          #:as String]
     [xml:keyword        #:+ XML:Keyword         #:as Keyword]
     [xml:text           #:+ XML:Text            #:as String]
-    [xml:whitespace     #:+ XML:WhiteSpace      #:as (U String Char)]))
+    [xml:whitespace     #:+ XML:WhiteSpace      #:as String]))
 
 ;; https://drafts.xmlwg.org/xml-syntax/#style-rules
 ;; https://drafts.xmlwg.org/selectors/#invalid

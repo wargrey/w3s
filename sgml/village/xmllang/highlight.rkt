@@ -9,6 +9,7 @@
   (lambda [/dev/drin offset mode]
     (define-values (t next-mode) (xml-consume-token* /dev/drin '/dev/drin mode))
     (cond [(eof-object? t) (values eof 'eof #false #false #false 0 next-mode)]
+          [(xml:comment? t) (xml-hlvalues t 'comment #false next-mode)]
           [(xml:whitespace? t) (xml-hlvalues t 'white-space #false next-mode)]
           [(xml:name? t) (xml-hlvalues t 'symbol #false next-mode)]
           [(xml:string? t) (xml-hlvalues t 'string #false next-mode)]

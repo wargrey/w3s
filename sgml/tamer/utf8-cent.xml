@@ -1,4 +1,7 @@
+#lang sgml/xml
+
 <?xml version="1.0" encoding="utf-8"?>
+
 <testdoc id="t7-20020923" resp="MSM">
 <names>From Española -- a ‘test’ for you.</names>
 <nums>From Española -- a ‘test’ for you.</nums>
