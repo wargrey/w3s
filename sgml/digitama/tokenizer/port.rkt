@@ -59,14 +59,18 @@
 
 (define xml-consume-open-token : (-> Input-Port XML-Scope (Values (U Symbol XML-Comment XML-Error) XML-Scope))
   (lambda [/dev/xmlin scope]
-    (define maybe-string : (U String EOF) (peek-string 3 0 /dev/xmlin))
-    (cond [(eof-object? maybe-string) (values (list #\<) '<)]
-          [(string=? maybe-string "!--") (read-string 3 /dev/xmlin) (values (xml-consum-comment-tail /dev/xmlin) scope)]
-          [else (let ([ch (string-ref maybe-string 0)])
-                  (cond [(eq? ch #\!) (read-char /dev/xmlin) (values <! '<!)]
-                        [(eq? ch #\?) (read-char /dev/xmlin) (values <? '<?)]
-                        [(eq? ch #\/) (read-char /dev/xmlin) (values </ '</)]
-                        [else (values <_ '<)]))])))
+    (define maybe-ch : (U Char EOF) (peek-char /dev/xmlin 0))
+    (cond [(eq? maybe-ch #\!)
+           (let ([dispatcher (peek-char /dev/xmlin 1)])
+             (cond [(eq? dispatcher #\[)
+                    (cond [(not (equal? (peek-string 6 2 /dev/xmlin) "CDATA[")) (read-string 2 /dev/xmlin) (values <!$ '|<![|)]
+                          [else (read-string 9 /dev/xmlin) (values <!$CDATA$ scope)])]
+                   [(and (eq? dispatcher #\-) (eq? (peek-char /dev/xmlin 2) #\-))
+                    (read-string 3 /dev/xmlin) (values (xml-consum-comment-tail /dev/xmlin) scope)]
+                   [else (read-char /dev/xmlin) (values <! '<!)]))]
+          [(eq? maybe-ch #\?) (read-char /dev/xmlin) (values <? '<?)]
+          [(eq? maybe-ch #\/) (read-char /dev/xmlin) (values </ '</)]
+          [else (values <_ '<)])))
 
 (define xml-consume-close-token : (-> Input-Port Char XML-Scope (Values (U Symbol XML-Error) XML-Scope))
   (lambda [/dev/xmlin leading-char scope]
@@ -132,7 +136,7 @@
                     (cond [(and -? >?)
                            (read-string 2 /dev/xmlin)
                            (cond [(not malformed?) (xml-comment (list->string (reverse srahc)))]
-                                 [else (list*  #\< #\! #\- #\- (reverse (list* #\< #\- #\- srahc)))])]
+                                 [else (list*  #\< #\! #\- #\- (reverse (list* #\> #\- #\- srahc)))])]
                           [else (read-comment (cons maybe-char srahc) (or malformed? -? (null? srahc)))]))]))))
   
 (define xml-consume-namechars : (-> Input-Port Char String)
@@ -174,8 +178,8 @@
   (lambda [/dev/xmlin quote]
     (let consume-literal ([srahc : (Listof Char) null])
       (define ch : (U EOF Char) (read-char /dev/xmlin))
-      (cond [(eof-object? ch) (reverse srahc)]
-            [(eq? ch quote) (list->string (reverse srahc))]
+      (cond [(eq? ch quote) (list->string (reverse srahc))]
+            [(eof-object? ch) (reverse srahc)]
             [else (consume-literal (cons ch srahc))]))))
 
 (define xml-consume-attribute-value : (-> Input-Port Char (U String XML-Error))
@@ -183,8 +187,8 @@
   (lambda [/dev/xmlin quote]
     (let consume-literal ([srahc : (Listof Char) null])
       (define ch : (U EOF Char) (read-char /dev/xmlin))
-      (cond [(eof-object? ch) (reverse srahc)]
-            [(eq? ch quote) (list->string (reverse srahc))]
+      (cond [(eq? ch quote) (list->string (reverse srahc))]
+            [(eof-object? ch) (reverse srahc)]
             [else (consume-literal (cons ch srahc))]))))
 
 (define xml-consume-system-literal : (-> Input-Port Char (U String XML-Error))
@@ -192,8 +196,8 @@
   (lambda [/dev/xmlin quote]
     (let consume-literal ([srahc : (Listof Char) null])
       (define ch : (U EOF Char) (read-char /dev/xmlin))
-      (cond [(eof-object? ch) (reverse srahc)]
-            [(eq? ch quote) (list->string (reverse srahc))]
+      (cond [(eq? ch quote) (list->string (reverse srahc))]
+            [(eof-object? ch) (reverse srahc)]
             [else (consume-literal (cons ch srahc))]))))
 
 (define xml-consume-pubid-literal : (-> Input-Port Char (U String XML-Error))
@@ -201,8 +205,8 @@
   (lambda [/dev/xmlin quote]
     (let consume-literal ([srahc : (Listof Char) null])
       (define ch : (U EOF Char) (read-char /dev/xmlin))
-      (cond [(eof-object? ch) (reverse srahc)]
-            [(eq? ch quote) (list->string (reverse srahc))]
+      (cond [(eq? ch quote) (list->string (reverse srahc))]
+            [(eof-object? ch) (reverse srahc)]
             [(xml-pubid-char? ch) (consume-literal (cons ch srahc))]
             [else (xml-consume-error-literal /dev/xmlin quote (cons ch srahc))]))))
 

@@ -1,0 +1,88 @@
+#lang sgml/xml
+
+<?xml version="1.0"?>
+
+<!DOCTYPE testdoc [
+<!--* test swi: check to see how SWI handles non-ASCII characters
+    * in Unicode.  Named entities, numeric character references,
+    * and native UTF8 may all be different. 
+    *-->
+<!ENTITY ntilde  "&#241;" ><!-- small n, tilde -->
+<!ENTITY lsquo  "&#x2018;" ><!--=single quotation mark, left-->
+<!ENTITY rsquo  "&#8217;" ><!-- = x2019 single quotation mark, right-->
+<!ENTITY townname "Espa&ntilde;ola">
+<!ENTITY townnum "Espa&#241;ola">
+<!ENTITY scarequote1 "a &lsquo;test&rsquo; for you">
+<!ENTITY scarequote2 "a &#x2018;test&#x2019; for you">
+
+<!ENTITY xxe SYSTEM "/etc/passwd" >
+<!ENTITY ok CDATA "&#10003">
+]>
+
+<!-- comment -->
+<!--- bad comment -->
+<!-- bad -- comment -->
+<!-- ok-comment -->
+<!-- bad comment end --->
+
+<testdoc id="t7-20020923" resp="MSM">
+<names>From Espa&ntilde;ola -- a &lsquo;test&rsquo; for you.</names>
+<nums>From Espa&#241;ola -- a &#x2018;test&#x2019; for you.</nums>
+<names>From &townname; -- &scarequote1;.</names>
+<nums>From &townname; -- &scarequote2;.</nums>
+
+<foo>&xxe;</foo>
+<test>This content holds a &#0; byte that should be skipped</test>
+
+<badent>
+<test a="John & Mary">
+   John & Mary
+</test>
+</badent>
+
+<!-- The ü below is a single character #xFC in NFC
+(encoded as two UTF-8 octets #xC3 #xBC)  -->
+
+<name>Dürst</name>
+<name name="Dürst"/>
+
+<Человек язык="мова">Borys</Человек>
+
+<testdoc id="t7-20020923" resp="MSM">
+  <names>From Española -- a ‘test’ for you.</names>
+  <nums>From Española -- a ‘test’ for you.</nums>
+  <names>From Española -- a ‘test’ for you.</names>
+  <nums>From Española -- a ‘test’ for you.</nums>
+</testdoc>
+
+<li>Some cyrillic chars: &#1080;&#1081;</li>
+<li>This a an sizzors symbol: &#9988;</li>
+<li>OK, entered via entity: &ok;</li>
+<a att="Cirle with 1: &#10112;" ok="&ok;"/>
+
+<?this is a pi>
+
+<document name="value" badatt=10>
+  <ul>
+    <li>Line one</li>
+    <li>Line with <em>emphasised</em> text</li>
+  </ul>
+
+  <p>This is a nice paragraph with some <b>bold</b> text</p>
+
+  <!-- minus2 -->
+  <x--y/>
+</document>
+
+<p>
+This is a long test holding, with the intention to switch to wide character
+encoding from the local buffer to malloc'ed buffer.  This (&#9996;) is a
+piece symbol.
+</p>
+<p>
+This is a long test holding, with the intention to switch to wide character
+encoding after the output buffer has been switched to malloc'ed mode.  For this
+reason, our buffer should should hold more than 256 character, as defined in
+util.h in the structure ocharbuf.  This (&#10173;) is a fat arrow.
+</p>
+</testdoc>

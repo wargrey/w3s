@@ -1,5 +1,0 @@
-#lang sgml/xml
-
-<test>
-<?this is a pi>
-</test>

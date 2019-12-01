@@ -1,7 +1,0 @@
-#lang sgml/xml
-
-<?xml version="1.0"?>
-<!DOCTYPE foo [
- <!ENTITY xxe SYSTEM "/etc/passwd" >
-]>
-<foo>&xxe;</foo>
