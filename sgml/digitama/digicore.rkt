@@ -216,16 +216,8 @@
    
    [xml:pi              #:+ XML:PI              #:-> xml:open]
    [xml:decl            #:+ XML:Decl            #:-> xml:open]
-   [xml:cdata           #:+ XML:CDATA           #:-> xml:open]
 
-   [xml:comment         #:+ XML:Comment         #:-> xml:whitespace]
-   
-   [xml:bad:eof         #:+ XML:Bad:EOF         #:-> xml:bad]
-   [xml:bad:eol         #:+ XML:Bad:EOL         #:-> xml:bad]
-   [xml:bad:char        #:+ XML:Bad:Char        #:-> xml:bad]
-   [xml:bad:blank       #:+ XML:Bad:Blank       #:-> xml:bad]
-   [xml:bad:range       #:+ XML:Bad:Range       #:-> xml:bad]
-   [xml:bad:stdin       #:+ XML:Bad:StdIn       #:-> xml:bad]]
+   [xml:comment         #:+ XML:Comment         #:-> xml:whitespace]]
 
   ; WARNING: Carefully defining types to avoid happening to mess up '(list? datum)'. 
   (define-symbolic-tokens xml-bad-token #:+ XML-Bad-Token
@@ -233,10 +225,9 @@
     
   ; TODO: Typed Racket is buggy if there are more than 11 conditions
   (define-symbolic-tokens xml-symbolic-token #:+ XML-Symbolic-Token
-    [xml:delim          #:+ XML:Delim           #:as Symbol]
+    [xml:delim          #:+ XML:Delim           #:as (U Symbol Char)]
     [xml:name           #:+ XML:Name            #:as Symbol]
-    [xml:entity         #:+ XML:Entity          #:as Symbol]
-    [xml:char           #:+ XML:Char            #:as Char]
+    [xml:entity         #:+ XML:Entity          #:as (U Symbol Index)]
     [xml:string         #:+ XML:String          #:as String]
     [xml:keyword        #:+ XML:Keyword         #:as Keyword]
     [xml:text           #:+ XML:Text            #:as String]

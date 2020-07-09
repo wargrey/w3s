@@ -1,6 +1,9 @@
 #lang scribble/manual
 
-@title{SVG: An SVG Engine written in Typed Racket}
-@author{wargrey}
+@(require digimon/tamer)
 
-@italic{The next engine on the list.}
+@handbook-title/pkg-desc[]
+
+@defmodule*/no-declare[(svg)]{The package is on its way...}
+
+@handbook-appendix[#:index? #true]

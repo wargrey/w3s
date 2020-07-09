@@ -26,8 +26,8 @@
   
 (define-syntax (xml-make-bad-token stx)
   (syntax-case stx []
-    [(_ source prev-mode end xml:bad:sub token datum)
-     #'(let ([bad (xml-make-token source prev-mode end xml:bad:sub (~s (cons (object-name token) datum)))])
+    [(_ source prev-mode end xml:bad:sub datum)
+     #'(let ([bad (xml-make-token source prev-mode end xml:bad:sub (~s datum))])
          (xml-log-read-error (xml-token->string bad))
          bad)]))
 
@@ -66,15 +66,23 @@
                    (if (xml-comment? datum)
                        (xml-make-token source prev-mode end xml:comment (xml-white-space-raw datum))
                        (xml-make-token source prev-mode end xml:whitespace (xml-white-space-raw datum)))]
+                  [(char? datum)
+                   (cond [(eq? datum #\<) (xml-make-token source prev-mode end xml:open datum)]
+                         [(eq? datum #\>) (xml-make-token source prev-mode end xml:close datum)]
+                         [(eq? datum #\=) (xml-make-token source prev-mode end xml:eq datum)]
+                         [(memq datum '(#\( #\[)) (xml-make-token source prev-mode end xml:open datum)]
+                         [(memq datum '(#\) #\])) (xml-make-token source prev-mode end xml:close datum)]
+                         [else (xml-make-token source prev-mode end xml:delim datum)])]
                   [(symbol? datum)
                    (cond [(symbol-interned? datum) (xml-make-token source prev-mode end xml:name datum)]
-                         [(or (eq? datum <_) (eq? datum </) (eq? datum <!) (eq? datum <?)) (xml-make-token source prev-mode end xml:open datum)]
-                         [(or (eq? datum _>) (eq? datum />) (eq? datum ?>)) (xml-make-token source prev-mode end xml:close datum)]
-                         [(eq? datum :=) (xml-make-token source prev-mode end xml:eq datum)]
+                         [(eq? datum </) (xml-make-token source prev-mode end xml:open datum)]
+                         [(eq? datum />) (xml-make-token source prev-mode end xml:close datum)]
+                         [(memq datum (list <! <? <!$ <!$CDATA$)) (xml-make-token source prev-mode end xml:open datum)]
+                         [(memq datum (list ?> $$>)) (xml-make-token source prev-mode end xml:close datum)]
                          [else (xml-make-token source prev-mode end xml:entity datum)])]
                   [(string? datum) (xml-make-token source prev-mode end xml:string datum)]
-                  [(char? datum) (xml-make-token source prev-mode end xml:char datum)]
+                  [(index? datum) (xml-make-token source prev-mode end xml:entity datum)]
                   [(keyword? datum) (xml-make-token source prev-mode end xml:keyword datum)]
                   [(eof-object? datum) eof]
-                  [else (xml-make-bad-token source prev-mode end xml:bad:stdin xml:string (list->string datum))])
+                  [else (xml-make-bad-token source prev-mode end xml:bad (list->string datum))])
             (xml-parser-mode next-scope self-open line column end))))

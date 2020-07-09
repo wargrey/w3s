@@ -15,12 +15,12 @@
           [(char<=? #\A hexch) (- (char->integer hexch) #x37)]
           [else (- (char->integer hexch) #x30)])))
 
-(define natural->char : (-> Fixnum Char)
+(define natural->char-entity : (-> Fixnum Index)
   (lambda [n]
-    (cond [(<= #x1 n #xD7FF) (integer->char n)]
-          [(<= #xE000 n #xFFFD) (integer->char n)]
-          [(<= #x10000 n #x10FFFF) (integer->char n)]
-          [else #\uFFFD])))
+    (cond [(and (<= #x1 n) (<= n #xD7FF)) n]
+          [(and (<= #xE000 n) (<= n #xFFFD)) n]
+          [(and (<= #x10000 n) (<= n #x10FFFF)) n]
+          [else #xFFFD])))
 
 (define xml-name-start-char? : (-> Char Boolean)
   (lambda [ch]

@@ -1,6 +1,9 @@
 #lang scribble/manual
 
-@title{CSS: A CSS Engine Written in Typed Racket}
-@author{wargrey}
+@(require digimon/tamer)
 
-@italic{Sorry, I will write the documentation when it is ready to use. Currently I am using it to build a desktop application.}
+@handbook-title/pkg-desc[]
+
+@defmodule*/no-declare[(css)]{The docs is on its way...}
+
+@handbook-appendix[#:index? #true]

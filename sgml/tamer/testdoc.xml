@@ -15,8 +15,8 @@
 <!ENTITY scarequote1 "a &lsquo;test&rsquo; for you">
 <!ENTITY scarequote2 "a &#x2018;test&#x2019; for you">
 
-<!ENTITY xxe SYSTEM "/etc/passwd" >
-<!ENTITY ok CDATA "&#10003">
+<!--ENTITY xxe SYSTEM "/etc/passwd" -->
+<!--ENTITY ok CDATA "&#10003"-->
 ]>
 
 <!-- comment -->
@@ -33,12 +33,6 @@
 
 <foo>&xxe;</foo>
 <test>This content holds a &#0; byte that should be skipped</test>
-
-<badent>
-<test a="John & Mary">
-   John & Mary
-</test>
-</badent>
 
 <!-- The ü below is a single character #xFC in NFC
 (encoded as two UTF-8 octets #xC3 #xBC)  -->
@@ -85,4 +79,17 @@ encoding after the output buffer has been switched to malloc'ed mode.  For this
 reason, our buffer should should hold more than 256 character, as defined in
 util.h in the structure ocharbuf.  This (&#10173;) is a fat arrow.
 </p>
+
+<![CDATA[]]]]><![CDATA[>]]>
+
+<![CDATA[*/
+body { background-image: url("marble.png?width=300&height=300") }     
+/*]]>
+
 </testdoc>
+
+<badent>
+<test a="John & Mary">
+   John & Mary
+</test>
+</badent>
