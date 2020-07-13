@@ -1,6 +1,11 @@
-# CSS: A CSS Engine Written in Typed Racket
+# A CSS Engine written in Typed Racket
 
 wargrey
 
-_Sorry, I will write the documentation when it is ready to use.
-Currently I am using it to build a desktop application._
+```racket
+ (require css) package: [w3s](https://pkgs.racket-lang.org/package/w3s)
+```
+
+The docs is on its way...
+
+See `bitmap` for its foundation.
