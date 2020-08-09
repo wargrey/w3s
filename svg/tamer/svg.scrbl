@@ -6,4 +6,4 @@
 
 @defmodule*/no-declare[(svg)]{The package is on its way...}
 
-@handbook-appendix[#:index? #true]
+@handbook-appendix[#:index-section? #true]

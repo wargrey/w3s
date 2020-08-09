@@ -10,4 +10,4 @@
  See @racketmodname[bitmap] for its foundation.
 }
 
-@handbook-appendix[#:index? #true]
+@handbook-appendix[#:index-section? #true]
