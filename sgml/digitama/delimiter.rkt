@@ -3,8 +3,6 @@
 (provide (all-defined-out))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define <? : Symbol (string->uninterned-symbol "<?"))
-(define ?> : Symbol (string->uninterned-symbol "?>"))
 (define <! : Symbol (string->uninterned-symbol "<!"))
 (define <!$ : Symbol (string->uninterned-symbol "<!["))
 (define <!$CDATA$ : Symbol (string->uninterned-symbol "<![CDATA["))

@@ -19,6 +19,7 @@
  racket/base ; the line is gauranteed to count, hence the explicitly requiring.
  [port-next-location (-> Port (Values Positive-Integer Natural Positive-Integer))])
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-syntax (xml-make-token stx)
   (syntax-case stx []
     [(_ source prev-mode end make-xml:token datum ...)
@@ -77,8 +78,8 @@
                    (cond [(symbol-interned? datum) (xml-make-token source prev-mode end xml:name datum)]
                          [(eq? datum </) (xml-make-token source prev-mode end xml:open datum)]
                          [(eq? datum />) (xml-make-token source prev-mode end xml:close datum)]
-                         [(memq datum (list <! <? <!$ <!$CDATA$)) (xml-make-token source prev-mode end xml:open datum)]
-                         [(memq datum (list ?> $$>)) (xml-make-token source prev-mode end xml:close datum)]
+                         [(memq datum (list <! <!$ <!$CDATA$)) (xml-make-token source prev-mode end xml:open datum)]
+                         [(memq datum (list $$>)) (xml-make-token source prev-mode end xml:close datum)]
                          [else (xml-make-token source prev-mode end xml:entity datum)])]
                   [(string? datum) (xml-make-token source prev-mode end xml:string datum)]
                   [(index? datum) (xml-make-token source prev-mode end xml:entity datum)]

@@ -9,6 +9,7 @@
 
 (require racket/unsafe/ops)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Performance Hint:
 ;; 0. See schema/digitama/exchange/csv/reader/port.rkt
 ;; 1. Checking empty file before reading makes it oscillate(500ms for 2.1MB xslx), weird
@@ -17,8 +18,10 @@
 (define-type XML-Datum (U Char Symbol String Index Keyword XML-White-Space XML-Error))
 
 (define-type XML-Scope XML-Datum)
+(define-type XML-Token-Consumer (->* (Input-Port Char XML-Scope) (Values (U XML-Datum EOF) XML-Scope)))
 
 (struct xml-white-space ([raw : String]) #:type-name XML-White-Space)
+(struct xml-pi xml-white-space ([target : Symbol]) #:type-name XML-PI)
 (struct xml-comment xml-white-space () #:type-name XML-Comment)
 
 (define xml-empty-attributes : (Immutable-HashTable Symbol XML-Datum) (make-immutable-hasheq))
@@ -33,20 +36,26 @@
             [else (read-xml (cons token snekot) this-scope)]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-consume-token : (->* (Input-Port) (XML-Scope) (Values (U XML-Datum EOF) XML-Scope))
+(define xml-consume-token : (->* (Input-Port) (XML-Scope XML-Token-Consumer) (Values (U XML-Datum EOF) XML-Scope))
   ;;; https://www.w3.org/TR/xml11/#sec-common-syn
-  (lambda [/dev/xmlin [scope 'TopLevel]]
+  (lambda [/dev/xmlin [scope 'TopLevel] [consume xml-consume-toplevel-token]]
     (define ch : (U Char EOF) (read-char /dev/xmlin))
     (cond [(eof-object? ch) (values eof scope)]
           [(char-whitespace? ch) (values (xml-consume-whitespace /dev/xmlin ch scope) scope)]
           [(xml-name-start-char? ch) (xml-consume-nmtoken /dev/xmlin ch scope)]
-          [else (case ch
-                  [(#\<) (xml-consume-open-token /dev/xmlin scope)]
-                  [(#\> #\= #\( #\) #\[) (values ch ch)]
-                  [(#\' #\") (values (xml-consume-literal-token /dev/xmlin ch scope) scope)]
-                  [(#\? #\/ #\]) (xml-consume-close-token /dev/xmlin ch scope)]
-                  [(#\& #\%) (values (xml-consume-reference-token /dev/xmlin ch) scope)]
-                  [else (values ch scope)])])))
+          [(eq? ch #\<) (xml-consume-open-token /dev/xmlin scope)]
+          [(eq? ch #\>) (values ch ch)]
+          [else (consume /dev/xmlin ch scope)])))
+
+(define xml-consume-toplevel-token : XML-Token-Consumer
+  (lambda [/dev/xmlin ch scope]
+    (case ch
+      [(#\<) (xml-consume-open-token /dev/xmlin scope)]
+      [(#\> #\= #\( #\) #\[) (values ch ch)]
+      [(#\' #\") (values (xml-consume-literal-token /dev/xmlin ch scope) scope)]
+      [(#\/ #\]) (xml-consume-close-token /dev/xmlin ch scope)]
+      [(#\& #\%) (values (xml-consume-reference-token /dev/xmlin ch) scope)]
+      [else (values ch scope)])))
 
 #;(define xml-consume-token/skip-whitespace : (->* (Input-Port (U Char EOF)) (XML-Literal) (Values XML-Datum (U Char EOF)))
   ;;; https://www.w3.org/TR/xml11/#sec-common-syn
@@ -56,7 +65,8 @@
     (cond [(xml-white-space? token) (xml-consume-token /dev/xmlin maybe-char literals)]
           [else (values token maybe-char)])))
 
-(define xml-consume-open-token : (-> Input-Port XML-Scope (Values (U Char Symbol XML-Comment XML-Error) XML-Scope))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define xml-consume-open-token : (-> Input-Port XML-Scope (Values (U Char Symbol XML-Comment XML-PI XML-Error) XML-Scope))
   (lambda [/dev/xmlin scope]
     (define maybe-ch : (U Char EOF) (peek-char /dev/xmlin 0))
     (cond [(eq? maybe-ch #\!)
@@ -65,9 +75,9 @@
                     (cond [(equal? (peek-string 6 2 /dev/xmlin) "CDATA[") (read-string 9 /dev/xmlin) (values <!$CDATA$ scope)]
                           [else (read-string 2 /dev/xmlin) (values <!$ '|<![|)])]
                    [(and (eq? dispatcher #\-) (eq? (peek-char /dev/xmlin 2) #\-))
-                    (read-string 3 /dev/xmlin) (values (xml-consum-comment-tail /dev/xmlin) scope)]
+                    (read-string 3 /dev/xmlin) (values (xml-consume-comment-tail /dev/xmlin) scope)]
                    [else (read-char /dev/xmlin) (values <! <!)]))]
-          [(eq? maybe-ch #\?) (read-char /dev/xmlin) (values <? <?)]
+          [(eq? maybe-ch #\?) (read-char /dev/xmlin) (values (xml-consume-pi /dev/xmlin) scope)]
           [(eq? maybe-ch #\/) (read-char /dev/xmlin) (values </ </)]
           [else (values #\< #\<)])))
 
@@ -81,7 +91,6 @@
                       (cond [(not (eq? maybe-> #\>)) (values leading-char leading-char)]
                             [else (read-string 2 /dev/xmlin) (values $$> $$>)]))])
         (cond [(not (eq? maybe-char #\>)) (values leading-char scope)]
-              [(eq? leading-char #\?) (read-char /dev/xmlin) (values ?> ?>)]
               [else (read-char /dev/xmlin) (values /> />)]))))
   
 (define xml-consume-nmtoken : (-> Input-Port Char XML-Scope (Values Symbol XML-Scope))
@@ -126,7 +135,7 @@
             [(char-whitespace? maybe-space) (read-whitespace (unsafe-fx+ span 1))]
             [else (xml-white-space (xml-read-string /dev/xmlin span leader))]))))
 
-(define xml-consum-comment-tail : (-> Input-Port (U XML-Comment XML-Error))
+(define xml-consume-comment-tail : (-> Input-Port (U XML-Comment XML-Error))
   ;;; https://www.w3.org/TR/xml11/#sec-comments
   (lambda [/dev/xmlin]
     (let read-comment ([srahc : (Listof Char) null]
@@ -143,6 +152,21 @@
                            (cond [(not malformed?) (xml-comment (list->string (reverse srahc)))]
                                  [else (list*  #\< #\! #\- #\- (reverse (list* #\> #\- #\- srahc)))])]
                           [else (read-comment (cons maybe-char srahc) (or malformed? -? (null? srahc)))]))]))))
+
+(define xml-consume-pi : (-> Input-Port (U XML-PI XML-Error))
+  ;;; https://www.w3.org/TR/xml11/#sec-pi
+  (lambda [/dev/xmlin]
+    (define ch : (U Char EOF) (read-char /dev/xmlin))
+
+    (cond [(eof-object? ch) null]
+          [(not (xml-name-start-char? ch)) (xml-consume-chars-literal /dev/xmlin #\? (list ch) #\>)]
+          [else (let ([target (xml-consume-namechars /dev/xmlin ch)]
+                      [wsch (read-char /dev/xmlin)])
+                  (cond [(eof-object? wsch) (string->list target)]
+                        [(not (char-whitespace? wsch)) (xml-consume-chars-literal /dev/xmlin #\? (cons wsch (reverse (string->list target))) #\>)]
+                        [(string-ci=? target "xml") (xml-consume-chars-literal /dev/xmlin #\? (reverse (string->list target)) #\>)]
+                        [else (xml-pi (list->string (xml-consume-chars-literal /dev/xmlin #\? null #\>))
+                                      (string->symbol target))]))])))
   
 (define xml-consume-namechars : (-> Input-Port Char String)
   ;;; https://www.w3.org/TR/xml11/#NT-NameChar
@@ -164,19 +188,19 @@
       (cond [(eof-object? ch) (reverse srahc)]
             [(char-digit? ch) (read-char-reference (read-char /dev/xmlin) (cons ch srahc) (unsafe-fx+ (unsafe-fx* code base) (char->hexadecimal ch)))]
             [(eq? ch #\;) (natural->char-entity code)]
-            [else (xml-consume-error-literal /dev/xmlin #\; (cons ch srahc))]))))
+            [else (xml-consume-chars-literal /dev/xmlin #\; (cons ch srahc))]))))
 
 (define xml-consume-entity-reference : (-> Input-Port Char Char (U Symbol XML-Error))
   ;;; https://www.w3.org/TR/xml11/#NT-EntityRef
   (lambda [/dev/xmlin type leader]
     (define %? : Boolean (eq? type #\%))
-    (cond [(not (xml-name-start-char? leader)) (xml-consume-error-literal /dev/xmlin #\; (list leader type))]
+    (cond [(not (xml-name-start-char? leader)) (xml-consume-chars-literal /dev/xmlin #\; (list leader type))]
           [else (let read-entity-reference ([srahc : (Listof Char) (if (not %?) (list leader) (list leader type))])
                   (define ch : (U EOF Char) (read-char /dev/xmlin))
                   (cond [(eof-object? ch) (reverse srahc)]
                         [(xml-name-char? ch) (read-entity-reference (cons ch srahc))]
                         [(eq? ch #\;) (string->unreadable-symbol (list->string (reverse srahc)))]
-                        [else (xml-consume-error-literal /dev/xmlin #\; (cons ch srahc))]))])))
+                        [else (xml-consume-chars-literal /dev/xmlin #\; (cons ch srahc))]))])))
 
 (define xml-consume-entity-value : (-> Input-Port Char (U String XML-Error))
   ;;; https://www.w3.org/TR/xml11/#NT-EntityValue
@@ -213,15 +237,20 @@
       (cond [(eq? ch quote) (list->string (reverse srahc))]
             [(eof-object? ch) (reverse srahc)]
             [(xml-pubid-char? ch) (consume-literal (cons ch srahc))]
-            [else (xml-consume-error-literal /dev/xmlin quote (cons ch srahc))]))))
+            [else (xml-consume-chars-literal /dev/xmlin quote (cons ch srahc))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-consume-error-literal : (-> Input-Port Char (Listof Char) XML-Error)
-  (lambda [/dev/xmlin quote chars]
+(define xml-consume-chars-literal : (->* (Input-Port Char (Listof Char)) ((Option Char)) XML-Error)
+  (lambda [/dev/xmlin boundary chars [ahead-boundary #false]]
     (let consume-literal ([srahc : (Listof Char) chars])
       (define ch : (U EOF Char) (read-char /dev/xmlin))
-      (cond [(or (eq? ch quote) (eof-object? ch)) (reverse srahc)]
-            [else (consume-literal (cons ch srahc))]))))
+      (cond [(eof-object? ch) (reverse srahc)]
+            [(not (eq? ch boundary)) (consume-literal (cons ch srahc))]
+            [(not ahead-boundary) (reverse srahc)]
+            [else (let ([ach (read-char /dev/xmlin)])
+                    (cond [(eof-object? ach) (reverse (cons ch srahc))]
+                          [(eq? ach ahead-boundary) (reverse srahc)]
+                          [else (consume-literal (list* ach ch srahc))]))]))))
 
 (define xml-read-string : (-> Input-Port Natural Char String)
   (lambda [/dev/xmlin tailsize leader]
