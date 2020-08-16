@@ -59,7 +59,8 @@
 
 (define xml-pubid-char? : (-> Char Boolean)
   (lambda [ch]
-    (or (char-alphabetic? ch)
+    (or (char<=? #\a ch #\z)
+        (char<=? #\A ch #\Z)
         (char-numeric? ch)
         (and (memq ch (list #\space #\newline #\return
                             #\- #\' #\( #\) #\+ #\, #\. #\/ #\:
