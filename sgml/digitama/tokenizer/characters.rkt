@@ -50,6 +50,12 @@
         (char<=? #\u0300 ch #\u036F)
         (char<=? #\u203F ch #\u2040))))
 
+(define xml-content-char? : (-> Char Boolean)
+  (lambda [ch]
+    (not (or (char-whitespace? ch)
+             (eq? ch #\<)
+             (eq? ch #\&)
+             (eq? ch #\%)))))
 
 (define xml-pubid-char? : (-> Char Boolean)
   (lambda [ch]

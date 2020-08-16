@@ -34,7 +34,7 @@
 
 <? bad pi?>
 <?bad! pi?>
-<?this is a pi?>
+<?this is a pid?>
 
 <foo>&xxe;</foo>
 <test>This content holds a &#0; byte that should be skipped</test>
@@ -42,8 +42,8 @@
 <!-- The ü below is a single character #xFC in NFC
 (encoded as two UTF-8 octets #xC3 #xBC)  -->
 
-<name>Dürst</name>
-<name name="Dürst"/>
+<nickname>Dürst</nickname>
+<nickname name="Dürst"/>
 
 <Человек язык="мова">Borys</Человек>
 
@@ -82,7 +82,7 @@ This is a long test holding, with the intention to switch to wide character
 encoding after the output buffer has been switched to malloc'ed mode.  For this
 reason, our buffer should should hold more than 256 character, as defined in
 util.h in the structure ocharbuf.  This (&#10173;) is a fat arrow.
-</p>
+</p> 
 
 <![CDATA[]]]]><![CDATA[>]]>
 

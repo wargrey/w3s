@@ -213,8 +213,8 @@
   [[xml:open            #:+ XML:Open            #:-> xml:delim]
    [xml:close           #:+ XML:Close           #:-> xml:delim]
    [xml:eq              #:+ XML:Eq              #:-> xml:delim]
-   
    [xml:pi              #:+ XML:PI              #:-> xml:open]
+   
    [xml:decl            #:+ XML:Decl            #:-> xml:open]
 
    [xml:comment         #:+ XML:Comment         #:-> xml:whitespace]]

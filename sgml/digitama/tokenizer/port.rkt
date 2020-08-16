@@ -17,89 +17,166 @@
 (define-type XML-Error (Listof Char))
 (define-type XML-Datum (U Char Symbol String Index Keyword XML-White-Space XML-Error))
 
-(define-type XML-Scope XML-Datum)
-(define-type XML-Token-Consumer (->* (Input-Port Char XML-Scope) (Values (U XML-Datum EOF) XML-Scope)))
+(define-type XML-Scope (U Symbol Fixnum))
+(define-type XML-Token-Consumer (Rec λ (-> Input-Port Char XML-Scope (Values (U XML-Datum EOF) λ XML-Scope))))
 
 (struct xml-white-space ([raw : String]) #:type-name XML-White-Space)
-(struct xml-pi xml-white-space ([target : Symbol]) #:type-name XML-PI)
 (struct xml-comment xml-white-space () #:type-name XML-Comment)
 
 (define xml-empty-attributes : (Immutable-HashTable Symbol XML-Datum) (make-immutable-hasheq))
+
+(define xml-initial-scope : XML-Scope 'initial)
+(define xml-default-scope : XML-Scope 'xml)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define read-xml-tokens : (-> Input-Port (Listof XML-Datum))
   (lambda [/dev/xmlin]
     (let read-xml ([snekot : (Listof XML-Datum) null]
-                   [scope : XML-Scope 'TopLevel])
-      (define-values (token this-scope) (xml-consume-token /dev/xmlin scope))
+                   [consume : XML-Token-Consumer xml-consume-token:*]
+                   [scope : XML-Scope xml-initial-scope])
+      (define-values (token this-consume this-scope) (xml-consume-token /dev/xmlin consume scope))
       (cond [(eof-object? token) (reverse snekot)]
-            [else (read-xml (cons token snekot) this-scope)]))))
+            [else (read-xml (cons token snekot) this-consume this-scope)]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-consume-token : (->* (Input-Port) (XML-Scope XML-Token-Consumer) (Values (U XML-Datum EOF) XML-Scope))
+(define xml-consume-token : (-> Input-Port XML-Token-Consumer XML-Scope (Values (U XML-Datum EOF) XML-Token-Consumer XML-Scope))
   ;;; https://www.w3.org/TR/xml11/#sec-common-syn
-  (lambda [/dev/xmlin [scope 'TopLevel] [consume xml-consume-toplevel-token]]
+  (lambda [/dev/xmlin consume scope]
     (define ch : (U Char EOF) (read-char /dev/xmlin))
-    (cond [(eof-object? ch) (values eof scope)]
-          [(char-whitespace? ch) (values (xml-consume-whitespace /dev/xmlin ch scope) scope)]
-          [(xml-name-start-char? ch) (xml-consume-nmtoken /dev/xmlin ch scope)]
-          [(eq? ch #\<) (xml-consume-open-token /dev/xmlin scope)]
-          [(eq? ch #\>) (values ch ch)]
+    
+    (cond [(eof-object? ch) (values eof consume scope)]
           [else (consume /dev/xmlin ch scope)])))
 
-(define xml-consume-toplevel-token : XML-Token-Consumer
+(define xml-consume-token:* : XML-Token-Consumer
   (lambda [/dev/xmlin ch scope]
-    (case ch
-      [(#\<) (xml-consume-open-token /dev/xmlin scope)]
-      [(#\> #\= #\( #\) #\[) (values ch ch)]
-      [(#\' #\") (values (xml-consume-literal-token /dev/xmlin ch scope) scope)]
-      [(#\/ #\]) (xml-consume-close-token /dev/xmlin ch scope)]
-      [(#\& #\%) (values (xml-consume-reference-token /dev/xmlin ch) scope)]
-      [else (values ch scope)])))
+    (if (index? scope)
+        (cond [(char-whitespace? ch) (values (xml-consume-whitespace /dev/xmlin ch) xml-consume-token:* scope)]
+              [else (case ch
+                      [(#\<) (xml-consume-open-token /dev/xmlin xml-consume-token:* scope)]
+                      [(#\& #\%) (values (xml-consume-reference-token /dev/xmlin ch) xml-consume-token:* scope)]
+                      [(#\? #\]) (xml-consume-close-token /dev/xmlin ch xml-consume-token:* scope)] ; for PI and CDATA
+                      [else (values (xml-consume-contentchars /dev/xmlin ch) xml-consume-token:* scope)])])
+        (cond [(char-whitespace? ch) (values (xml-consume-whitespace /dev/xmlin ch) xml-consume-token:* scope)]
+              [(xml-name-start-char? ch) (values (xml-consume-nmtoken /dev/xmlin ch) xml-consume-token:* scope)]
+              [else (case ch
+                      [(#\<) (xml-consume-open-token /dev/xmlin xml-consume-token:* scope)]
+                      [(#\>) (values ch xml-consume-token:* scope)]
+                      [(#\= #\( #\) #\[) (values ch xml-consume-token:* scope)]
+                      [(#\' #\") (values (xml-consume-literal-token /dev/xmlin ch xml-consume-token:*) xml-consume-token:* scope)]
+                      [(#\? #\/ #\]) (xml-consume-close-token /dev/xmlin ch xml-consume-token:* scope)]
+                      [(#\& #\%) (values (xml-consume-reference-token /dev/xmlin ch) xml-consume-token:* scope)]
+                      [else (values ch xml-consume-token:* scope)])]))))
 
-#;(define xml-consume-token/skip-whitespace : (->* (Input-Port (U Char EOF)) (XML-Literal) (Values XML-Datum (U Char EOF)))
-  ;;; https://www.w3.org/TR/xml11/#sec-common-syn
-  (lambda [/dev/xmlin leading-char [literals 'Attribute]]
-    (define-values (token maybe-char) (xml-consume-token /dev/xmlin leading-char literals))
+(define xml-consume-token:start-decl-name : XML-Token-Consumer
+  (lambda [/dev/xmlin ch scope]
+    (cond [(xml-name-start-char? ch) (values (xml-consume-nmtoken /dev/xmlin ch) xml-consume-token:* scope)]
+          [else (values (xml-consume-chars-literal/within-tag /dev/xmlin (list ch)) xml-consume-token:* scope)])))
 
-    (cond [(xml-white-space? token) (xml-consume-token /dev/xmlin maybe-char literals)]
-          [else (values token maybe-char)])))
+(define xml-consume-token:start-tag-name : XML-Token-Consumer
+  (lambda [/dev/xmlin ch scope]
+    (cond [(xml-name-start-char? ch) (values (xml-consume-nmtoken /dev/xmlin ch) xml-consume-token:tag-attr-name scope)]
+          [else (values (xml-consume-chars-literal/within-tag /dev/xmlin (list ch)) xml-consume-token:* scope)])))
+
+(define xml-consume-token:end-tag-name : XML-Token-Consumer
+  (lambda [/dev/xmlin ch scope]
+    (cond [(xml-name-start-char? ch) (values (xml-consume-nmtoken /dev/xmlin ch) xml-consume-token:tag-end scope)]
+          [else (values (xml-consume-chars-literal/within-tag /dev/xmlin (list ch)) xml-consume-token:* scope)])))
+
+(define xml-consume-token:tag-attr-name : XML-Token-Consumer
+  (lambda [/dev/xmlin ch scope]
+    (cond [(char-whitespace? ch) (values (xml-consume-whitespace /dev/xmlin ch) xml-consume-token:tag-attr-name scope)]
+          [(xml-name-start-char? ch) (values (xml-consume-nmtoken /dev/xmlin ch) xml-consume-token:tag-attr-eq scope)]
+          [(eq? ch #\>) (values ch xml-consume-token:* scope)]
+          [(eq? ch #\/)
+           (let ([nch (read-char /dev/xmlin)])
+             (cond [(eq? nch #\>) (values /> xml-consume-token:* (xml-doc-scope-- scope))]
+                   [else (values (xml-consume-chars-literal/within-tag /dev/xmlin (if (eof-object? nch) (list ch) (list nch ch)))
+                                 xml-consume-token:* scope)]))]
+          [(and (eq? ch #\?) (eq? scope xml-initial-scope))
+           (let ([nch (read-char /dev/xmlin)])
+             (cond [(eq? nch #\>) (values ?> xml-consume-token:* xml-default-scope)]
+                   [else (values (xml-consume-chars-literal/within-tag /dev/xmlin (if (eof-object? nch) (list ch) (list nch ch)))
+                                 xml-consume-token:* scope)]))]
+          [(eq? ch #\<)
+           (let ([nch (read-char /dev/xmlin)])
+             (cond [(eq? nch #\>) (values ?> xml-consume-token:* xml-default-scope)]
+                   [else (values (xml-consume-chars-literal/within-tag /dev/xmlin (if (eof-object? nch) (list ch) (list nch ch)))
+                                 xml-consume-token:* scope)]))]
+          [else (values (xml-consume-chars-literal/within-tag /dev/xmlin (list ch)) xml-consume-token:* scope)])))
+
+(define xml-consume-token:tag-attr-eq : XML-Token-Consumer
+  (lambda [/dev/xmlin ch scope]
+    (cond [(eq? ch #\=) (values ch xml-consume-token:tag-attr-value scope)]
+          [else (values (xml-consume-chars-literal/within-tag /dev/xmlin (list ch)) xml-consume-token:* scope)])))
+
+(define xml-consume-token:tag-attr-value : XML-Token-Consumer
+  (lambda [/dev/xmlin ch scope]
+    (cond [(or (eq? ch #\') (eq? ch #\")) (values (xml-consume-attribute-value /dev/xmlin ch) xml-consume-token:tag-attr-name scope)]
+          [else (values (xml-consume-chars-literal/within-tag /dev/xmlin (list ch)) xml-consume-token:* scope)])))
+
+(define xml-consume-token:tag-end : XML-Token-Consumer
+  (lambda [/dev/xmlin ch scope]
+    (cond [(char-whitespace? ch) (values (xml-consume-whitespace /dev/xmlin ch) xml-consume-token:tag-end scope)]
+          [(eq? ch #\>) (values ch xml-consume-token:* (xml-doc-scope-- scope))]
+          [else (values (xml-consume-chars-literal/exclusive /dev/xmlin #\> (list ch)) xml-consume-token:* scope)])))
+
+(define xml-consume-token:pi-target : XML-Token-Consumer
+  (lambda [/dev/xmlin ch scope]
+    (cond [(not (xml-name-start-char? ch)) (values (xml-consume-chars-literal/exclusive /dev/xmlin #\? (list ch) #\>) xml-consume-token:* scope)]
+          [else (let ([target (xml-consume-namechars /dev/xmlin ch)])
+                  ;;; DrRacket's color lexer parses the XMLDecl which should be eaten by the #lang reader
+                  (cond [(not (string-ci=? target "xml")) (values (string->symbol target) xml-consume-token:pi-body scope)]
+                        [(eq? scope xml-initial-scope) (values (string->symbol target) xml-consume-token:tag-attr-name scope)]
+                        [else (values (xml-consume-chars-literal/exclusive /dev/xmlin #\? (reverse (string->list target)) #\>) xml-consume-token:* scope)]))])))
+
+(define xml-consume-token:pi-body : XML-Token-Consumer
+  ;;; https://www.w3.org/TR/xml11/#sec-pi
+  (lambda [/dev/xmlin ch scope]
+    (cond [(not (char-whitespace? ch)) (values (xml-consume-chars-literal/exclusive /dev/xmlin #\? (list ch) #\>) xml-consume-token:* scope)]
+          [else (values (list->string (xml-consume-chars-literal/exclusive /dev/xmlin #\? null #\>)) xml-consume-token:* scope)])))
+
+(define xml-consume-token:cdata : XML-Token-Consumer
+  ;;; https://www.w3.org/TR/xml11/#sec-cdata-sect
+  (lambda [/dev/xmlin ch scope]
+    (values (list->string (xml-consume-chars-literal/exclusive /dev/xmlin #\] (list ch) #\] #\>))
+            xml-consume-token:*
+            scope)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-consume-open-token : (-> Input-Port XML-Scope (Values (U Char Symbol XML-Comment XML-PI XML-Error) XML-Scope))
-  (lambda [/dev/xmlin scope]
+(define xml-consume-open-token : (-> Input-Port XML-Token-Consumer XML-Scope (Values (U Char Symbol XML-Comment XML-Error) XML-Token-Consumer XML-Scope))
+  (lambda [/dev/xmlin consume scope]
     (define maybe-ch : (U Char EOF) (peek-char /dev/xmlin 0))
     (cond [(eq? maybe-ch #\!)
            (let ([dispatcher (peek-char /dev/xmlin 1)])
              (cond [(eq? dispatcher #\[)
-                    (cond [(equal? (peek-string 6 2 /dev/xmlin) "CDATA[") (read-string 9 /dev/xmlin) (values <!$CDATA$ scope)]
-                          [else (read-string 2 /dev/xmlin) (values <!$ '|<![|)])]
+                    (cond [(equal? (peek-string 6 2 /dev/xmlin) "CDATA[") (read-string 8 /dev/xmlin) (values <!$CDATA$ xml-consume-token:cdata scope)]
+                          [else (read-string 2 /dev/xmlin) (values <!$ xml-consume-token:* scope)])]
                    [(and (eq? dispatcher #\-) (eq? (peek-char /dev/xmlin 2) #\-))
-                    (read-string 3 /dev/xmlin) (values (xml-consume-comment-tail /dev/xmlin) scope)]
-                   [else (read-char /dev/xmlin) (values <! <!)]))]
-          [(eq? maybe-ch #\?) (read-char /dev/xmlin) (values (xml-consume-pi /dev/xmlin) scope)]
-          [(eq? maybe-ch #\/) (read-char /dev/xmlin) (values </ </)]
-          [else (values #\< #\<)])))
+                    (read-string 3 /dev/xmlin) (values (xml-consume-comment-tail /dev/xmlin) consume scope)]
+                   [else (read-char /dev/xmlin) (values <! xml-consume-token:start-decl-name scope)]))]
+          [(eq? maybe-ch #\?) (read-char /dev/xmlin) (values <? xml-consume-token:pi-target scope)]
+          [(eq? maybe-ch #\/) (read-char /dev/xmlin) (values </ xml-consume-token:end-tag-name scope)]
+          [else (values #\< xml-consume-token:start-tag-name (xml-doc-scope++ scope))])))
 
-(define xml-consume-close-token : (-> Input-Port Char XML-Scope (Values (U Symbol Char XML-Error) XML-Scope))
-  (lambda [/dev/xmlin leading-char scope]
+(define xml-consume-close-token : (-> Input-Port Char XML-Token-Consumer XML-Scope (Values (U Symbol Char XML-Error) XML-Token-Consumer XML-Scope))
+  (lambda [/dev/xmlin leading-char consume scope]
     (define maybe-char : (U Char EOF) (peek-char /dev/xmlin 0))
 
     (if (eq? leading-char #\])
-        (cond [(not (eq? maybe-char #\])) (values leading-char leading-char)]
+        (cond [(not (eq? maybe-char #\])) (values leading-char xml-consume-token:* scope)]
               [else (let ([maybe-> (peek-char /dev/xmlin 1)])
-                      (cond [(not (eq? maybe-> #\>)) (values leading-char leading-char)]
-                            [else (read-string 2 /dev/xmlin) (values $$> $$>)]))])
-        (cond [(not (eq? maybe-char #\>)) (values leading-char scope)]
-              [else (read-char /dev/xmlin) (values /> />)]))))
+                      (cond [(not (eq? maybe-> #\>)) (values leading-char xml-consume-token:* scope)]
+                            [else (read-string 2 /dev/xmlin) (values $$> xml-consume-token:* scope)]))])
+        (cond [(not (eq? maybe-char #\>)) (values leading-char consume scope)]
+              [(eq? maybe-char #\?) (values ?> consume scope)]
+              [else (read-char /dev/xmlin) (values /> xml-consume-token:* (xml-doc-scope-- scope))]))))
   
-(define xml-consume-nmtoken : (-> Input-Port Char XML-Scope (Values Symbol XML-Scope))
+(define xml-consume-nmtoken : (-> Input-Port Char Symbol)
   ;;; https://www.w3.org/TR/xml11/#sec-common-syn
   ;;; https://www.w3.org/TR/xml11/#NT-Names
   ;;; https://www.w3.org/TR/xml11/#NT-Nmtokens
-  (lambda [/dev/xmlin leader scope]
-    (values (string->symbol (xml-consume-namechars /dev/xmlin leader))
-            scope)))
+  (lambda [/dev/xmlin leader]
+    (string->symbol (xml-consume-namechars /dev/xmlin leader))))
 
 (define xml-consume-reference-token : (-> Input-Port Char (U Symbol Index XML-Error))
   ;;; https://www.w3.org/TR/xml11/#sec-references
@@ -114,7 +191,7 @@
                         [(eq? char-leader #\x) (xml-consume-char-reference /dev/xmlin #false)]
                         [else (xml-consume-char-reference /dev/xmlin char-leader)]))])))
 
-(define xml-consume-literal-token : (-> Input-Port Char XML-Scope (U String XML-Error))
+(define xml-consume-literal-token : (-> Input-Port Char XML-Token-Consumer (U String XML-Error))
   ;;; https://www.w3.org/TR/xml11/#NT-SystemLiteral
   (lambda [/dev/xmlin quote type]
     (case type
@@ -124,10 +201,10 @@
       [else (xml-consume-system-literal /dev/xmlin quote)])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-consume-whitespace : (-> Input-Port Char XML-Scope XML-White-Space)
+(define xml-consume-whitespace : (-> Input-Port Char XML-White-Space)
   ;;; https://www.w3.org/TR/xml11/#NT-S
   ;;; https://www.w3.org/TR/xml11/#sec-line-ends
-  (lambda [/dev/xmlin leader scope]
+  (lambda [/dev/xmlin leader]
     ;; NOTE: The clients take responsibility for normalizing the End-of-Lines if required
     (let read-whitespace ([span : Nonnegative-Fixnum 0])
       (define maybe-space : (U Char EOF) (peek-char /dev/xmlin span))
@@ -152,21 +229,6 @@
                            (cond [(not malformed?) (xml-comment (list->string (reverse srahc)))]
                                  [else (list*  #\< #\! #\- #\- (reverse (list* #\> #\- #\- srahc)))])]
                           [else (read-comment (cons maybe-char srahc) (or malformed? -? (null? srahc)))]))]))))
-
-(define xml-consume-pi : (-> Input-Port (U XML-PI XML-Error))
-  ;;; https://www.w3.org/TR/xml11/#sec-pi
-  (lambda [/dev/xmlin]
-    (define ch : (U Char EOF) (read-char /dev/xmlin))
-
-    (cond [(eof-object? ch) null]
-          [(not (xml-name-start-char? ch)) (xml-consume-chars-literal /dev/xmlin #\? (list ch) #\>)]
-          [else (let ([target (xml-consume-namechars /dev/xmlin ch)]
-                      [wsch (read-char /dev/xmlin)])
-                  (cond [(eof-object? wsch) (string->list target)]
-                        [(not (char-whitespace? wsch)) (xml-consume-chars-literal /dev/xmlin #\? (cons wsch (reverse (string->list target))) #\>)]
-                        [(string-ci=? target "xml") (xml-consume-chars-literal /dev/xmlin #\? (reverse (string->list target)) #\>)]
-                        [else (xml-pi (list->string (xml-consume-chars-literal /dev/xmlin #\? null #\>))
-                                      (string->symbol target))]))])))
   
 (define xml-consume-namechars : (-> Input-Port Char String)
   ;;; https://www.w3.org/TR/xml11/#NT-NameChar
@@ -175,6 +237,17 @@
       (define ch : (U EOF Char) (peek-char /dev/xmlin span))
       (cond [(eof-object? ch) (xml-read-string /dev/xmlin span leader)]
             [(xml-name-char? ch) (consume-name (unsafe-fx+ span 1))]
+            [else (xml-read-string /dev/xmlin span leader)]))))
+
+(define xml-consume-contentchars : (-> Input-Port Char (U String XML-Error))
+  ;;; https://www.w3.org/TR/xml11/#sec-starttags
+  (lambda [/dev/xmlin leader]
+    (let consume-content ([span : Nonnegative-Fixnum 0])
+      (define ch : (U EOF Char) (peek-char /dev/xmlin span))
+      (when (char? ch)
+        (printf "~a [~a]~n" ch (xml-content-char? ch)))
+      (cond [(eof-object? ch) (xml-read-string /dev/xmlin span leader)]
+            [(xml-content-char? ch) (consume-content (unsafe-fx+ span 1))]
             [else (xml-read-string /dev/xmlin span leader)]))))
 
 (define xml-consume-char-reference : (-> Input-Port (Option Char) (U Index XML-Error))
@@ -240,8 +313,8 @@
             [else (xml-consume-chars-literal /dev/xmlin quote (cons ch srahc))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-consume-chars-literal : (->* (Input-Port Char (Listof Char)) ((Option Char)) XML-Error)
-  (lambda [/dev/xmlin boundary chars [ahead-boundary #false]]
+(define xml-consume-chars-literal : (->* (Input-Port Char (Listof Char)) ((Option Char) (Option Char)) XML-Error)
+  (lambda [/dev/xmlin boundary chars [ahead-boundary #false] [aahead-boundary #false]]
     (let consume-literal ([srahc : (Listof Char) chars])
       (define ch : (U EOF Char) (read-char /dev/xmlin))
       (cond [(eof-object? ch) (reverse srahc)]
@@ -249,8 +322,40 @@
             [(not ahead-boundary) (reverse srahc)]
             [else (let ([ach (read-char /dev/xmlin)])
                     (cond [(eof-object? ach) (reverse (cons ch srahc))]
-                          [(eq? ach ahead-boundary) (reverse srahc)]
-                          [else (consume-literal (list* ach ch srahc))]))]))))
+                          [(not (eq? ach ahead-boundary)) (consume-literal (list* ach ch srahc))]
+                          [(not aahead-boundary) (reverse srahc)]
+                          [else (let ([aach (read-char /dev/xmlin)])
+                                  (cond [(eof-object? aach) (reverse (list* ach ch srahc))]
+                                        [(not (eq? aach aahead-boundary)) (consume-literal (list* aach ach ch srahc))]
+                                        [else (reverse srahc)]))]))]))))
+
+(define xml-consume-chars-literal/exclusive : (->* (Input-Port Char (Listof Char)) ((Option Char) (Option Char)) XML-Error)
+  (lambda [/dev/xmlin boundary chars [ahead-boundary #false] [aahead-boundary #false]]
+    (let consume-literal ([srahc : (Listof Char) chars])
+      (define ch : (U EOF Char) (peek-char /dev/xmlin))
+      (cond [(eof-object? ch) (reverse srahc)]
+            [(not (eq? ch boundary)) (read-char /dev/xmlin) (consume-literal (cons ch srahc))]
+            [(not ahead-boundary) (reverse srahc)]
+            [else (let ([ach (peek-char /dev/xmlin 1)])
+                    (cond [(eof-object? ach) (read-char /dev/xmlin) (reverse (cons ch srahc))]
+                          [(not (eq? ach ahead-boundary)) (read-string 2 /dev/xmlin) (consume-literal (list* ach ch srahc))]
+                          [(not aahead-boundary) (reverse srahc)]
+                          [else (let ([aach (peek-char /dev/xmlin 2)])
+                                  (cond [(eof-object? aach) (read-string 2 /dev/xmlin) (reverse (list* ach ch srahc))]
+                                        [(not (eq? aach aahead-boundary)) (read-string 3 /dev/xmlin) (consume-literal (list* aach ach ch srahc))]
+                                        [else (reverse srahc)]))]))]))))
+
+(define xml-consume-chars-literal/within-tag : (-> Input-Port (Listof Char) XML-Error)
+  (lambda [/dev/xmlin chars]
+    (let consume-literal ([srahc : (Listof Char) chars])
+      (define ch : (U EOF Char) (peek-char /dev/xmlin))
+      (cond [(eof-object? ch) (reverse srahc)]
+            [(eq? ch #\>) (reverse srahc)]
+            [(not (eq? ch #\/)) (read-char /dev/xmlin) (consume-literal (cons ch srahc))]
+            [else (let ([ach (peek-char /dev/xmlin 1)])
+                    (cond [(eof-object? ach) (read-char /dev/xmlin) (reverse (cons ch srahc))]
+                          [(eq? ach #\>) (reverse srahc)]
+                          [else (read-string 2 /dev/xmlin) (consume-literal (list* ach ch srahc))]))]))))
 
 (define xml-read-string : (-> Input-Port Natural Char String)
   (lambda [/dev/xmlin tailsize leader]
@@ -259,3 +364,14 @@
 
     (read-string! s /dev/xmlin 1 total)
     s))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define xml-doc-scope++ : (-> XML-Scope XML-Scope)
+  (lambda [scope]
+    (cond [(index? scope) (+ scope 1)]
+          [else 0])))
+
+(define xml-doc-scope-- : (-> XML-Scope XML-Scope)
+  (lambda [scope]
+    (cond [(and (index? scope) (> scope 0)) (- scope 1)]
+          [else xml-default-scope])))
