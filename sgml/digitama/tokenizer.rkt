@@ -52,12 +52,15 @@
             [else (read-xml (cons token snekot) env++)]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-consume-token* : (-> Input-Port (U String Symbol) (U False XML-Parser-ENV XML-Token-Consumer) (Values (U XML-Token EOF) XML-Parser-ENV))
+(define xml-consume-token* : (-> Input-Port (U String Symbol)
+                                 (U False XML-Parser-ENV (Pairof XML-Token-Consumer XML-Scope))
+                                 (Values (U XML-Token EOF) XML-Parser-ENV))
   (lambda [/dev/xmlin source env]
     (define prev-env : XML-Parser-ENV
       (cond [(xml-parser-env? env) env]
             [else (let-values ([(line column position) (port-next-location /dev/xmlin)])
-                    (xml-parser-env (or env xml-consume-token:*) xml-initial-scope line column position))]))
+                    (cond [(not env) (xml-parser-env xml-consume-token:* xml-initial-scope line column position)]
+                          [else (xml-parser-env (car env) (cdr env) line column position)]))]))
     (define-values (datum next-consume next-scope)
       (xml-consume-token /dev/xmlin (xml-parser-env-consume prev-env) (xml-parser-env-scope prev-env)))
     (define-values (line column end) (port-next-location /dev/xmlin))

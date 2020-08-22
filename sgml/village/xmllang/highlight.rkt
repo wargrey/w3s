@@ -4,6 +4,7 @@
 
 (require sgml/digitama/digicore)
 (require sgml/digitama/tokenizer)
+(require sgml/digitama/delimiter)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-lexer ;: (-> Input-Port Natural XML-Parser-Mode (Values (U String EOF) Symbol (Option Symbol) (Option Integer) (Option Integer) Natural XML-Parser-Mode))
@@ -26,10 +27,17 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-hlvalues ;: (-> XML-Token Symbol (Option Symbol) Index XML-Parser-Mode (Values String Symbol (Option Symbol) (Option Integer) (Option Integer) Natural XML-Parser-Mode))
   (lambda [t type subtype offset mode]
-    (define pos (xml-token-start t))
+    (define spos (xml-token-start t))
+    (define epos (xml-token-end t))
     
-    (values "" type subtype pos (xml-token-end t)
-            (+ pos offset) mode)))
+    (values "" type subtype spos epos
+            (cond [(and (xml:open? t) (not (xml:delim=:=? t </))) 0]
+                  [else (+ spos offset)])
+
+            ; NOTE: DrRacket may do tokenizing at any starting position,
+            ;         in which case the prev position must be dropped.  
+            (cons (xml-parser-env-consume mode)
+                  (xml-parser-env-scope mode)))))
 
 (define xml-open-type ;: (-> XML:Open Symbol)
   (lambda [t]
