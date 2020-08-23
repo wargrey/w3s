@@ -70,18 +70,19 @@
                        (xml-make-token source prev-env end xml:comment (xml-white-space-raw datum))
                        (xml-make-token source prev-env end xml:whitespace (xml-white-space-raw datum)))]
                   [(char? datum)
-                   (cond [(eq? datum #\<) (xml-make-token source prev-env end xml:open datum)]
-                         [(eq? datum #\>) (xml-make-token source prev-env end xml:close datum)]
+                   (cond [(eq? datum #\<) (xml-make-token source prev-env end xml:stag datum)]
+                         [(eq? datum #\>) (xml-make-token source prev-env end xml:etag datum)] ; `#\>` for Decls and EndTags
                          [(eq? datum #\=) (xml-make-token source prev-env end xml:eq datum)]
                          [(memq datum '(#\( #\[)) (xml-make-token source prev-env end xml:open datum)]
                          [(memq datum '(#\) #\])) (xml-make-token source prev-env end xml:close datum)]
-                         [else (xml-make-token source prev-env end xml:delim datum)])]
+                         [else (xml-make-token source prev-env end xml:delim datum) #| `>` for non-empty start tag |#])]
                   [(symbol? datum)
                    (cond [(symbol-interned? datum) (xml-make-token source prev-env end xml:name datum)]
-                         [(eq? datum </) (xml-make-token source prev-env end xml:open datum)]
-                         [(eq? datum />) (xml-make-token source prev-env end xml:close datum)]
+                         [(eq? datum </) (xml-make-token source prev-env end xml:delim datum)] ; it is not an open delimiter
+                         [(eq? datum />) (xml-make-token source prev-env end xml:etag datum)] ; for empty Elements
                          [(eq? datum <?) (xml-make-token source prev-env end xml:pi datum)]
-                         [(memq datum (list <! <!$ <!$CDATA$)) (xml-make-token source prev-env end xml:open datum)]
+                         [(eq? datum <!) (xml-make-token source prev-env end xml:decl datum)]
+                         [(memq datum (list <!$ <!$CDATA$)) (xml-make-token source prev-env end xml:open datum)]
                          [(memq datum (list ?> $$>)) (xml-make-token source prev-env end xml:close datum)]
                          [else (xml-make-token source prev-env end xml:entity datum)])]
                   [(string? datum) (xml-make-token source prev-env end xml:string datum)]

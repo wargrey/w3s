@@ -31,8 +31,7 @@
     (define epos (xml-token-end t))
     
     (values "" type subtype spos epos
-            (cond [(and (xml:open? t) (not (xml:delim=:=? t </))) 0]
-                  [else (+ spos offset)])
+            (if (xml:bad? t) (- epos spos) 0)
 
             ; NOTE: DrRacket may do tokenizing at any starting position,
             ;         in which case the prev position must be dropped.  
@@ -44,7 +43,7 @@
     (define datum (xml-token->datum t))
 
     (cond [(eq? datum #\() '|(|]
-          [(eq? datum #\[) '|]|]
+          [(eq? datum #\[) '|[|]
           [else '|{|])))
 
 (define xml-close-type ;: (-> XML:Close Symbol)

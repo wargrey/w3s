@@ -213,8 +213,11 @@
   [[xml:open            #:+ XML:Open            #:-> xml:delim]
    [xml:close           #:+ XML:Close           #:-> xml:delim]
    [xml:eq              #:+ XML:Eq              #:-> xml:delim]
-   [xml:pi              #:+ XML:PI              #:-> xml:open]
+
+   [xml:stag            #:+ XML:STag            #:-> xml:open]
+   [xml:etag            #:+ XML:ETag            #:-> xml:close]
    
+   [xml:pi              #:+ XML:PI              #:-> xml:open]
    [xml:decl            #:+ XML:Decl            #:-> xml:open]
 
    [xml:comment         #:+ XML:Comment         #:-> xml:whitespace]]
@@ -236,31 +239,9 @@
 ;; https://drafts.xmlwg.org/xml-syntax/#style-rules
 ;; https://drafts.xmlwg.org/selectors/#invalid
 (define-syntax-error exn:xml #:as XML-Syntax-Error
-  [exn:xml:resource           #:-> exn:xml]
-  [exn:xml:deprecated         #:-> exn:xml]
-  [exn:xml:cyclic             #:-> exn:xml]
-  [exn:xml:namespace          #:-> exn:xml]
-  [exn:xml:racket             #:-> exn:xml]
-  [exn:xml:contract           #:-> exn:xml:racket]
   [exn:xml:unrecognized       #:-> exn:xml]
-  [exn:xml:misplaced          #:-> exn:xml:unrecognized]
-  [exn:xml:type               #:-> exn:xml:unrecognized]
-  [exn:xml:type:identifier    #:-> exn:xml:type]
-  [exn:xml:type:variable      #:-> exn:xml:type:identifier]
   [exn:xml:range              #:-> exn:xml:unrecognized]
-  [exn:xml:unit               #:-> exn:xml:range]
-  [exn:xml:overconsumption    #:-> exn:xml:unrecognized]
-  [exn:xml:enclosed           #:-> exn:xml:overconsumption]
-  [exn:xml:malformed          #:-> exn:xml]
-  [exn:xml:arity              #:-> exn:xml:malformed]
-  [exn:xml:empty              #:-> exn:xml:malformed]
-  [exn:xml:missing-block      #:-> exn:xml:malformed]
-  [exn:xml:missing-value      #:-> exn:xml:malformed]
-  [exn:xml:missing-feature    #:-> exn:xml:malformed]
-  [exn:xml:missing-delimiter  #:-> exn:xml:malformed]
-  [exn:xml:missing-colon      #:-> exn:xml:missing-delimiter]
-  [exn:xml:missing-comma      #:-> exn:xml:missing-delimiter]
-  [exn:xml:missing-slash      #:-> exn:xml:missing-delimiter])
+  [exn:xml:malformed          #:-> exn:xml])
 
 (define-syntax (xml-remake-token stx)
   (syntax-case stx []
@@ -321,46 +302,3 @@
 (define-type XML-Syntax-Any (U XML-Token EOF))
 (define-type (XML-Option xml) (U xml XML-Syntax-Error False))
 (define-type (XML:Filter xml) (-> XML-Syntax-Any (XML-Option xml)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-car/cdr : (All (a b) (case-> [(Pairof a b) -> (Values a b)]
-                                         [(Listof a) -> (Values (U a EOF) (Listof a))]))
-  (lambda [pretent-no-whitespace]
-    (cond [(null? pretent-no-whitespace) (values eof null)]
-          [else (values (car pretent-no-whitespace) (cdr pretent-no-whitespace))])))
-
-(define xml-car/cadr : (All (a) (case-> [(Pairof a (Listof a)) -> (Values a (Listof a) (U a EOF) (Listof a))]
-                                        [(Listof a) -> (Values (U a EOF) (Listof a) (U a EOF) (Listof a))]))
-  (lambda [pretent-no-whitespace]
-    (cond [(null? pretent-no-whitespace) (values eof null eof null)]
-          [else (let ([1st (car pretent-no-whitespace)]
-                      [2nd (cdr pretent-no-whitespace)])
-                  (cond [(null? 2nd) (values 1st null eof null)]
-                        [else (values 1st 2nd (car 2nd) (cdr 2nd))]))])))
-
-(define xml-car : (-> (Listof XML-Token) (Values XML-Syntax-Any (Listof XML-Token)))
-  (lambda [dirty]
-    (let skip-whitespace ([rest dirty])
-      (cond [(null? rest) (values eof null)]
-            [else (let-values ([(head tail) (values (car rest) (cdr rest))])
-                    (cond [(xml:whitespace? head) (skip-whitespace tail)]
-                          [else (values head tail)]))]))))
-
-(define xml-pair? : (All (a) (-> (Listof a) Boolean : #:+ (Listof+ a)))
-  (lambda [dirty]
-    (and (pair? dirty)
-         (let skip-whitespace : Boolean ([head : a (car dirty)]
-                                         [tail : (Listof a) (cdr dirty)])
-           (implies (xml:whitespace? head)
-                    (and (pair? tail)
-                         (skip-whitespace (car tail)
-                                          (cdr tail))))))))
-
-(define xml-null? : (All (a) (-> (Listof a) Boolean : #:- (Listof+ a)))
-  (lambda [dirty]
-    (not (xml-pair? dirty))))
-
-(define xml-cons : (All (xml) (-> (U XML-Syntax-Error xml) (Listof xml) (Listof xml)))
-  (lambda [item items]
-    (cond [(exn? item) items]
-          [else (cons item items)])))

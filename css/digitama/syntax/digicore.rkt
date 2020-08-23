@@ -579,16 +579,16 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define css-car/cdr : (All (a b) (case-> [(Pairof a b) -> (Values a b)]
                                          [(Listof a) -> (Values (U a EOF) (Listof a))]))
-  (lambda [pretent-no-whitespace]
-    (cond [(null? pretent-no-whitespace) (values eof null)]
-          [else (values (car pretent-no-whitespace) (cdr pretent-no-whitespace))])))
+  (lambda [pretend-no-whitespace]
+    (cond [(null? pretend-no-whitespace) (values eof null)]
+          [else (values (car pretend-no-whitespace) (cdr pretend-no-whitespace))])))
 
 (define css-car/cadr : (All (a) (case-> [(Pairof a (Listof a)) -> (Values a (Listof a) (U a EOF) (Listof a))]
                                         [(Listof a) -> (Values (U a EOF) (Listof a) (U a EOF) (Listof a))]))
-  (lambda [pretent-no-whitespace]
-    (cond [(null? pretent-no-whitespace) (values eof null eof null)]
-          [else (let ([1st (car pretent-no-whitespace)]
-                      [2nd (cdr pretent-no-whitespace)])
+  (lambda [pretend-no-whitespace]
+    (cond [(null? pretend-no-whitespace) (values eof null eof null)]
+          [else (let ([1st (car pretend-no-whitespace)]
+                      [2nd (cdr pretend-no-whitespace)])
                   (cond [(null? 2nd) (values 1st null eof null)]
                         [else (values 1st 2nd (car 2nd) (cdr 2nd))]))])))
 

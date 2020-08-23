@@ -13,25 +13,23 @@
 (require "tokenizer/port.rkt")
 (require "tokenizer.rkt")
 
-(struct xml-document-type
-  ([name : Symbol])
-  #:transparent
-  #:type-name XML-Document-Type)
-
 (struct xml-document
   ([location : (U String Symbol)]
    [namespaces : (Listof (Pairof Symbol String))]
    [version : (Option Nonnegative-Flonum)]
    [encoding : (Option String)]
    [standalone? : Boolean]
-   [doctype : XML-Document-Type]
+   [decltype : Symbol]
+   [public : (Option String)]
+   [system : (Option String)]
+   [subset : (Listof Any)]
    [tokens : (Listof Any)])
   #:transparent
   #:type-name XML-Document)
 
 (define xml-document-placeholder : XML-Document
   (xml-document '/dev/null null 1.1 "UTF-8" #true
-                (xml-document-type '||)
+                '|| #false #false null
                 null))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -40,7 +38,7 @@
     (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin #false))
 
     (xml-document '/dev/null null version encoding standalone?
-                  (xml-document-type '||)
+                  '|| #false #false null
                   (read-xml-tokens /dev/xmlin))))
 
 (define read-xml-document* : (-> XML-StdIn XML-Document)
@@ -49,5 +47,5 @@
     (define tokens : (Listof XML-Token) (read-xml-tokens* /dev/xmlin))
 
     (xml-document '/dev/null null version encoding standalone?
-                  (xml-document-type '||)
-                  tokens)))
+                  '|| #false #false null
+                  (xml-syntax->grammar tokens))))
