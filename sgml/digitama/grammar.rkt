@@ -12,7 +12,7 @@
 (define-type XML-Declaration* (Rec body (Vector XML:Name (Listof (U XML-Token body XML-Processing-Instruction*)))))
 (define-type XML-Element-Attribute* (Pairof XML:Name XML:String))
 (define-type XML-Element-Plain-Children* (U XML:String XML-Processing-Instruction* XML:WhiteSpace XML:Entity))
-(define-type XML-Element* (Rec elem (List XML-Token (Listof XML-Element-Attribute*) (Listof (U elem XML-Element-Plain-Children*)))))
+(define-type XML-Element* (Rec elem (List XML:Name (Listof XML-Element-Attribute*) (Listof (U elem XML-Element-Plain-Children*)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-syntax->grammar* : (-> (Listof XML-Token) (Listof XML-Grammar*))
@@ -53,7 +53,7 @@
                              (extract r name (if (not d) bodies (cons d bodies))))]
                           [(xml:pi? self)
                            (let-values ([(p r) (xml-syntax-extract-pi* rest++)])
-                             (extract r name (if (not p) bodies (cons p bodies))))]          
+                             (extract r name (if (not p) bodies (cons p bodies))))]    
                           [else (extract rest++ name (cons self bodies))]))]))))
 
 (define xml-syntax-extract-pi* : (-> (Listof XML-Token) (Values (Option XML-Processing-Instruction*) (Listof XML-Token)))
