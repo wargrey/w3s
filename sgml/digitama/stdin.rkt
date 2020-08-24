@@ -18,6 +18,7 @@
 
 (require (for-syntax racket/base))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type XML-StdIn (U Input-Port Path-String Bytes))
   
 (define xml-open-input-port : (->* (XML-StdIn) (Boolean) (Values Input-Port (Option Nonnegative-Flonum) (Option String) Boolean))
@@ -61,19 +62,6 @@
             [(symbol? src) src]
             [(string? src) (string->symbol src)]
             [else (string->symbol (~a src))]))))
-
-(define xml-read-syntax/skip-whitespace : (-> Input-Port XML-Syntax-Any)
-  (lambda [xml]
-    (define token (xml-read-syntax xml))
-    (cond [(not (xml:whitespace? token)) token]
-          [else (xml-read-syntax/skip-whitespace xml)])))
-
-(define xml-peek-syntax/skip-whitespace : (-> Input-Port XML-Syntax-Any)
-  (lambda [xml]
-    (let peek/skip-whitespace : XML-Syntax-Any ([skip : Nonnegative-Fixnum 0])
-      (define token (xml-peek-syntax xml skip))
-      (cond [(not (xml:whitespace? token)) token]
-            [else (peek/skip-whitespace (unsafe-fx+ skip 1))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-read-declaration : (-> Input-Port (Values (Option Nonnegative-Flonum) (Option String) Boolean))

@@ -89,7 +89,7 @@ util.h in the structure ocharbuf.  This (&#10173;) is a fat arrow.
 body { background-image: url("marble.png?width=300&height=300") }     
 /*]]>
 
-</testdoc>
+</testdoc  >
 
 <badent>
 <test a="John & Mary">

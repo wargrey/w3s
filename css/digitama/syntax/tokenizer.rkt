@@ -215,8 +215,8 @@
               [else (let ([ch : (U EOF Char) (peek-char /dev/cssin)])
                       (cond [(or (eof-object? ch) (not (char=? ch #\?))) (values s e)]
                             [else (read-char /dev/cssin) (consume-? (fxlshift s 4)
-                                                             (fxior (fxlshift e 4) #xF)
-                                                             (fx- ? 1))]))])))
+                                                                    (fxior (fxlshift e 4) #xF)
+                                                                    (fx- ? 1))]))])))
     (define-values (start end)
       (cond [(not (fx= start0 end0)) (values start0 end0)]
             [else (let ([ch1 (peek-char /dev/cssin 0)]

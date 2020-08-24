@@ -99,7 +99,7 @@
 (define xml-consume-token:tag-attr-name : XML-Token-Consumer
   ;;; https://www.w3.org/TR/xml11/#NT-Attribute
   (lambda [/dev/xmlin ch scope]
-    (cond [(char-whitespace? ch) (values (xml-consume-whitespace /dev/xmlin ch) xml-consume-token:tag-attr-name scope)]
+    (cond [(char-whitespace? ch) (xml-consume-token:tag-attr-name /dev/xmlin (xml-skip-whitespace /dev/xmlin #\!) scope)]
           [(xml-name-start-char? ch) (values (xml-consume-nmtoken /dev/xmlin ch) xml-consume-token:tag-attr-eq scope)]
           [(eq? ch #\>) (values stag> xml-consume-token:* scope)] ; non-empty (start) tag does not have a close delimiter.
           [(eq? ch #\/)
@@ -128,7 +128,7 @@
 
 (define xml-consume-token:tag-end : XML-Token-Consumer
   (lambda [/dev/xmlin ch scope]
-    (cond [(char-whitespace? ch) (values (xml-consume-whitespace /dev/xmlin ch) xml-consume-token:tag-end scope)]
+    (cond [(char-whitespace? ch) (xml-consume-token:tag-end /dev/xmlin (xml-skip-whitespace /dev/xmlin #\!) scope)]
           [(eq? ch #\>) (values ch xml-consume-token:* (xml-doc-scope-- scope))]
           [else (values (xml-consume-chars-literal/exclusive /dev/xmlin #\> (list ch)) xml-consume-token:* scope)])))
 
@@ -215,6 +215,14 @@
       (cond [(eof-object? maybe-space) (xml-white-space (xml-read-string /dev/xmlin span leader))]
             [(char-whitespace? maybe-space) (read-whitespace (unsafe-fx+ span 1))]
             [else (xml-white-space (xml-read-string /dev/xmlin span leader))]))))
+
+(define xml-skip-whitespace : (-> Input-Port Char Char)
+  ;;; https://www.w3.org/TR/xml11/#NT-S
+  ;;; https://www.w3.org/TR/xml11/#sec-line-ends
+  (lambda [/dev/xmlin fallback]
+    (regexp-match-positions #px"\\s*" /dev/xmlin)
+    (define maybe-space : (U Char EOF) (read-char /dev/xmlin))
+    (if (eof-object? maybe-space) fallback maybe-space)))
 
 (define xml-consume-comment-tail : (-> Input-Port (U XML-Comment XML-Error))
   ;;; https://www.w3.org/TR/xml11/#sec-comments

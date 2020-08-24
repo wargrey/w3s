@@ -78,8 +78,9 @@
                          [else (xml-make-token source prev-env end xml:delim datum) #| `>` for non-empty start tag |#])]
                   [(symbol? datum)
                    (cond [(symbol-interned? datum) (xml-make-token source prev-env end xml:name datum)]
-                         [(eq? datum </) (xml-make-token source prev-env end xml:delim datum)] ; it is not an open delimiter
                          [(eq? datum />) (xml-make-token source prev-env end xml:etag datum)] ; for empty Elements
+                         [(eq? datum stag>) (xml-make-token source prev-env end xml:cstag datum)] ; not an close delimiter
+                         [(eq? datum </) (xml-make-token source prev-env end xml:oetag datum)] ; it is not an open delimiter
                          [(eq? datum <?) (xml-make-token source prev-env end xml:pi datum)]
                          [(eq? datum <!) (xml-make-token source prev-env end xml:decl datum)]
                          [(memq datum (list <!$ <!$CDATA$)) (xml-make-token source prev-env end xml:open datum)]

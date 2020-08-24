@@ -21,11 +21,8 @@
     (regexp-match #px"^\\s*" /dev/xmlin) ; skip blanks before real css content
     (define-values (line column position) (port-next-location /dev/xmlin))
     (define bytes-bag (port->bytes /dev/xmlin))
-    (define all-namespaces null)
     (define lang.xml
-      (cond [(and (pair? all-namespaces) (not (eq? (caar all-namespaces) '||)))
-             (string->symbol (string-append (symbol->string (caar all-namespaces)) ".xml"))]
-            [(path? src)
+      (cond [(path? src)
              (define src.xml (path-replace-extension (file-name-from-path src) ""))
              (define path.xml (if (regexp-match? #px"\\.xml$" src.xml) src.xml (path-replace-extension src.xml ".xml")))
              (string->symbol (path->string path.xml))]
