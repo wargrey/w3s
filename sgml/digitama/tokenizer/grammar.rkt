@@ -88,7 +88,7 @@
                           [(eq? self stag>) (values (reverse setubirtta) #false rest++)]
                           [(not (symbol? self)) #| should not happen |# (extract rest++ setubirtta)]
                           [(or (null? rest++) (null? (cdr rest++))) #| element is at the end of the file and malformed |# (extract null setubirtta)]
-                          [else (let-values ([(?eq ?value rest) (values (car rest++) (cadr rest++) (cdr rest++))])
+                          [else (let-values ([(?eq ?value rest) (values (car rest++) (cadr rest++) (cddr rest++))])
                                   (cond [(and (eq? ?eq #\=) (string? ?value)) (extract rest (cons (cons self ?value) setubirtta))]
                                         [else (extract rest++ setubirtta)]))]))]))))
 
@@ -106,7 +106,7 @@
                           [(string? self) (extract rest++ (cons self nerdlidc))]
                           [(eq? self </)
                            (cond [(or (null? rest++) (null? (cdr rest++))) #| element is at the end of the file and malformed |# (extract null nerdlidc)]
-                                 [else (let-values ([(?name ?etag rest) (values (car rest++) (cadr rest++) (cdr rest++))])
+                                 [else (let-values ([(?name ?etag rest) (values (car rest++) (cadr rest++) (cddr rest++))])
                                          (cond [(and (symbol? ?name) (xml-etag? ?etag))
                                                 (values (and (eq? tagname ?name) (reverse nerdlidc)) rest)]
                                                [else (let ([>rest (memf xml-etag? rest++)])

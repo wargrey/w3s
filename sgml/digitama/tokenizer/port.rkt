@@ -87,14 +87,18 @@
 (define xml-consume-token:start-tag-name : XML-Token-Consumer
   ;;; https://www.w3.org/TR/xml11/#NT-STag
   (lambda [/dev/xmlin ch scope]
-    (cond [(xml-name-start-char? ch) (values (xml-consume-nmtoken /dev/xmlin ch) xml-consume-token:tag-attr-name scope)]
-          [else (values (xml-consume-chars-literal/within-tag /dev/xmlin (list ch)) xml-consume-token:* scope)])))
+    (values (if (xml-name-start-char? ch)
+                (xml-consume-nmtoken /dev/xmlin ch)
+                (xml-consume-chars-literal/within-tag /dev/xmlin (list ch)))
+            xml-consume-token:tag-attr-name scope)))
 
 (define xml-consume-token:end-tag-name : XML-Token-Consumer
   ;;; https://www.w3.org/TR/xml11/#NT-ETag
   (lambda [/dev/xmlin ch scope]
-    (cond [(xml-name-start-char? ch) (values (xml-consume-nmtoken /dev/xmlin ch) xml-consume-token:tag-end scope)]
-          [else (values (xml-consume-chars-literal/within-tag /dev/xmlin (list ch)) xml-consume-token:* scope)])))
+    (values (if (xml-name-start-char? ch)
+                (xml-consume-nmtoken /dev/xmlin ch)
+                (xml-consume-chars-literal/within-tag /dev/xmlin (list ch)))
+            xml-consume-token:tag-end scope)))
 
 (define xml-consume-token:tag-attr-name : XML-Token-Consumer
   ;;; https://www.w3.org/TR/xml11/#NT-Attribute
@@ -112,19 +116,21 @@
              (cond [(eq? nch #\>) (values ?> xml-consume-token:* (if (eq? scope xml-initial-scope) xml-default-scope scope))]
                    [else (values (xml-consume-chars-literal/within-tag /dev/xmlin (if (eof-object? nch) (list ch) (list nch ch)))
                                  xml-consume-token:* scope)]))]
-          [else (values (xml-consume-chars-literal/within-tag /dev/xmlin (list ch)) xml-consume-token:* scope)])))
+          [else (values (xml-consume-chars-literal/within-tag /dev/xmlin (list ch)) xml-consume-token:tag-attr-name scope)])))
 
 (define xml-consume-token:tag-attr-eq : XML-Token-Consumer
   ;;; https://www.w3.org/TR/xml11/#NT-Attribute
   (lambda [/dev/xmlin ch scope]
     (cond [(eq? ch #\=) (values ch xml-consume-token:tag-attr-value scope)]
-          [else (values (xml-consume-chars-literal/within-tag /dev/xmlin (list ch)) xml-consume-token:* scope)])))
+          [else (values (xml-consume-chars-literal/within-tag /dev/xmlin (list ch)) xml-consume-token:tag-attr-name scope)])))
 
 (define xml-consume-token:tag-attr-value : XML-Token-Consumer
   ;;; https://www.w3.org/TR/xml11/#NT-Attribute
   (lambda [/dev/xmlin ch scope]
-    (cond [(or (eq? ch #\') (eq? ch #\")) (values (xml-consume-attribute-value /dev/xmlin ch) xml-consume-token:tag-attr-name scope)]
-          [else (values (xml-consume-chars-literal/within-tag /dev/xmlin (list ch)) xml-consume-token:* scope)])))
+    (values (if (or (eq? ch #\') (eq? ch #\"))
+                (xml-consume-attribute-value /dev/xmlin ch)
+                (xml-consume-chars-literal/within-tag /dev/xmlin (list ch)))
+            xml-consume-token:tag-attr-name scope)))
 
 (define xml-consume-token:tag-end : XML-Token-Consumer
   (lambda [/dev/xmlin ch scope]

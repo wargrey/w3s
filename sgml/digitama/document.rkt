@@ -19,7 +19,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (struct xml-doctype
   ([location : (U String Symbol)]
-   [namespaces : (Listof (Pairof Symbol String))]
    [version : (Option Nonnegative-Flonum)]
    [encoding : (Option String)]
    [standalone? : Boolean]
@@ -49,7 +48,7 @@
     (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin #false))
     (define tokens : (Listof XML-Datum) (read-xml-tokens /dev/xmlin))
 
-    (xml-document (xml-doctype (xml-port-name /dev/xmlin) null version encoding standalone? '|| #false #false)
+    (xml-document (xml-doctype (xml-port-name /dev/xmlin) version encoding standalone? '|| #false #false)
                   null (xml-syntax->grammar tokens))))
 
 (define read-xml-document* : (-> XML-StdIn XML-Document*)
@@ -57,7 +56,7 @@
     (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin #true))
     (define tokens : (Listof XML-Token) (read-xml-tokens* /dev/xmlin))
 
-    (xml-document* (xml-doctype (xml-port-name /dev/xmlin) null version encoding standalone? '|| #false #false)
+    (xml-document* (xml-doctype (xml-port-name /dev/xmlin) version encoding standalone? '|| #false #false)
                    null (xml-syntax->grammar* tokens))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

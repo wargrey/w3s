@@ -31,7 +31,8 @@
                            (let-values ([(e r) (xml-syntax-extract-element* rest++)])
                              (syntax->grammar r (if (not e) srammarg (cons e srammarg))))]
                           [(xml:whitespace? self) (syntax->grammar rest++ srammarg)]
-                          [else (syntax->grammar rest++ srammarg)]))]))))
+                          [(xml:bad? self) (syntax->grammar rest++ srammarg)]
+                          [else (make+exn:xml:unrecognized self) (syntax->grammar rest++ srammarg)]))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-syntax-extract-declaration* : (-> (Listof XML-Token) (Values (Option XML-Declaration*) (Listof XML-Token)))
@@ -43,7 +44,7 @@
     (let extract ([rest : (Listof XML-Token) tokens]
                   [name : (Option XML:Name) #false]
                   [bodies : (Listof (U XML-Token XML-Declaration* XML-Processing-Instruction*)) null])
-      (cond [(null? rest) #| PI is at the end of the file and malformed |# (values #false null)]
+      (cond [(null? rest) (make+exn:xml:malformed eof) (values #false null)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml:whitespace? self) (extract rest++ name bodies)]
                           [(xml:etag? self) (values (and name (vector name (reverse bodies))) rest++)]
@@ -64,7 +65,7 @@
     (let extract ([rest : (Listof XML-Token) tokens]
                   [target : (Option XML:Name) #false]
                   [body : (Option XML:String) #false])
-      (cond [(null? rest) #| PI is at the end of the file and malformed |# (values #false null)]
+      (cond [(null? rest) (make+exn:xml:malformed eof) (values #false null)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml:name? self) (extract rest++ self body)]
                           [(xml:string? self) (extract rest++ target self)]
@@ -77,42 +78,45 @@
   ;;; https://www.w3.org/TR/xml11/#NT-content
   (lambda [tokens]
     (let extract ([rest : (Listof XML-Token) tokens])
-      (cond [(null? rest) #| element is at the end of the file and malformed |# (values #false null)]
+      (cond [(null? rest) (make+exn:xml:malformed eof) (values #false null)]
             [else (let-values ([(?name rest++) (values (car rest) (cdr rest))])
-                    (cond [(not (xml:name? ?name)) #| bad element |# (extract rest++)]
-                          [else (let-values ([(attributes empty? rest++++) (xml-syntax-extract-element-attributes* rest++)])
-                                  (cond [(and empty?) (values (list ?name attributes null) rest++++)]
-                                        [else (let-values ([(children rest++++++) (xml-syntax-extract-element-children* ?name rest++++)])
-                                                (values (and children (list ?name attributes children))
-                                                        rest++++++))]))]))]))))
+                    (define tagname : (Option XML:Name)
+                      (cond [(xml:name? ?name) ?name]
+                            [else (make+exn:xml:missing-name ?name) #false]))
+                    (let-values ([(attributes empty? rest++++) (xml-syntax-extract-element-attributes* tagname rest++)])
+                      (cond [(and empty?) (values (and tagname (list tagname attributes null)) rest++++)]
+                            [else (let-values ([(children rest++++++) (xml-syntax-extract-element-children* tagname rest++++)])
+                                    (values (and children tagname (list tagname attributes children))
+                                            rest++++++))])))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-syntax-extract-element-attributes* : (-> (Listof XML-Token) (Values (Listof XML-Element-Attribute*) Boolean (Listof XML-Token)))
+(define xml-syntax-extract-element-attributes* : (-> (Option XML:Name) (Listof XML-Token) (Values (Listof XML-Element-Attribute*) Boolean (Listof XML-Token)))
   ;;; https://www.w3.org/TR/xml11/#NT-Attribute
-  (lambda [tokens]
+  (lambda [tagname tokens]
     ; NOTE: the tokenizer ensures the sequence of StartTag token
     ;   < name attrname=value* /?>
     ;   no whitespaces and comments among them
     ;   error spans the rest part of the StartTag
     (let extract ([rest : (Listof XML-Token) tokens]
                   [setubirtta : (Listof XML-Element-Attribute*) null])
-      (cond [(null? rest) #| element is at the end of the file and malformed |# (values setubirtta #false null)]
+      (cond [(null? rest) (make+exn:xml:malformed eof tagname) (values setubirtta #false null)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml:etag? self) (values (reverse setubirtta) #true rest++)]
                           [(xml:cstag? self) (values (reverse setubirtta) #false rest++)]
-                          [(not (xml:name? self)) #| should not happen |# (extract rest++ setubirtta)]
-                          [(or (null? rest++) (null? (cdr rest++))) #| element is at the end of the file and malformed |# (extract null setubirtta)]
-                          [else (let-values ([(?eq ?value rest*) (values (car rest++) (cadr rest++) (cdr rest++))])
+                          [(not (xml:name? self)) (make+exn:xml:missing-name self tagname) (extract rest++ setubirtta)]
+                          [(or (null? rest++) (null? (cdr rest++))) (make+exn:xml:malformed rest tagname) (extract null setubirtta)]
+                          [else (let-values ([(?eq ?value rest*) (values (car rest++) (cadr rest++) (cddr rest++))])
                                   (cond [(and (xml:eq? ?eq) (xml:string? ?value)) (extract rest* (cons (cons self ?value) setubirtta))]
-                                        [else (extract rest++ setubirtta)]))]))]))))
+                                        [(xml:eq? ?eq) (make+exn:xml:malformed (list self ?eq ?value) tagname) (extract (cdr rest++) setubirtta)]
+                                        [else (make+exn:xml:malformed (list self ?eq ?value) tagname) (extract rest* setubirtta)]))]))]))))
 
-(define xml-syntax-extract-element-children* : (-> XML:Name (Listof XML-Token)
+(define xml-syntax-extract-element-children* : (-> (Option XML:Name) (Listof XML-Token)
                                                    (Values (Option (Listof (U XML-Element* XML-Element-Plain-Children*))) (Listof XML-Token)))
   ;;; https://www.w3.org/TR/xml11/#NT-content
   (lambda [tagname tokens]
     (let extract ([rest : (Listof XML-Token) tokens]
                   [nerdlidc : (Listof (U XML-Element* XML-Element-Plain-Children*)) null])
-      (cond [(null? rest) #| element is at the end of the file and malformed |# (values #false null)]
+      (cond [(null? rest) (make+exn:xml:malformed eof tagname) (values #false null)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml:whitespace? self) (extract rest++ (cons self nerdlidc))]
                           [(xml:stag? self)
@@ -124,15 +128,18 @@
                            ;   </ name >
                            ;   no whitespaces and comments among them
                            ;   error spans the rest part of the EndTag
-                           (cond [(or (null? rest++) (null? (cdr rest++))) #| element is at the end of the file and malformed |# (extract null nerdlidc)]
-                                 [else (let-values ([(?name ?etag rest*) (values (car rest++) (cadr rest++) (cdr rest++))])
-                                         (cond [(and (xml:name? ?name) (xml:etag? ?etag))
-                                                (values (and (eq? (xml:name-datum tagname) (xml:name-datum ?name)) (reverse nerdlidc)) rest*)]
-                                               [else (let ([>rest (memf xml:etag? rest++)])
-                                                       (cond [(not >rest) #| element is at the end of the file and malformed |# (extract null nerdlidc)]
-                                                             [else #| invalid element EndTag |# (values #false (cdr >rest))]))]))])]
+                           (cond [(or (null? rest++) (null? (cdr rest++))) (make+exn:xml:malformed rest tagname) (extract null nerdlidc)]
+                                 [else (let-values ([(?name ?etag rest*) (values (car rest++) (cadr rest++) (cddr rest++))])
+                                         (if (and (xml:name? ?name) (xml:etag? ?etag))
+                                             (let ([well-endtag? (and tagname (eq? (xml:name-datum tagname) (xml:name-datum ?name)))])
+                                               (when (not well-endtag?) (make+exn:xml:end-tag ?name tagname))
+                                               (values (and well-endtag? (reverse nerdlidc)) rest*))
+                                             (let ([>rest (memf xml:etag? rest++)])
+                                               (cond [(not >rest) (make+exn:xml:malformed rest++ tagname) (extract null nerdlidc)]
+                                                     [else (make+exn:xml:malformed (take rest++ (- (length rest++) (length >rest) 1)) tagname)
+                                                           (values #false (cdr >rest))]))))])]
                           [(xml:entity? self) (extract rest++ (cons self nerdlidc))]
                           [(xml:pi? self)
                            (let-values ([(p r) (xml-syntax-extract-pi* rest++)])
                              (extract r (if (not p) nerdlidc (cons p nerdlidc))))]
-                          [else #| should not happen |# (extract rest++ nerdlidc)]))]))))
+                          [else (make+exn:xml:unrecognized self tagname) (extract rest++ nerdlidc)]))]))))
