@@ -222,6 +222,7 @@
    [xml:pi              #:+ XML:PI              #:-> xml:open]
    [xml:decl            #:+ XML:Decl            #:-> xml:open]
 
+   [xml:text            #:+ XML:Text            #:-> xml:string]
    [xml:comment         #:+ XML:Comment         #:-> xml:whitespace]]
 
   ; WARNING: Carefully defining types to avoid happening to mess up '(list? datum)'. 
@@ -235,7 +236,6 @@
     [xml:entity         #:+ XML:Entity          #:as (U Symbol Index)]
     [xml:string         #:+ XML:String          #:as String]
     [xml:keyword        #:+ XML:Keyword         #:as Keyword]
-    [xml:text           #:+ XML:Text            #:as String]
     [xml:whitespace     #:+ XML:WhiteSpace      #:as String]))
 
 ;; https://drafts.xmlwg.org/xml-syntax/#style-rules
@@ -243,6 +243,7 @@
 (define-syntax-error exn:xml #:as XML-Syntax-Error
   [exn:xml:unrecognized       #:-> exn:xml]
   [exn:xml:range              #:-> exn:xml:unrecognized]
+  [exn:xml:unexpected         #:-> exn:xml:unrecognized]
   [exn:xml:malformed          #:-> exn:xml]
   [exn:xml:end-tag            #:-> exn:xml]
   [exn:xml:missing-name       #:-> exn:xml:malformed]

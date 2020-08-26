@@ -31,7 +31,6 @@
                            (let-values ([(e r) (xml-syntax-extract-element* rest++)])
                              (syntax->grammar r (if (not e) srammarg (cons e srammarg))))]
                           [(xml:whitespace? self) (syntax->grammar rest++ srammarg)]
-                          [(xml:bad? self) (syntax->grammar rest++ srammarg)]
                           [else (make+exn:xml:unrecognized self) (syntax->grammar rest++ srammarg)]))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -80,6 +79,7 @@
     (let extract ([rest : (Listof XML-Token) tokens])
       (cond [(null? rest) (make+exn:xml:malformed eof) (values #false null)]
             [else (let-values ([(?name rest++) (values (car rest) (cdr rest))])
+                    ; broken start tag should not affect its parent and sibling elements.
                     (define tagname : (Option XML:Name)
                       (cond [(xml:name? ?name) ?name]
                             [else (make+exn:xml:missing-name ?name) #false]))
@@ -142,4 +142,10 @@
                           [(xml:pi? self)
                            (let-values ([(p r) (xml-syntax-extract-pi* rest++)])
                              (extract r (if (not p) nerdlidc (cons p nerdlidc))))]
-                          [else (make+exn:xml:unrecognized self tagname) (extract rest++ nerdlidc)]))]))))
+                          [(xml:delim=:=? self <!$CDATA$)
+                           ; NOTE: the tokenizer ensures the sequence of CDATA token
+                           ;   <![CDATA[ text ]]>
+                           ;   no whitespaces, errors or comments among them
+                           (cond [(or (null? rest++) (null? (cdr rest++))) (make+exn:xml:malformed rest tagname) (extract null nerdlidc)]
+                                 [else (extract (cddr rest++) (cons (assert (car rest++) xml:string?) nerdlidc))])]
+                          [else (make+exn:xml:unexpected self tagname) (extract rest++ nerdlidc)]))]))))

@@ -10,7 +10,7 @@
 
 (define-type XML-Processing-Instruction (Boxof (Pairof Symbol String)))
 (define-type XML-Declaration (Rec body (Vector Symbol (Listof (U XML-Datum body XML-Processing-Instruction)))))
-(define-type XML-Element-Attribute (Pairof Symbol String))
+(define-type XML-Element-Attribute (Pairof Symbol (U String (Boxof String))))
 (define-type XML-Element-Plain-Children (U String XML-Processing-Instruction XML-White-Space Index Symbol))
 (define-type XML-Element (Rec elem (List Symbol (Listof XML-Element-Attribute) (Listof (U elem XML-Element-Plain-Children)))))
 
@@ -68,36 +68,37 @@
 (define xml-syntax-extract-element : (-> (Listof XML-Datum) (Values (Option XML-Element) (Listof XML-Datum)))
   (lambda [tokens]
     (let extract ([rest : (Listof XML-Datum) tokens])
-      (cond [(null? rest) #| element is at the end of the file and malformed |# (values #false null)]
+      (cond [(null? rest) #| unexpected EOF |# (values #false null)]
             [else (let-values ([(?name rest++) (values (car rest) (cdr rest))])
-                    (cond [(not (symbol? ?name)) #| bad element |# (extract rest++)]
-                          [else (let-values ([(attributes empty? rest++++) (xml-syntax-extract-element-attributes rest++)])
-                                  (cond [(and empty?) (values (list ?name attributes null) rest++++)]
-                                        [else (let-values ([(children rest++++++) (xml-syntax-extract-element-children ?name rest++++)])
-                                                (values (and children (list ?name attributes children))
-                                                        rest++++++))]))]))]))))
+                    ; broken start tag should not affect its parent and sibling elements
+                    (define tagname : (Option Symbol) (and (symbol? ?name) ?name))
+                    (let-values ([(attributes empty? rest++++) (xml-syntax-extract-element-attributes rest++)])
+                      (cond [(and empty?) (values (and tagname (list tagname attributes null)) rest++++)]
+                            [else (let-values ([(children rest++++++) (xml-syntax-extract-element-children tagname rest++++)])
+                                    (values (and children tagname (list tagname attributes children))
+                                            rest++++++))])))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-syntax-extract-element-attributes : (-> (Listof XML-Datum) (Values (Listof XML-Element-Attribute) Boolean (Listof XML-Datum)))
   (lambda [tokens]
     (let extract ([rest : (Listof XML-Datum) tokens]
                   [setubirtta : (Listof XML-Element-Attribute) null])
-      (cond [(null? rest) #| element is at the end of the file and malformed |# (values setubirtta #false null)]
+      (cond [(null? rest) #| unexpected EOF |# (values setubirtta #false null)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(eq? self />) (values (reverse setubirtta) #true rest++)]
                           [(eq? self stag>) (values (reverse setubirtta) #false rest++)]
-                          [(not (symbol? self)) #| should not happen |# (extract rest++ setubirtta)]
-                          [(or (null? rest++) (null? (cdr rest++))) #| element is at the end of the file and malformed |# (extract null setubirtta)]
+                          [(not (symbol? self)) #| missing name |# (extract rest++ setubirtta)]
+                          [(or (null? rest++) (null? (cdr rest++))) #| unexpected EOF |# (extract null setubirtta)]
                           [else (let-values ([(?eq ?value rest) (values (car rest++) (cadr rest++) (cddr rest++))])
-                                  (cond [(and (eq? ?eq #\=) (string? ?value)) (extract rest (cons (cons self ?value) setubirtta))]
+                                  (cond [(and (eq? ?eq #\=) (or (string? ?value) (box? ?value))) (extract rest (cons (cons self ?value) setubirtta))]
                                         [else (extract rest++ setubirtta)]))]))]))))
 
-(define xml-syntax-extract-element-children : (-> Symbol (Listof XML-Datum)
+(define xml-syntax-extract-element-children : (-> (Option Symbol) (Listof XML-Datum)
                                                   (Values (Option (Listof (U XML-Element XML-Element-Plain-Children))) (Listof XML-Datum)))
   (lambda [tagname tokens]
     (let extract ([rest : (Listof XML-Datum) tokens]
                   [nerdlidc : (Listof (U XML-Element XML-Element-Plain-Children)) null])
-      (cond [(null? rest) #| element is at the end of the file and malformed |# (values #false null)]
+      (cond [(null? rest) #| unexpected EOF |# (values #false null)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml-white-space? self) (extract rest++ (cons self nerdlidc))]
                           [(eq? self #\<)
@@ -105,17 +106,20 @@
                              (extract r (if (not e) nerdlidc (cons e nerdlidc))))]
                           [(string? self) (extract rest++ (cons self nerdlidc))]
                           [(eq? self </)
-                           (cond [(or (null? rest++) (null? (cdr rest++))) #| element is at the end of the file and malformed |# (extract null nerdlidc)]
+                           (cond [(or (null? rest++) (null? (cdr rest++))) #| unexpected EOF |# (extract null nerdlidc)]
                                  [else (let-values ([(?name ?etag rest) (values (car rest++) (cadr rest++) (cddr rest++))])
                                          (cond [(and (symbol? ?name) (xml-etag? ?etag))
                                                 (values (and (eq? tagname ?name) (reverse nerdlidc)) rest)]
                                                [else (let ([>rest (memf xml-etag? rest++)])
-                                                       (cond [(not >rest) #| element is at the end of the file and malformed |# (extract null nerdlidc)]
+                                                       (cond [(not >rest) #| unexpected EOF |# (extract null nerdlidc)]
                                                              [else #| invalid element EndTag |# (values #false (cdr >rest))]))]))])]
                           [(or (index? self) (symbol? self)) (extract rest++ (cons self nerdlidc))]  ; entities
                           [(eq? self <?)
                            (let-values ([(p r) (xml-syntax-extract-pi rest++)])
                              (extract r (if (not p) nerdlidc (cons p nerdlidc))))]
+                          [(eq? self <!$CDATA$)
+                           (cond [(or (null? rest++) (null? (cdr rest++))) #| unexpected EOF |# (extract null nerdlidc)]
+                                 [else (extract (cddr rest++) (cons (assert (car rest++) string?) nerdlidc))])]
                           [else #| should not happen |# (extract rest++ nerdlidc)]))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

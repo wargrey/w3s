@@ -30,6 +30,12 @@
 <names>From &townname; -- &scarequote1;.</names>
 <nums>From &townname; -- &scarequote2;.</nums>
 
+<testdoc id="t7-&#241;" ~resp="MSM">
+  <names>From Española -- a ‘test’ for you.</names>
+  <nums>From Española -- a ‘test’ for you.</nums>
+  <names>From Española -- a ‘test’ for you.</names>
+  <nums>From Española -- a ‘test’ for you.</nums>
+</testdoc>
 
 <? bad pi?>
 <?bad! pi?>
@@ -46,20 +52,13 @@
 
 <Человек язык="мова">Borys</Человек>
 
-<testdoc id="t7-20020923" ~resp="MSM">
-  <names>From Española -- a ‘test’ for you.</names>
-  <nums>From Española -- a ‘test’ for you.</nums>
-  <names>From Española -- a ‘test’ for you.</names>
-  <nums>From Española -- a ‘test’ for you.</nums>
-</testdoc>
-
 <li>Some cyrillic chars: &#1080;&#1081;</li>
 <li>This a an sizzors symbol: &#9988;</li>
 <li>OK, entered via entity: &ok;</li>
 <a att="Cirle with 1: &#10112;" ok="&ok;"/>
 
 
-<document name="value" badatt=10>
+<document badval="va<lue" badatt=10>
   <~ul>
     <li>Line one</li>
     <li>Line with <em>emphasised</em> text</li>
