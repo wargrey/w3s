@@ -11,18 +11,15 @@
 (define-type XML-Declaration* (Rec body (Vector XML:Name (Listof (U XML-Token body XML-Processing-Instruction*)))))
 (define-type XML-Doctype-Body* (U XML-Token XML-Declaration* XML-Processing-Instruction*))
 
-(define-type XML-Processing-Instruction* (Boxof (Pairof XML:Name XML:String)))
-(define-type XML-Internal-Entities* (HashTable Symbol XML:String))
+(define-type XML-Processing-Instruction* (MPairof XML:Name XML:String))
 (define-type XML-Element-Attribute* (Pairof XML:Name XML:String))
 (define-type XML-Element-Plain-Children* (U XML:String XML-Processing-Instruction* XML:WhiteSpace XML:Entity))
 (define-type XML-Element* (Rec elem (List XML:Name (Listof XML-Element-Attribute*) (Listof (U elem XML-Element-Plain-Children*)))))
 
-(define empty-internal-entities* : (Immutable-HashTable Symbol XML:String) (hasheq))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-syntax->grammar* : (-> (Listof XML-Token) (Values (Option XML-DocType-Metadata) XML-Internal-Entities* (Listof XML-Grammar*)))
+(define xml-syntax->grammar* : (-> (Listof XML-Token) (Values (Option XML-DocType-Metadata) XML-Internal-Entities (Listof XML-Grammar*)))
   (lambda [tokens]
-    (define entities : XML-Internal-Entities* (make-hasheq))
+    (define entities : XML-Internal-Entities (make-hasheq))
     
     (let syntax->grammar ([rest : (Listof XML-Token) tokens]
                           [doctype : (Option XML-DocType-Metadata) #false]
@@ -34,7 +31,7 @@
                            (let-values ([(d r) (xml-syntax-extract-declaration* rest++)])
                              (cond [(not d) (syntax->grammar r doctype srammarg)]
                                    [(xml:name=:=? (vector-ref d 0) 'DOCTYPE)
-                                    (let-values ([(metadata sPI) (xml-grammar-parse-doctype d entities)])
+                                    (let-values ([(metadata sPI) (xml-grammar-parse-doctype* d entities)])
                                       (syntax->grammar r metadata (append sPI srammarg)))]
                                    [else (make+exn:xml:unimplemented (vector-ref d 0)) (syntax->grammar r doctype srammarg)]))]
                           [(xml:pi? self)
@@ -81,7 +78,7 @@
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml:name? self) (extract rest++ self body)]
                           [(xml:string? self) (extract rest++ target self)]
-                          [(xml:delim=:=? self ?>) (values (and target body (box (cons target body))) (cdr rest))]
+                          [(xml:delim=:=? self ?>) (values (and target body (mcons target body)) (cdr rest))]
                           [else #| bad PI |# (extract rest++ target body)]))]))))
 
 (define xml-syntax-extract-element* : (-> (Listof XML-Token) (Values (Option XML-Element*) (Listof XML-Token)))
@@ -167,20 +164,22 @@
 (define xml-grammar-throw : (-> XML:Name (U XML-Doctype-Body* (Listof XML-Doctype-Body*)) (U Void XML-Syntax-Error))
   (lambda [declname bad]
     (cond [(list? bad) (for ([b (in-list bad)]) (xml-grammar-throw declname bad))]
-          [(xml-token? bad) (make+exn:xml:unrecognized bad declname)])))
+          [(xml-token? bad) (make+exn:xml:malformed bad declname)]
+          [(vector? bad) (make+exn:xml:misplaced (vector-ref bad 0) declname)]
+          [(box? bad) (make+exn:xml:misplaced (car (unbox bad)) declname)])))
 
-(define xml-grammar-parse-doctype : (-> XML-Declaration* XML-Internal-Entities* (Values (Option XML-DocType-Metadata) (Listof XML-Processing-Instruction*)))
+(define xml-grammar-parse-doctype* : (-> XML-Declaration* XML-Internal-Entities (Values (Option XML-DocType-Metadata) (Listof XML-Processing-Instruction*)))
   (lambda [doctype entities]
     ; Whitespaces have already been filtered out.
     (define-values (declname body) (values (vector-ref doctype 0) (vector-ref doctype 1)))
     (cond [(null? body) (make+exn:xml:malformed declname) (values #false null)]
           [else (let-values ([(self rest) (values (car body) (cdr body))])
                   (cond [(not (xml:name? self)) (xml-grammar-throw declname self) (values #false null)]
-                        [else (let* ([ext (xml-grammar-extract-external (vector-ref doctype 0) rest)]
+                        [else (let* ([ext (xml-grammar-extract-external* (vector-ref doctype 0) rest)]
                                      [metainfo (xml-doctype-metadata (xml:name-datum self) (car ext) (cadr ext))])
-                                (values metainfo (xml-grammar-extract-internal self (cddr ext) entities)))]))])))
+                                (values metainfo (xml-grammar-extract-internal* self (cddr ext) entities)))]))])))
 
-(define xml-grammar-extract-external : (-> XML:Name (Listof XML-Doctype-Body*) (List* (Option String) (Option String) (Listof XML-Doctype-Body*)))
+(define xml-grammar-extract-external* : (-> XML:Name (Listof XML-Doctype-Body*) (List* (Option String) (Option String) (Listof XML-Doctype-Body*)))
   (lambda [declname doctype]
     (or (and (pair? doctype)
              (let-values ([(self rest) (values (car doctype) (cdr doctype))])
@@ -204,7 +203,7 @@
         #| no external definition, not an error |#
         (list* #false #false doctype))))
 
-(define xml-grammar-extract-internal : (-> XML:Name (Listof XML-Doctype-Body*) XML-Internal-Entities* (Listof XML-Processing-Instruction*))
+(define xml-grammar-extract-internal* : (-> XML:Name (Listof XML-Doctype-Body*) XML-Internal-Entities (Listof XML-Processing-Instruction*))
   (lambda [declname subset0 entities]
     (define subset : (Listof XML-Doctype-Body*)
       (let trim ([rest : (Listof XML-Doctype-Body*) subset0])
@@ -212,4 +211,34 @@
               [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                       (cond [(xml:delim=:=? self #\[) rest++]
                             [else (xml-grammar-throw declname self) (trim rest++)]))])))
-    null))
+    (let extract-entity ([rest : (Listof XML-Doctype-Body*) subset]
+                         [sIP : (Listof XML-Processing-Instruction*) null])
+      (cond [(null? rest) (make+exn:xml:malformed declname) sIP]
+            [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
+                    (cond [(xml:delim=:=? self #\]) (when (pair? rest++) (xml-grammar-throw declname rest++)) sIP]
+                          [(vector? self)
+                           (let ([DECL (vector-ref self 0)])
+                             (case (xml:name-datum DECL)
+                               [(ENTITY) (xml-grammar-extract-entity* declname DECL (vector-ref self 1) entities)]
+                               [else (make+exn:xml:unimplemented DECL declname)])
+                             (extract-entity rest++ sIP))]
+                          [(box? self) (extract-entity rest++ (cons self sIP))]
+                          [(xml:entity? self) (make+exn:xml:unimplemented self declname) (extract-entity rest++ sIP)]
+                          [else (xml-grammar-throw declname self) (extract-entity rest++ sIP)]))]))))
+
+(define xml-grammar-extract-entity* : (-> XML:Name XML:Name (Listof XML-Doctype-Body*) XML-Internal-Entities Void)
+  (lambda [declname ENTITY body entities]
+    (define-values (tokens others) (partition xml-token? body))
+    (cond [(pair? others) (xml-grammar-throw ENTITY others)]
+          [(or (null? tokens) (null? (cdr tokens))) (make+exn:xml:malformed (cons ENTITY tokens) declname)]
+          [else (let-values ([(?name ?value rest) (values (car tokens) (cadr tokens) (cddr tokens))])
+                  (if (and (xml:name? ?name) (xml:string? ?value) (null? rest))
+                      (hash-set! entities (xml:name-datum ?name) (xml-entity-value->datum ?value))
+                      (make+exn:xml:unimplemented (cons ENTITY tokens) declname)))])
+    (void)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define xml-entity-value->datum : (-> XML:String (U String (Boxof String)))
+  (lambda [v]
+    (cond [(xml:&string? v) (box (xml:string-datum v))]
+          [else (xml:string-datum v)])))

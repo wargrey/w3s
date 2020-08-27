@@ -2,6 +2,8 @@
 
 (provide (all-defined-out))
 
+(require racket/list)
+
 (require "port.rkt")
 (require "../doctype.rkt")
 (require "../delimiter.rkt")
@@ -9,9 +11,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type XML-Grammar (U XML-Processing-Instruction XML-Element))
 (define-type XML-Declaration (Rec body (Vector Symbol (Listof (U XML-Datum body XML-Processing-Instruction)))))
+(define-type XML-Doctype-Body (U XML-Datum XML-Declaration XML-Processing-Instruction))
 
-(define-type XML-Processing-Instruction (Boxof (Pairof Symbol String)))
-(define-type XML-Internal-Entities (HashTable Symbol (U String (Boxof String))))
+(define-type XML-Processing-Instruction (MPairof Symbol String))
 (define-type XML-Element-Attribute (Pairof Symbol (U String (Boxof String))))
 (define-type XML-Element-Plain-Children (U String XML-Processing-Instruction XML-White-Space Index Symbol))
 (define-type XML-Element (Rec elem (List Symbol (Listof XML-Element-Attribute) (Listof (U elem XML-Element-Plain-Children)))))
@@ -28,7 +30,11 @@
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(eq? self <!)
                            (let-values ([(d r) (xml-syntax-extract-declaration rest++)])
-                             (syntax->grammar r doctype srammarg))]
+                             (cond [(not d) (syntax->grammar r doctype srammarg)]
+                                   [(eq? (vector-ref d 0) 'DOCTYPE)
+                                    (let-values ([(metadata sPI) (xml-grammar-parse-doctype d entities)])
+                                      (syntax->grammar r metadata (append sPI srammarg)))]
+                                   [else (syntax->grammar r doctype srammarg)]))]
                           [(eq? self <?)
                            (let-values ([(p r) (xml-syntax-extract-pi rest++)])
                              (syntax->grammar r doctype (if (not p) srammarg (cons p srammarg))))]
@@ -67,7 +73,7 @@
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(symbol? self) (extract rest++ self body)]
                           [(string? self) (extract rest++ target self)]
-                          [(eq? self ?>) (values (and target body (box (cons target body))) (cdr rest))]
+                          [(eq? self ?>) (values (and target body (mcons target body)) (cdr rest))]
                           [else #| bad PI |# (extract rest++ target body)]))]))))
 
 (define xml-syntax-extract-element : (-> (Listof XML-Datum) (Values (Option XML-Element) (Listof XML-Datum)))
@@ -95,7 +101,7 @@
                           [(not (symbol? self)) #| missing name |# (extract rest++ setubirtta)]
                           [(or (null? rest++) (null? (cdr rest++))) #| unexpected EOF |# (extract null setubirtta)]
                           [else (let-values ([(?eq ?value rest) (values (car rest++) (cadr rest++) (cddr rest++))])
-                                  (cond [(and (eq? ?eq #\=) (or (string? ?value) (box? ?value))) (extract rest (cons (cons self ?value) setubirtta))]
+                                  (cond [(and (eq? ?eq #\=) (xml-value-string? ?value)) (extract rest (cons (cons self ?value) setubirtta))]
                                         [else (extract rest++ setubirtta)]))]))]))))
 
 (define xml-syntax-extract-element-children : (-> (Option Symbol) (Listof XML-Datum)
@@ -128,6 +134,78 @@
                           [else #| should not happen |# (extract rest++ nerdlidc)]))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define xml-grammar-parse-doctype : (-> XML-Declaration XML-Internal-Entities (Values (Option XML-DocType-Metadata) (Listof XML-Processing-Instruction)))
+  (lambda [doctype entities]
+    ; Whitespaces have already been filtered out.
+    (define-values (declname body) (values (vector-ref doctype 0) (vector-ref doctype 1)))
+    (cond [(null? body) (values #false null)]
+          [else (let-values ([(self rest) (values (car body) (cdr body))])
+                  (cond [(not (symbol? self)) (values #false null)]
+                        [else (let* ([ext (xml-grammar-extract-external (vector-ref doctype 0) rest)]
+                                     [metainfo (xml-doctype-metadata self (car ext) (cadr ext))])
+                                (values metainfo (xml-grammar-extract-internal self (cddr ext) entities)))]))])))
+
+(define xml-grammar-extract-external : (-> Symbol (Listof XML-Doctype-Body) (List* (Option String) (Option String) (Listof XML-Doctype-Body)))
+  (lambda [declname doctype]
+    (or (and (pair? doctype)
+             (let-values ([(self rest) (values (car doctype) (cdr doctype))])
+               (case self
+                 [(SYSTEM)
+                  (and (pair? rest)
+                       (let ([system (car rest)])
+                         (list* #false (and (string? system) system) (cdr rest))))]
+                 [(PUBLIC)
+                  (and (pair? rest) (pair? (cdr rest))
+                       (let ([public (car rest)]
+                             [system (cadr rest)])
+                         ; do not mess up contents after ExternalID
+                         (cond [(and (string? public) (string? system))
+                                (list* public system (cddr rest))]
+                               [(string? public)
+                                (list* public #false (cdr rest))]
+                               [else (list* #false #false rest)])))]
+                 [else #false])))
+        #| no external definition, not an error |#
+        (list* #false #false doctype))))
+
+(define xml-grammar-extract-internal : (-> Symbol (Listof XML-Doctype-Body) XML-Internal-Entities (Listof XML-Processing-Instruction))
+  (lambda [declname subset0 entities]
+    (define subset : (Listof XML-Doctype-Body)
+      (let trim ([rest : (Listof XML-Doctype-Body) subset0])
+        (cond [(null? rest) null]
+              [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
+                      (cond [(eq? self #\[) rest++]
+                            [else (trim rest++)]))])))
+    (let extract-entity ([rest : (Listof XML-Doctype-Body) subset]
+                         [sIP : (Listof XML-Processing-Instruction) null])
+      (cond [(null? rest) sIP]
+            [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
+                    (cond [(eq? self #\]) sIP]
+                          [(vector? self)
+                           (let ([DECL (vector-ref self 0)])
+                             (case DECL
+                               [(ENTITY) (xml-grammar-extract-entity declname DECL (vector-ref self 1) entities)])
+                             (extract-entity rest++ sIP))]
+                          [(mpair? self) (extract-entity rest++ (cons self sIP))]
+                          [else (extract-entity rest++ sIP)]))]))))
+
+(define xml-grammar-extract-entity : (-> Symbol Symbol (Listof XML-Doctype-Body) XML-Internal-Entities Void)
+  (lambda [declname ENTITY body entities]
+    (define-values (decls others) (partition vector? body))
+    (define-values (PIs tokens) (partition mpair? others))
+    (cond [(or (pair? others) (pair? PIs)) (void)]
+          [(or (null? tokens) (null? (cdr tokens))) (void)]
+          [else (let-values ([(?name ?value rest) (values (car tokens) (cadr tokens) (cddr tokens))])
+                  (when (and (symbol? ?name) (xml-value-string? ?value) (null? rest))
+                    (hash-set! entities ?name ?value)))])
+    (void)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-etag? : (-> XML-Datum Boolean)
   (lambda [xd]
     (eq? xd #\>)))
+
+(define xml-value-string? : (-> XML-Doctype-Body Boolean : (U String (Boxof String)))
+  (lambda [xd]
+    (or (string? xd)
+        (box? xd))))

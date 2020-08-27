@@ -5,6 +5,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type XML-External-ID (U False String (Pairof String String)))
 (define-type XML-DocType-Metadata (Pairof Symbol (U False String (Pairof String String))))
+(define-type XML-Internal-Entities (HashTable Symbol (U String (Boxof String))))
 
 (struct xml-doctype
   ([location : (U String Symbol)]
@@ -12,7 +13,8 @@
    [encoding : (Option String)]
    [standalone? : Boolean]
    [name : Symbol]
-   [external : XML-External-ID])
+   [external : XML-External-ID]
+   [entities : XML-Internal-Entities])
   #:transparent
   #:type-name XML-DocType)
 

@@ -20,14 +20,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (struct xml-document
   ([doctype : XML-DocType]
-   [entities : XML-Internal-Entities]
    [elements : (Listof XML-Grammar)])
   #:transparent
   #:type-name XML-Document)
 
 (struct xml-document*
   ([doctype : XML-DocType]
-   [entities : XML-Internal-Entities*]
    [elements : (Listof XML-Grammar*)])
   #:transparent
   #:type-name XML-Document*)
@@ -47,8 +45,8 @@
 
     (xml-document (xml-doctype (xml-port-name /dev/xmlin)
                                version encoding standalone?
-                               name external)
-                  entities grammars)))
+                               name external entities)
+                  grammars)))
 
 (define read-xml-document* : (-> XML-StdIn XML-Document*)
   (lambda [/dev/rawin]
@@ -64,15 +62,13 @@
 
     (xml-document* (xml-doctype (xml-port-name /dev/xmlin)
                                 version encoding standalone?
-                                name external)
-                   entities grammars)))
+                                name external entities)
+                   grammars)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define read-xml-document*->document : (-> XML-Document* XML-Document)
   (lambda [doc.xml]
     (xml-document (xml-document*-doctype doc.xml)
-                  (for/hasheq : XML-Internal-Entities ([(key value) (in-hash (xml-document*-entities doc.xml))])
-                    (values key (xml-entity-value->datum value)))
                   (map xml-grammar->datum (xml-document*-elements doc.xml)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -81,14 +77,9 @@
     (cond [(list? g) (xml-element->datum g)]
           [else (xml-pi->datum g)])))
 
-(define xml-entity-value->datum : (-> XML:String (U String (Boxof String)))
-  (lambda [v]
-    (cond [(xml:&string? v) (box (xml:string-datum v))]
-          [else (xml:string-datum v)])))
-
 (define xml-pi->datum : (-> XML-Processing-Instruction* XML-Processing-Instruction)
   (lambda [p]
-    (box (xml-pair->datum (unbox p)))))
+    (mcons (xml:name-datum (mcar p)) (xml:string-datum (mcdr p)))))
 
 (define xml-element->datum : (-> XML-Element* XML-Element)
   (lambda [e]

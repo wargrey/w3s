@@ -4,7 +4,7 @@
 ;;; https://www.w3.org/TR/xml11/                                                                ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(provide (all-defined-out))
+(provide (all-defined-out) XML-Internal-Entities XML-External-ID)
 (provide (struct-out XML-Document) read-xml-document)
 (provide (struct-out XML-Document*) read-xml-document*)
 
@@ -45,6 +45,12 @@
 (define xml-doc-external : (-> (U XML-Document XML-Document*) XML-External-ID)
   (lambda [xml]
     (xml-doctype-external
+     (cond [(xml-document? xml) (xml-document-doctype xml)]
+           [else (xml-document*-doctype xml)]))))
+
+(define xml-doc-general-entities : (-> (U XML-Document XML-Document*) XML-Internal-Entities)
+  (lambda [xml]
+    (xml-doctype-entities
      (cond [(xml-document? xml) (xml-document-doctype xml)]
            [else (xml-document*-doctype xml)]))))
 
