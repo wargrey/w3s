@@ -8,6 +8,7 @@
 (provide (struct-out XML-Document) read-xml-document)
 (provide (struct-out XML-Document*) read-xml-document*)
 
+(require "digitama/doctype.rkt")
 (require "digitama/document.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -41,15 +42,9 @@
      (cond [(xml-document? xml) (xml-document-doctype xml)]
            [else (xml-document*-doctype xml)]))))
 
-(define xml-doc-public : (-> (U XML-Document XML-Document*) (Option String))
+(define xml-doc-external : (-> (U XML-Document XML-Document*) XML-External-ID)
   (lambda [xml]
-    (xml-doctype-public
-     (cond [(xml-document? xml) (xml-document-doctype xml)]
-           [else (xml-document*-doctype xml)]))))
-
-(define xml-doc-system : (-> (U XML-Document XML-Document*) (Option String))
-  (lambda [xml]
-    (xml-doctype-system
+    (xml-doctype-external
      (cond [(xml-document? xml) (xml-document-doctype xml)]
            [else (xml-document*-doctype xml)]))))
 

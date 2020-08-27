@@ -3,35 +3,40 @@
 (provide (all-defined-out))
 
 (require "port.rkt")
+(require "../doctype.rkt")
 (require "../delimiter.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-type XML-Grammar (U XML-Declaration XML-Processing-Instruction XML-Element))
+(define-type XML-Grammar (U XML-Processing-Instruction XML-Element))
+(define-type XML-Declaration (Rec body (Vector Symbol (Listof (U XML-Datum body XML-Processing-Instruction)))))
 
 (define-type XML-Processing-Instruction (Boxof (Pairof Symbol String)))
-(define-type XML-Declaration (Rec body (Vector Symbol (Listof (U XML-Datum body XML-Processing-Instruction)))))
+(define-type XML-Internal-Entities (HashTable Symbol (U String (Boxof String))))
 (define-type XML-Element-Attribute (Pairof Symbol (U String (Boxof String))))
 (define-type XML-Element-Plain-Children (U String XML-Processing-Instruction XML-White-Space Index Symbol))
 (define-type XML-Element (Rec elem (List Symbol (Listof XML-Element-Attribute) (Listof (U elem XML-Element-Plain-Children)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-syntax->grammar : (-> (Listof XML-Datum) (Listof XML-Grammar))
+(define xml-syntax->grammar : (-> (Listof XML-Datum) (Values (Option XML-DocType-Metadata) XML-Internal-Entities (Listof XML-Grammar)))
   (lambda [tokens]
+    (define entities : XML-Internal-Entities (make-hasheq))
+    
     (let syntax->grammar ([rest : (Listof XML-Datum) tokens]
+                          [doctype : (Option XML-DocType-Metadata) #false]
                           [srammarg : (Listof XML-Grammar) null])
-      (cond [(null? rest) (reverse srammarg)]
+      (cond [(null? rest) (values doctype entities (reverse srammarg))]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(eq? self <!)
                            (let-values ([(d r) (xml-syntax-extract-declaration rest++)])
-                             (syntax->grammar r (if (not d) srammarg (cons d srammarg))))]
+                             (syntax->grammar r doctype srammarg))]
                           [(eq? self <?)
                            (let-values ([(p r) (xml-syntax-extract-pi rest++)])
-                             (syntax->grammar r (if (not p) srammarg (cons p srammarg))))]
+                             (syntax->grammar r doctype (if (not p) srammarg (cons p srammarg))))]
                           [(eq? self #\<)
                            (let-values ([(e r) (xml-syntax-extract-element rest++)])
-                             (syntax->grammar r (if (not e) srammarg (cons e srammarg))))]
-                          [(xml-white-space? self) (syntax->grammar rest++ srammarg)]
-                          [else (syntax->grammar rest++ srammarg)]))]))))
+                             (syntax->grammar r doctype (if (not e) srammarg (cons e srammarg))))]
+                          [(xml-white-space? self) (syntax->grammar rest++ doctype srammarg)]
+                          [else (syntax->grammar rest++ doctype srammarg)]))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-syntax-extract-declaration : (-> (Listof XML-Datum) (Values (Option XML-Declaration) (Listof XML-Datum)))

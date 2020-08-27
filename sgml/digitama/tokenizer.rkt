@@ -71,23 +71,23 @@
                        (xml-make-token source prev-env end xml:whitespace (xml-white-space-raw datum)))]
                   [(char? datum)
                    (cond [(eq? datum #\<) (xml-make-token source prev-env end xml:stag datum)]
-                         [(eq? datum #\>) (xml-make-token source prev-env end xml:etag datum)] ; `#\>` for Decls and EndTags
+                         [(eq? datum #\>) (xml-make-token source prev-env end xml:etag datum)] ; close delimiter for Decls and EndTags
                          [(eq? datum #\=) (xml-make-token source prev-env end xml:eq datum)]
                          [(or (eq? datum #\() (eq? datum #\[)) (xml-make-token source prev-env end xml:open datum)]
                          [(or (eq? datum #\)) (eq? datum #\])) (xml-make-token source prev-env end xml:close datum)]
                          [else (xml-make-token source prev-env end xml:delim datum) #| `>` for non-empty start tag |#])]
                   [(symbol? datum)
                    (cond [(symbol-interned? datum) (xml-make-token source prev-env end xml:name datum)]
-                         [(eq? datum />) (xml-make-token source prev-env end xml:etag datum)] ; for empty Elements
+                         [(eq? datum />) (xml-make-token source prev-env end xml:etag datum)] ; close delimiter for empty Elements
                          [(eq? datum stag>) (xml-make-token source prev-env end xml:cstag datum)] ; not an close delimiter
-                         [(eq? datum </) (xml-make-token source prev-env end xml:oetag datum)] ; it is not an open delimiter
+                         [(eq? datum </) (xml-make-token source prev-env end xml:oetag datum)] ; not an open delimiter
                          [(eq? datum <?) (xml-make-token source prev-env end xml:pi datum)]
                          [(eq? datum <!) (xml-make-token source prev-env end xml:decl datum)]
                          [(or (eq? datum <!$) (eq? datum <!$CDATA$)) (xml-make-token source prev-env end xml:open datum)]
                          [(or (eq? datum ?>) (eq? datum $$>)) (xml-make-token source prev-env end xml:close datum)]
                          [else (xml-make-token source prev-env end xml:entity datum)])]
                   [(string? datum) (xml-make-token source prev-env end xml:string datum)]
-                  [(box? datum) (xml-make-token source prev-env end xml:text (assert (unbox datum) string?))]
+                  [(box? datum) (xml-make-token source prev-env end xml:&string (assert (unbox datum) string?))]
                   [(index? datum) (xml-make-token source prev-env end xml:entity datum)]
                   [(keyword? datum) (xml-make-token source prev-env end xml:keyword datum)]
                   [(eof-object? datum) eof]
