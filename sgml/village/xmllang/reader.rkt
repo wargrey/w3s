@@ -21,12 +21,14 @@
     (regexp-match #px"^\\s*" /dev/xmlin) ; skip blanks before real css content
     (define-values (line column position) (port-next-location /dev/xmlin))
     (define bytes-bag (port->bytes /dev/xmlin))
+    
     (define lang.xml
       (cond [(path? src)
              (define src.xml (path-replace-extension (file-name-from-path src) ""))
              (define path.xml (if (regexp-match? #px"\\.xml$" src.xml) src.xml (path-replace-extension src.xml ".xml")))
              (string->symbol (path->string path.xml))]
             [else '|this should not happen| 'lang.xml]))
+
     (strip-context
      #`(module #,lang.xml typed/racket/base
          (provide #,lang.xml)

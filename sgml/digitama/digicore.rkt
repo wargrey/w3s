@@ -250,6 +250,7 @@
   [exn:xml:missing-name  #:-> exn:xml:malformed]
   [exn:xml:missing-value #:-> exn:xml:malformed]
   [exn:xml:misplaced     #:-> exn:xml:malformed]
+  [exn:xml:duplicate     #:-> exn:xml:malformed]
   [exn:xml:unimplemented #:-> exn:xml])
 
 (define-syntax (xml-remake-token stx)

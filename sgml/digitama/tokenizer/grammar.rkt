@@ -32,8 +32,9 @@
                            (let-values ([(d r) (xml-syntax-extract-declaration rest++)])
                              (cond [(not d) (syntax->grammar r doctype srammarg)]
                                    [(eq? (vector-ref d 0) 'DOCTYPE)
-                                    (let-values ([(metadata sPI) (xml-grammar-parse-doctype d entities)])
-                                      (syntax->grammar r metadata (append sPI srammarg)))]
+                                    (cond [(not doctype) (syntax->grammar r doctype srammarg)]
+                                          [else (let-values ([(metadata sPI) (xml-grammar-parse-doctype d entities)])
+                                                  (syntax->grammar r metadata (append sPI srammarg)))])]
                                    [else (syntax->grammar r doctype srammarg)]))]
                           [(eq? self <?)
                            (let-values ([(p r) (xml-syntax-extract-pi rest++)])
