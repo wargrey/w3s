@@ -4,12 +4,13 @@
 ;;; https://www.w3.org/TR/xml11/                                                                ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(provide (all-defined-out) XML-Internal-Entities XML-External-ID)
+(provide (all-defined-out) SGML-StdIn XML-DTD XML-External-ID)
 (provide (struct-out XML-Document) read-xml-document)
 (provide (struct-out XML-Document*) read-xml-document*)
 
 (require "digitama/doctype.rkt")
 (require "digitama/document.rkt")
+(require "digitama/stdin.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-doc-location : (-> (U XML-Document XML-Document*) (U String Symbol))
@@ -48,9 +49,9 @@
      (cond [(xml-document? xml) (xml-document-doctype xml)]
            [else (xml-document*-doctype xml)]))))
 
-(define xml-doc-general-entities : (-> (U XML-Document XML-Document*) XML-Internal-Entities)
+(define xml-doc-dtd : (-> (U XML-Document XML-Document*) XML-DTD)
   (lambda [xml]
-    (xml-doctype-entities
+    (xml-doctype-internal-dtd
      (cond [(xml-document? xml) (xml-document-doctype xml)]
            [else (xml-document*-doctype xml)]))))
 
@@ -62,4 +63,4 @@
   (provide (rename-out [xml-read-syntax read-syntax]))
   (provide (rename-out [xml-info get-info]))
   
-  (require sgml/village/xmllang/reader))
+  (require sgml/village/sgmlang/reader))

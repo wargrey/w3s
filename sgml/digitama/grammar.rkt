@@ -17,14 +17,14 @@
 (define-type XML-Element* (Rec elem (List XML:Name (Listof XML-Element-Attribute*) (Listof (U elem XML-Element-Plain-Children*)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-syntax->grammar* : (-> (Listof XML-Token) (Values (Option XML-DocType-Metadata) XML-Internal-Entities (Listof XML-Grammar*)))
+(define xml-syntax->grammar* : (-> (Listof XML-Token) (Values (Option XML-DocType-Metadata) XML-DTD (Listof XML-Grammar*)))
   (lambda [tokens]
-    (define entities : XML-Internal-Entities (make-hasheq))
+    (define dtd (make-xml-dtd))
     
     (let syntax->grammar ([rest : (Listof XML-Token) tokens]
                           [doctype : (Option XML-DocType-Metadata) #false]
                           [srammarg : (Listof XML-Grammar*) null])
-      (cond [(null? rest) (values doctype entities (reverse srammarg))]
+      (cond [(null? rest) (values doctype dtd (reverse srammarg))]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml:whitespace? self) (syntax->grammar rest++ doctype srammarg)]
                           [(xml:decl? self)
@@ -32,7 +32,7 @@
                              (cond [(not d) (syntax->grammar r doctype srammarg)]
                                    [(xml:name=:=? (vector-ref d 0) 'DOCTYPE)
                                     (cond [(not doctype) (make+exn:xml:duplicate (vector-ref d 0)) (syntax->grammar r doctype srammarg)]
-                                          [else (let-values ([(metadata sPI) (xml-grammar-parse-doctype* d entities)])
+                                          [else (let-values ([(metadata sPI) (xml-grammar-parse-doctype* d dtd)])
                                                   (syntax->grammar r metadata (append sPI srammarg)))])]
                                    [else (make+exn:xml:unimplemented (vector-ref d 0)) (syntax->grammar r doctype srammarg)]))]
                           [(xml:pi? self)
@@ -169,16 +169,17 @@
           [(vector? bad) (make+exn:xml:misplaced (vector-ref bad 0) declname)]
           [(box? bad) (make+exn:xml:misplaced (car (unbox bad)) declname)])))
 
-(define xml-grammar-parse-doctype* : (-> XML-Declaration* XML-Internal-Entities (Values (Option XML-DocType-Metadata) (Listof XML-Processing-Instruction*)))
-  (lambda [doctype entities]
+(define xml-grammar-parse-doctype* : (-> XML-Declaration* XML-DTD (Values (Option XML-DocType-Metadata) (Listof XML-Processing-Instruction*)))
+  (lambda [doctype dtd]
     ; Whitespaces have already been filtered out.
     (define-values (declname body) (values (vector-ref doctype 0) (vector-ref doctype 1)))
     (cond [(null? body) (make+exn:xml:malformed declname) (values #false null)]
           [else (let-values ([(self rest) (values (car body) (cdr body))])
                   (cond [(not (xml:name? self)) (xml-grammar-throw declname self) (values #false null)]
-                        [else (let* ([ext (xml-grammar-extract-external* (vector-ref doctype 0) rest)]
-                                     [metainfo (xml-doctype-metadata (xml:name-datum self) (car ext) (cadr ext))])
-                                (values metainfo (xml-grammar-extract-internal* self (cddr ext) entities)))]))])))
+                        [else (let*-values ([(ext) (xml-grammar-extract-external* (vector-ref doctype 0) rest)]
+                                            [(metainfo) (xml-doctype-metadata (xml:name-datum self) (car ext) (cadr ext))]
+                                            [(sIP) (xml-grammar-extract-internal* self (cddr ext) dtd)])
+                                (values metainfo sIP))]))])))
 
 (define xml-grammar-extract-external* : (-> XML:Name (Listof XML-Doctype-Body*) (List* (Option String) (Option String) (Listof XML-Doctype-Body*)))
   (lambda [declname doctype]
@@ -204,8 +205,8 @@
         #| no external definition, not an error |#
         (list* #false #false doctype))))
 
-(define xml-grammar-extract-internal* : (-> XML:Name (Listof XML-Doctype-Body*) XML-Internal-Entities (Listof XML-Processing-Instruction*))
-  (lambda [declname subset0 entities]
+(define xml-grammar-extract-internal* : (-> XML:Name (Listof XML-Doctype-Body*) XML-DTD (Values (Listof XML-Processing-Instruction*)))
+  (lambda [declname subset0 dtd]
     (define subset : (Listof XML-Doctype-Body*)
       (let trim ([rest : (Listof XML-Doctype-Body*) subset0])
         (cond [(null? rest) null]
@@ -220,21 +221,21 @@
                           [(vector? self)
                            (let ([DECL (vector-ref self 0)])
                              (case (xml:name-datum DECL)
-                               [(ENTITY) (xml-grammar-extract-entity* declname DECL (vector-ref self 1) entities)]
+                               [(ENTITY) (xml-grammar-extract-entity* declname DECL (vector-ref self 1) dtd)]
                                [else (make+exn:xml:unimplemented DECL declname)])
                              (extract-entity rest++ sIP))]
                           [(box? self) (extract-entity rest++ (cons self sIP))]
                           [(xml:entity? self) (make+exn:xml:unimplemented self declname) (extract-entity rest++ sIP)]
                           [else (xml-grammar-throw declname self) (extract-entity rest++ sIP)]))]))))
 
-(define xml-grammar-extract-entity* : (-> XML:Name XML:Name (Listof XML-Doctype-Body*) XML-Internal-Entities Void)
-  (lambda [declname ENTITY body entities]
+(define xml-grammar-extract-entity* : (-> XML:Name XML:Name (Listof XML-Doctype-Body*) XML-DTD Void)
+  (lambda [declname ENTITY body dtd]
     (define-values (tokens others) (partition xml-token? body))
     (cond [(pair? others) (xml-grammar-throw ENTITY others)]
           [(or (null? tokens) (null? (cdr tokens))) (make+exn:xml:malformed (cons ENTITY tokens) declname)]
           [else (let-values ([(?name ?value rest) (values (car tokens) (cadr tokens) (cddr tokens))])
                   (if (and (xml:name? ?name) (xml:string? ?value) (null? rest))
-                      (hash-set! entities (xml:name-datum ?name) (xml-entity-value->datum ?value))
+                      (hash-set! (xml-dtd-entities dtd) (xml:name-datum ?name) (xml-entity-value->datum ?value))
                       (make+exn:xml:unimplemented (cons ENTITY tokens) declname)))])
     (void)))
 

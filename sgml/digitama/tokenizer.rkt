@@ -42,9 +42,8 @@
   #:transparent)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define read-xml-tokens* : (-> Input-Port (Listof XML-Token))
-  (lambda [/dev/xmlin]
-    (define source : (U String Symbol) (xml-port-name /dev/xmlin))
+(define read-xml-tokens* : (-> Input-Port (U String Symbol) (Listof XML-Token))
+  (lambda [/dev/xmlin source]
     (let read-xml ([snekot : (Listof XML-Token) null]
                    [env : (Option XML-Parser-ENV) #false])
       (define-values (token env++) (xml-consume-token* /dev/xmlin source env))
@@ -75,6 +74,7 @@
                          [(eq? datum #\=) (xml-make-token source prev-env end xml:eq datum)]
                          [(or (eq? datum #\() (eq? datum #\[)) (xml-make-token source prev-env end xml:open datum)]
                          [(or (eq? datum #\)) (eq? datum #\])) (xml-make-token source prev-env end xml:close datum)]
+                         [(eq? datum #\%) (xml-make-token source prev-env end xml:pe datum)]
                          [else (xml-make-token source prev-env end xml:delim datum) #| `>` for non-empty start tag |#])]
                   [(symbol? datum)
                    (cond [(symbol-interned? datum) (xml-make-token source prev-env end xml:name datum)]
@@ -83,8 +83,9 @@
                          [(eq? datum </) (xml-make-token source prev-env end xml:oetag datum)] ; not an open delimiter
                          [(eq? datum <?) (xml-make-token source prev-env end xml:pi datum)]
                          [(eq? datum <!) (xml-make-token source prev-env end xml:decl datum)]
-                         [(or (eq? datum <!$) (eq? datum <!$CDATA$)) (xml-make-token source prev-env end xml:open datum)]
                          [(or (eq? datum ?>) (eq? datum $$>)) (xml-make-token source prev-env end xml:close datum)]
+                         [(eq? datum <!$CDATA$) (xml-make-token source prev-env end xml:open datum)]
+                         [(eq? datum <!$) (xml-make-token source prev-env end xml:delim datum)]
                          [else (xml-make-token source prev-env end xml:entity datum)])]
                   [(string? datum) (xml-make-token source prev-env end xml:string datum)]
                   [(box? datum) (xml-make-token source prev-env end xml:&string (assert (unbox datum) string?))]

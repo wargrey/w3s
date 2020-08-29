@@ -213,6 +213,7 @@
   [[xml:open            #:+ XML:Open            #:-> xml:delim]
    [xml:close           #:+ XML:Close           #:-> xml:delim]
    [xml:eq              #:+ XML:Eq              #:-> xml:delim]
+   [xml:pe              #:+ XML:PE              #:-> xml:delim]
 
    [xml:stag            #:+ XML:STag            #:-> xml:open]
    [xml:etag            #:+ XML:ETag            #:-> xml:close]

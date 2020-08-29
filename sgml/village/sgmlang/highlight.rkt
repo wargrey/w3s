@@ -4,6 +4,7 @@
 
 (require sgml/digitama/digicore)
 (require sgml/digitama/tokenizer)
+(require sgml/digitama/delimiter)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-lexer
@@ -45,7 +46,7 @@
     (define datum (xml-token->datum t))
 
     (cond [(eq? datum #\() '|(|]
-          [(eq? datum #\[) '|[|]
+          [(or (eq? datum #\[) (eq? datum <!$CDATA$) (eq? datum <!$CDATA$)) '|[|]
           [else '|{|])))
 
 (define xml-close-type ;: (-> XML:Close Symbol)
@@ -53,5 +54,5 @@
     (define datum (xml-token->datum t))
 
     (cond [(eq? datum #\)) '|)|]
-          [(eq? datum #\]) '|]|]
+          [(or (eq? datum #\]) (eq? datum $$>)) '|]|]
           [else '|}|])))

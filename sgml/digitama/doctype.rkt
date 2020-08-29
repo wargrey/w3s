@@ -5,8 +5,19 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type XML-External-ID (U False String (Pairof String String)))
 (define-type XML-DocType-Metadata (Pairof Symbol (U False String (Pairof String String))))
-(define-type XML-Internal-Entities (HashTable Symbol (U String (Boxof String))))
+(define-type XML-Entities (HashTable Symbol (U String (Boxof String))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(struct xml-dtd
+  ([entities : XML-Entities])
+  #:transparent
+  #:type-name XML-DTD)
+
+(define make-xml-dtd : (-> XML-DTD)
+  (lambda []
+    (xml-dtd (make-hasheq))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (struct xml-doctype
   ([location : (U String Symbol)]
    [version : (Option Nonnegative-Flonum)]
@@ -14,7 +25,7 @@
    [standalone? : Boolean]
    [name : Symbol]
    [external : XML-External-ID]
-   [entities : XML-Internal-Entities])
+   [internal-dtd : XML-DTD])
   #:transparent
   #:type-name XML-DocType)
 

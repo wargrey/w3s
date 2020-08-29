@@ -4,10 +4,6 @@
 
 (provide (all-defined-out))
 
-(require racket/string)
-(require racket/path)
-(require racket/vector)
-
 (require "doctype.rkt")
 (require "grammar.rkt")
 (require "digicore.rkt")
@@ -31,11 +27,11 @@
   #:type-name XML-Document*)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define read-xml-document : (-> XML-StdIn XML-Document)
+(define read-xml-document : (-> SGML-StdIn XML-Document)
   (lambda [/dev/rawin]
     (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin #false))
     (define tokens : (Listof XML-Datum) (read-xml-tokens /dev/xmlin))
-    (define-values (doctype entities grammars) (xml-syntax->grammar tokens))
+    (define-values (doctype dtd grammars) (xml-syntax->grammar tokens))
     (define-values (maybe-name external) (xml-doctype-values doctype))
     (define name : Symbol
       (cond [(or maybe-name) maybe-name]
@@ -43,16 +39,15 @@
                     (cond [(pair? maybe-first-element) (car maybe-first-element)]
                           [else '||]))]))
 
-    (xml-document (xml-doctype (xml-port-name /dev/xmlin)
-                               version encoding standalone?
-                               name external entities)
+    (xml-document (xml-doctype (sgml-port-name /dev/xmlin) version encoding standalone? name external dtd)
                   grammars)))
 
-(define read-xml-document* : (-> XML-StdIn XML-Document*)
+(define read-xml-document* : (-> SGML-StdIn XML-Document*)
   (lambda [/dev/rawin]
     (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin #true))
-    (define tokens : (Listof XML-Token) (read-xml-tokens* /dev/xmlin))
-    (define-values (doctype entities grammars) (xml-syntax->grammar* tokens))
+    (define source : (U Symbol String) (sgml-port-name /dev/xmlin))
+    (define tokens : (Listof XML-Token) (read-xml-tokens* /dev/xmlin source))
+    (define-values (doctype dtd grammars) (xml-syntax->grammar* tokens))
     (define-values (maybe-name external) (xml-doctype-values doctype))
     (define name : Symbol
       (cond [(or maybe-name) maybe-name]
@@ -60,9 +55,7 @@
                     (cond [(pair? maybe-first-element) (xml:name-datum (car maybe-first-element))]
                           [else '||]))]))
 
-    (xml-document* (xml-doctype (xml-port-name /dev/xmlin)
-                                version encoding standalone?
-                                name external entities)
+    (xml-document* (xml-doctype source version encoding standalone? name external dtd)
                    grammars)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

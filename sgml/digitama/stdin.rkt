@@ -19,9 +19,9 @@
 (require (for-syntax racket/base))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-type XML-StdIn (U Input-Port Path-String Bytes))
-  
-(define xml-open-input-port : (->* (XML-StdIn) (Boolean) (Values Input-Port (Option Nonnegative-Flonum) (Option String) Boolean))
+(define-type SGML-StdIn (U Input-Port Path-String Bytes))
+
+(define xml-open-input-port : (->* (SGML-StdIn) (Boolean) (Values Input-Port (Option Nonnegative-Flonum) (Option String) Boolean))
   ;;; https://www.w3.org/TR/xml11/#sec-prolog-dtd
   ;;; https://www.w3.org/TR/xml11/#NT-EncodingDecl
   ;;; https://www.w3.org/TR/xml11/#sec-TextDecl
@@ -55,7 +55,26 @@
                             /dev/xmlin)])
               version encoding standalone?))))
 
-(define xml-port-name : (-> Input-Port (U String Symbol))
+(define dtd-open-input-port : (->* (SGML-StdIn) (Boolean) Input-Port)
+  (lambda [/dev/stdin [enable-line-counting? #false]]
+    (define /dev/dtdin : Input-Port
+      (cond [(port? /dev/stdin) /dev/stdin]
+            [(path? /dev/stdin) (open-input-file /dev/stdin)]
+            [(regexp-match? #px"\\.dtd$" /dev/stdin) (open-input-file (~a /dev/stdin))]
+            [(string? /dev/stdin) (open-input-string /dev/stdin '/dev/dtdin/string)]
+            [(bytes? /dev/stdin) (open-input-bytes /dev/stdin '/dev/dtdin/bytes)]
+            [else (open-input-string (~s /dev/stdin) '/dev/dtdin/error)]))
+
+    (when (and enable-line-counting? (not (port-counts-lines? /dev/dtdin)))
+      (port-count-lines! /dev/dtdin))
+    
+    ;; skip racket `#lang` line
+    (when (regexp-match-peek #px"^#(lang|!)" /dev/dtdin)
+      (read-line /dev/dtdin))
+    
+    /dev/dtdin))
+
+(define sgml-port-name : (-> Input-Port (U String Symbol))
   (lambda [/dev/xmlin]
     (let ([src (object-name /dev/xmlin)])
       (cond [(path? src) (path->string (simple-form-path src))]

@@ -24,7 +24,7 @@
 (struct xml-comment xml-white-space () #:type-name XML-Comment)
 
 (define xml-initial-scope : XML-Scope 'initial)
-(define xml-default-scope : XML-Scope 'xml)
+(define xml-default-scope : XML-Scope 'dtd)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define read-xml-tokens : (-> Input-Port (Listof XML-Datum))
@@ -66,7 +66,8 @@
                           [(#\= #\( #\) #\[) (values ch xml-consume-token:* scope)]
                           [(#\' #\") (xml-consume-token:literals /dev/xmlin ch scope)]
                           [(#\? #\/ #\]) (xml-consume-close-token /dev/xmlin ch xml-consume-token:* scope)]
-                          [(#\& #\%) (values (xml-consume-reference-token /dev/xmlin ch) xml-consume-token:* scope)]
+                          [(#\&) (values (xml-consume-reference-token /dev/xmlin ch) xml-consume-token:* scope)]
+                          [(#\%) (values (xml-consume-parameter-entity-token /dev/xmlin ch) xml-consume-token:* scope)]
                           [else (values ch xml-consume-token:* scope)])))])))
 
 (define xml-consume-token:start-decl-name : XML-Token-Consumer
@@ -198,15 +199,24 @@
 (define xml-consume-reference-token : (-> Input-Port Char (U Symbol Index XML-Error))
   ;;; https://www.w3.org/TR/xml11/#sec-references
   (lambda [/dev/xmlin leader]
-    (define entity-leader : (U Char EOF) (read-char /dev/xmlin))
-    (cond [(eof-object? entity-leader) (list leader)]
-          [(eq? leader #\%) (xml-consume-entity-reference /dev/xmlin leader entity-leader)]
-          [(eq? entity-leader #\;) (list leader entity-leader)]
-          [(not (eq? entity-leader #\#)) (xml-consume-entity-reference /dev/xmlin leader entity-leader)]
+    (define ch : (U Char EOF) (read-char /dev/xmlin))
+    (cond [(eof-object? ch) (list leader)]
+          [(eq? leader #\%) (xml-consume-entity-reference /dev/xmlin leader ch)]
+          [(eq? ch #\;) (list leader ch)]
+          [(not (eq? ch #\#)) (xml-consume-entity-reference /dev/xmlin leader ch)]
           [else (let ([char-leader (read-char /dev/xmlin)])
-                  (cond [(eof-object? char-leader) (list leader entity-leader)]
+                  (cond [(eof-object? char-leader) (list leader ch)]
                         [(eq? char-leader #\x) (xml-consume-char-reference /dev/xmlin #false)]
                         [else (xml-consume-char-reference /dev/xmlin char-leader)]))])))
+
+(define xml-consume-parameter-entity-token : (-> Input-Port Char (U Symbol Char XML-Error))
+  ;;; https://www.w3.org/TR/xml11/#sec-references
+  (lambda [/dev/xmlin leader]
+    (define ch : (U Char EOF) (peek-char /dev/xmlin))
+    (cond [(eof-object? ch) (list leader)]
+          [(char-whitespace? ch) leader]
+          [(eq? ch #\;) (list leader ch)]
+          [else (read-char /dev/xmlin) (xml-consume-entity-reference /dev/xmlin leader ch)])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-consume-whitespace : (-> Input-Port Char XML-White-Space)
