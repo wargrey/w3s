@@ -66,3 +66,12 @@
       [(drracket:indentation) (dynamic-require 'sgml/village/xmllang/indentation 'xml-indentation)]
       [(color-lexer) (dynamic-require 'sgml/village/xmllang/highlight 'xml-lexer)]
       [else default])))
+
+(define (dtd-info in mod line col pos)
+  (lambda [key default]
+    (case key
+      [(drracket:default-filters) '(["DTD Sources" "*.dtd"])]
+      [(drracket:default-extension) "dtd"]
+      [(drracket:indentation) (dynamic-require 'sgml/village/xmllang/indentation 'xml-indentation)]
+      [(color-lexer) (dynamic-require 'sgml/village/xmllang/highlight 'xml-lexer)]
+      [else default])))

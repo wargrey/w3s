@@ -11,7 +11,8 @@
  there would be another @tt{sgml/html} as well.}
 
 The @the-name is a typed XML parsing library which originally designed for my @racketmodname[svg]
-engine.
+engine. That is, this library itself is not adequate for dealing with XML sources that used as data
+models.
 
 Meanwhile, @the-name will:
 

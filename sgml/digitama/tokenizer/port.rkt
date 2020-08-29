@@ -58,7 +58,7 @@
                     (if (xml-name-start-char? ch)
                         (let ([kw (xml-consume-nmtoken /dev/xmlin ch)])
                           (case kw
-                            [(PUBLIC SYSTEM) (values kw xml-consume-token:* kw)]
+                            [(PUBLIC SYSTEM ENTITY) (values kw xml-consume-token:* kw)]
                             [else (values kw xml-consume-token:* scope)]))
                         (case ch
                           [(#\<) (xml-consume-open-token /dev/xmlin xml-consume-token:* scope)]
