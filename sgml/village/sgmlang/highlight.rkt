@@ -46,7 +46,7 @@
     (define datum (xml-token->datum t))
 
     (cond [(eq? datum #\() '|(|]
-          [(or (eq? datum #\[) (eq? datum <!$CDATA$) (eq? datum <!$CDATA$)) '|[|]
+          [(or (eq? datum #\[) (eq? datum <!$CDATA$) (eq? datum <!$)) '|[|]
           [else '|{|])))
 
 (define xml-close-type ;: (-> XML:Close Symbol)

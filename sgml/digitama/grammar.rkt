@@ -7,7 +7,9 @@
 (require "doctype.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-type XML-Grammar* (U XML-Processing-Instruction* XML-Element*))
+(define-type XML-Content* (U XML-Processing-Instruction* XML-Element*))
+(define-type XML-Definition* (U XML-Processing-Instruction* XML-Declaration*))
+
 (define-type XML-Declaration* (Rec body (Vector XML:Name (Listof (U XML-Token body XML-Processing-Instruction*)))))
 (define-type XML-Doctype-Body* (U XML-Token XML-Declaration* XML-Processing-Instruction*))
 
@@ -16,14 +18,19 @@
 (define-type XML-Element-Plain-Children* (U XML:String XML-Processing-Instruction* XML:WhiteSpace XML:Entity))
 (define-type XML-Element* (Rec elem (List XML:Name (Listof XML-Element-Attribute*) (Listof (U elem XML-Element-Plain-Children*)))))
 
+(struct xml-section
+  ([condition : XML-Token])
+  #:transparent
+  #:type-name XML-Section)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-syntax->grammar* : (-> (Listof XML-Token) (Values (Option XML-DocType-Metadata) XML-DTD (Listof XML-Grammar*)))
+(define xml-syntax->content* : (-> (Listof XML-Token) (Values (Option XML-DocType-Metadata) XML-DTD (Listof XML-Content*)))
   (lambda [tokens]
     (define dtd (make-xml-dtd))
     
     (let syntax->grammar ([rest : (Listof XML-Token) tokens]
                           [doctype : (Option XML-DocType-Metadata) #false]
-                          [srammarg : (Listof XML-Grammar*) null])
+                          [srammarg : (Listof XML-Content*) null])
       (cond [(null? rest) (values doctype dtd (reverse srammarg))]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml:whitespace? self) (syntax->grammar rest++ doctype srammarg)]
@@ -34,7 +41,7 @@
                                     (cond [(not doctype) (make+exn:xml:duplicate (vector-ref d 0)) (syntax->grammar r doctype srammarg)]
                                           [else (let-values ([(metadata sPI) (xml-grammar-parse-doctype* d dtd)])
                                                   (syntax->grammar r metadata (append sPI srammarg)))])]
-                                   [else (make+exn:xml:unimplemented (vector-ref d 0)) (syntax->grammar r doctype srammarg)]))]
+                                   [else (make+exn:xml:unrecognized (vector-ref d 0)) (syntax->grammar r doctype srammarg)]))]
                           [(xml:pi? self)
                            (let-values ([(p r) (xml-syntax-extract-pi* rest++)])
                              (syntax->grammar r doctype (if (not p) srammarg (cons p srammarg))))]
@@ -42,6 +49,25 @@
                            (let-values ([(e r) (xml-syntax-extract-element* rest++)])
                              (syntax->grammar r doctype (if (not e) srammarg (cons e srammarg))))]
                           [else (make+exn:xml:unrecognized self) (syntax->grammar rest++ doctype srammarg)]))]))))
+
+(define xml-syntax->definition* : (-> (Listof XML-Token) (Listof XML-Definition*))
+  (lambda [tokens]
+    (let syntax->grammar ([rest : (Listof XML-Token) tokens]
+                          [snoitinifed : (Listof XML-Definition*) null])
+      (cond [(null? rest) (reverse snoitinifed)]
+            [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
+                    (cond [(xml:whitespace? self) (syntax->grammar rest++ snoitinifed)]
+                          [(xml:decl? self)
+                           (let-values ([(d r) (xml-syntax-extract-declaration* rest++)])
+                             (syntax->grammar r (if (not d) snoitinifed (cons d snoitinifed))))]
+                          [(xml:pi? self)
+                           (let-values ([(p r) (xml-syntax-extract-pi* rest++)])
+                             (syntax->grammar r (if (not p) snoitinifed (cons p snoitinifed))))]
+                          [(xml:stag? self)
+                           (let-values ([(e r) (xml-syntax-extract-element* rest++)])
+                             (unless (not e) (make+exn:xml:misplaced (car e)))
+                             (syntax->grammar r snoitinifed))]
+                          [else (make+exn:xml:unrecognized self) (syntax->grammar rest++ snoitinifed)]))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-syntax-extract-declaration* : (-> (Listof XML-Token) (Values (Option XML-Declaration*) (Listof XML-Token)))
@@ -53,10 +79,11 @@
     ;  no whitespaces except comments
     (let extract ([rest : (Listof XML-Token) tokens]
                   [name : (Option XML:Name) #false]
-                  [bodies : (Listof (U XML-Token XML-Declaration* XML-Processing-Instruction*)) null])
+                  [bodies : (Listof XML-Doctype-Body*) null])
       (cond [(null? rest) (make+exn:xml:eof eof) (values #false null)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
-                    (cond [(xml:etag? self) (values (and name (vector name (reverse bodies))) rest++)]
+                    (cond [(xml:whitespace? self) (extract rest++ name bodies)]
+                          [(xml:etag? self) (values (and name (vector name (reverse bodies))) rest++)]
                           [(xml:name? self) (if (not name) (extract rest++ self bodies) (extract rest++ name (cons self bodies)))]
                           [(xml:decl? self)
                            (let-values ([(d r) (xml-syntax-extract-declaration* rest++)])
@@ -64,7 +91,6 @@
                           [(xml:pi? self)
                            (let-values ([(p r) (xml-syntax-extract-pi* rest++)])
                              (extract r name (if (not p) bodies (cons p bodies))))]    
-                          [(xml:whitespace? self) (extract rest++ name bodies)]
                           [else (extract rest++ name (cons self bodies))]))]))))
 
 (define xml-syntax-extract-pi* : (-> (Listof XML-Token) (Values (Option XML-Processing-Instruction*) (Listof XML-Token)))
@@ -107,7 +133,7 @@
     ; NOTE: the tokenizer ensures the sequence of StartTag token
     ;   < name attrname=value* /?>
     ;   no whitespaces and comments among them
-    ;   error spans the rest part of the StartTag
+    ;   error spans the end of the StartTag or first whitespaces
     (let extract ([rest : (Listof XML-Token) tokens]
                   [setubirtta : (Listof XML-Element-Attribute*) null])
       (cond [(null? rest) (make+exn:xml:eof eof tagname) (values setubirtta #false null)]
@@ -118,7 +144,8 @@
                           [(or (null? rest++) (null? (cdr rest++))) (make+exn:xml:eof rest tagname) (extract null setubirtta)]
                           [else (let-values ([(?eq ?value rest*) (values (car rest++) (cadr rest++) (cddr rest++))])
                                   (cond [(and (xml:eq? ?eq) (xml:string? ?value)) (extract rest* (cons (cons self ?value) setubirtta))]
-                                        [(xml:eq? ?eq) (make+exn:xml:malformed (list self ?eq ?value) tagname) (extract (cdr rest++) setubirtta)]
+                                        [(xml:eq? ?eq) (make+exn:xml:malformed (list self ?eq ?value) tagname) (extract rest* setubirtta)]
+                                        [(xml:name? ?value) (make+exn:xml:malformed (list self ?eq) tagname) (extract (cdr rest++) setubirtta)]
                                         [else (make+exn:xml:malformed (list self ?eq ?value) tagname) (extract rest* setubirtta)]))]))]))))
 
 (define xml-syntax-extract-element-children* : (-> (Option XML:Name) (Listof XML-Token)

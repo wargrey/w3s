@@ -5,18 +5,17 @@
 (provide (all-defined-out))
 
 (require "doctype.rkt")
-(require "grammar.rkt")
 (require "digicore.rkt")
 (require "stdin.rkt")
+(require "grammar.rkt")
+(require "tokenizer.rkt")
 
 (require "tokenizer/port.rkt")
-(require "tokenizer/grammar.rkt")
-(require "tokenizer.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (struct xml-type-definition
   ([location : (U String Symbol)]
-   [tokens : (Listof XML-Token)])
+   [tokens : (Listof XML-Definition*)])
   #:transparent
   #:type-name XML-Type-Definition)
 
@@ -26,5 +25,6 @@
     (define /dev/dtdin : Input-Port (dtd-open-input-port /dev/rawin #true))
     (define source : (U Symbol String) (sgml-port-name /dev/dtdin))
     (define tokens : (Listof XML-Token) (read-xml-tokens* /dev/dtdin source))
+    (define definitions : (Listof XML-Definition*) (xml-syntax->definition* tokens))
     
-    (xml-type-definition source tokens)))
+    (xml-type-definition source definitions)))

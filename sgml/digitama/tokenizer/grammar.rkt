@@ -9,7 +9,8 @@
 (require "../delimiter.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-type XML-Grammar (U XML-Processing-Instruction XML-Element))
+(define-type XML-Content (U XML-Processing-Instruction XML-Element))
+
 (define-type XML-Declaration (Rec body (Vector Symbol (Listof (U XML-Datum body XML-Processing-Instruction)))))
 (define-type XML-Doctype-Body (U XML-Datum XML-Declaration XML-Processing-Instruction))
 
@@ -19,13 +20,13 @@
 (define-type XML-Element (Rec elem (List Symbol (Listof XML-Element-Attribute) (Listof (U elem XML-Element-Plain-Children)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-syntax->grammar : (-> (Listof XML-Datum) (Values (Option XML-DocType-Metadata) XML-DTD (Listof XML-Grammar)))
+(define xml-syntax->content : (-> (Listof XML-Datum) (Values (Option XML-DocType-Metadata) XML-DTD (Listof XML-Content)))
   (lambda [tokens]
     (define dtd : XML-DTD (make-xml-dtd))
     
     (let syntax->grammar ([rest : (Listof XML-Datum) tokens]
                           [doctype : (Option XML-DocType-Metadata) #false]
-                          [srammarg : (Listof XML-Grammar) null])
+                          [srammarg : (Listof XML-Content) null])
       (cond [(null? rest) (values doctype dtd (reverse srammarg))]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(eq? self <!)
@@ -50,7 +51,7 @@
   (lambda [tokens]
     (let extract ([rest : (Listof XML-Datum) tokens]
                   [name : (Option Symbol) #false]
-                  [bodies : (Listof (U XML-Datum XML-Declaration XML-Processing-Instruction)) null])
+                  [bodies : (Listof XML-Doctype-Body) null])
       (cond [(null? rest) #| PI is at the end of the file and malformed |# (values #false null)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml-white-space? self) (extract rest++ name bodies)]
@@ -61,8 +62,8 @@
                              (extract r name (if (not d) bodies (cons d bodies))))]
                           [(eq? self <?)
                            (let-values ([(p r) (xml-syntax-extract-pi rest++)])
-                             (extract r name (if (not p) bodies (cons p bodies))))]    
-                          [else (extract rest++ name (cons self bodies))]))]))))
+                             (extract r name (if (not p) bodies (cons p bodies))))]
+                          [else (extract rest++ name bodies)]))]))))
 
 (define xml-syntax-extract-pi : (-> (Listof XML-Datum) (Values (Option XML-Processing-Instruction) (Listof XML-Datum)))
   ;;; https://www.w3.org/TR/xml11/#sec-pi
@@ -206,7 +207,7 @@
   (lambda [xd]
     (eq? xd #\>)))
 
-(define xml-value-string? : (-> XML-Doctype-Body Boolean : (U String (Boxof String)))
+(define xml-value-string? : (-> (U XML-Doctype-Body XML-Datum) Boolean : (U String (Boxof String)))
   (lambda [xd]
     (or (string? xd)
         (box? xd))))

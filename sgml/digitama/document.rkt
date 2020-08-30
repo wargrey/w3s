@@ -16,13 +16,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (struct xml-document
   ([doctype : XML-DocType]
-   [elements : (Listof XML-Grammar)])
+   [elements : (Listof XML-Content)])
   #:transparent
   #:type-name XML-Document)
 
 (struct xml-document*
   ([doctype : XML-DocType]
-   [elements : (Listof XML-Grammar*)])
+   [elements : (Listof XML-Content*)])
   #:transparent
   #:type-name XML-Document*)
 
@@ -31,7 +31,7 @@
   (lambda [/dev/rawin]
     (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin #false))
     (define tokens : (Listof XML-Datum) (read-xml-tokens /dev/xmlin))
-    (define-values (doctype dtd grammars) (xml-syntax->grammar tokens))
+    (define-values (doctype dtd grammars) (xml-syntax->content tokens))
     (define-values (maybe-name external) (xml-doctype-values doctype))
     (define name : Symbol
       (cond [(or maybe-name) maybe-name]
@@ -47,7 +47,7 @@
     (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin #true))
     (define source : (U Symbol String) (sgml-port-name /dev/xmlin))
     (define tokens : (Listof XML-Token) (read-xml-tokens* /dev/xmlin source))
-    (define-values (doctype dtd grammars) (xml-syntax->grammar* tokens))
+    (define-values (doctype dtd grammars) (xml-syntax->content* tokens))
     (define-values (maybe-name external) (xml-doctype-values doctype))
     (define name : Symbol
       (cond [(or maybe-name) maybe-name]
@@ -65,7 +65,7 @@
                   (map xml-grammar->datum (xml-document*-elements doc.xml)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-grammar->datum : (-> XML-Grammar* XML-Grammar)
+(define xml-grammar->datum : (-> XML-Content* XML-Content)
   (lambda [g]
     (cond [(list? g) (xml-element->datum g)]
           [else (xml-pi->datum g)])))

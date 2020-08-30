@@ -12,7 +12,10 @@
 <!ENTITY townname "Espa&ntilde;ola">
 <!ENTITY townnum "Espa&#241;ola">
 <!ENTITY scarequote1 "a &lsquo;test&rsquo; for you">
+
+<![INCLUDE[
 <!ENTITY scarequote2 "a &#x2018;test&#x2019; for you">
+]]>
 
 <!--ENTITY xxe SYSTEM "/etc/passwd" -->
 <!--ENTITY ok CDATA "&#10003"-->
@@ -30,7 +33,7 @@
 <names>From &townname; -- &scarequote1;.</names>
 <nums>From &townname; -- &scarequote2;.</nums>
 
-<testdoc id="t7-&#241;" ~resp="MSM">
+<testdoc id="t7-&#241;" ~resp="MSM" resp ="MSG" resp="MSN">
   <names>From Española -- a ‘test’ for you.</names>
   <nums>From Española -- a ‘test’ for you.</nums>
   <names>From Española -- a ‘test’ for you.</names>
@@ -39,7 +42,7 @@
 
 <? bad pi?>
 <?bad! pi?>
-<?this is a PI?>
+<?this is a PI ?>
 
 <foo>&xxe;</foo>
 <test>This content holds a &#0; byte that should be skipped</test>

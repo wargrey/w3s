@@ -219,6 +219,7 @@
    [xml:etag            #:+ XML:ETag            #:-> xml:close]
    [xml:cstag           #:+ XML:CSTag           #:-> xml:delim]
    [xml:oetag           #:+ XML:OETag           #:-> xml:delim]
+   [xml:conds           #:+ XML:CondS           #:-> xml:delim]
    
    [xml:pi              #:+ XML:PI              #:-> xml:open]
    [xml:decl            #:+ XML:Decl            #:-> xml:open]
