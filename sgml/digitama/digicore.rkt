@@ -17,7 +17,10 @@
 (require (for-syntax racket/string))
 (require (for-syntax racket/syntax))
 (require (for-syntax syntax/parse))
-  
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define-type XML-Syntax-Any (U XML-Token EOF))
+
 (define-syntax (define-token-interface stx)
   (syntax-case stx [:]
     [(_ symbolic-prefix : Type id? id-datum #:+ XML:ID #:eq? type=?)
@@ -31,27 +34,6 @@
                          (let ([datum : Type (id-datum token)])
                            (cond [(procedure? range?) (and (range? datum) datum)]
                                  [else (and (member datum range? type=?) datum)])))))
-
-                (define <id> : (All (a) (case-> [(-> Type Boolean : #:+ a) -> (XML:Filter a)]
-                                                [(U (-> Type Boolean) (Listof Type) Type) -> (XML:Filter Type)]
-                                                [-> (XML:Filter Type)]))
-                  (case-lambda
-                    [() (λ [[t : XML-Syntax-Any]] (and (id? t) (id-datum t)))]
-                    [(range?) (cond [(procedure? range?)
-                                     (λ [[t : XML-Syntax-Any]]
-                                       (and (id? t)
-                                            (or (let ([d : Type (id-datum t)]) (and (range? d) d))
-                                                (make-exn:xml:range t))))]
-                                    [(list? range?)
-                                     (λ [[t : XML-Syntax-Any]]
-                                       (and (id? t)
-                                            (let ([d : Type (id-datum t)])
-                                              (cond [(member d range? type=?) d]
-                                                    [else (make-exn:xml:range t)]))))]
-                                    [else (λ [[t : XML-Syntax-Any]]
-                                            (and (id? t)
-                                                 (let ([d : Type (id-datum t)])
-                                                   (if (type=? d range?) d (make-exn:xml:range t)))))])]))
 
                 (define id=:=? : (-> Any Type (Option Type) : #:+ XML:ID) #| for performance |#
                   (lambda [t v]
@@ -71,30 +53,7 @@
                     [(token range?) (and (id? token) (let ([d : Type (id-datum token)])
                                                        (cond [(procedure? range?) (and (range? d) d)]
                                                              [else (for/or : (Option Type) ([v (in-list range?)])
-                                                                     (and (type=? d v) d))])))]))
-
-                (define <id> : (All (a) (case-> [(-> Type Boolean : #:+ a) -> (XML:Filter a)]
-                                                [(-> Type Type Boolean) Type -> (XML:Filter Type)]
-                                                [Type (-> Type Type Boolean) Type -> (XML:Filter Type)]
-                                                [(Listof Type) -> (XML:Filter Type)]
-                                                [-> (XML:Filter Type)]))
-                  (case-lambda
-                    [() (λ [[t : XML-Syntax-Any]] (and (id? t) (id-datum t)))]
-                    [(op n) (λ [[t : XML-Syntax-Any]]
-                              (and (id? t)
-                                   (let ([d : Type (id-datum t)])
-                                     (if (op d n) d (make-exn:xml:range t)))))]
-                    [(l op r) (λ [[t : XML-Syntax-Any]]
-                                (and (id? t)
-                                     (let ([m : Type (id-datum t)])
-                                       (if (and (op l m) (op m r)) m (make-exn:xml:range t)))))]
-                    [(range?) (λ [[t : XML-Syntax-Any]]
-                                (and (id? t)
-                                     (let ([d : Type (id-datum t)])
-                                       (or (cond [(procedure? range?) (and (range? d) d)]
-                                                 [(list? range?) (and (member d range? type=?) d)]
-                                                 [else (and (type=? d range?) d)])
-                                           (make-exn:xml:range t)))))]))))]))
+                                                                     (and (type=? d v) d))])))]))))]))
 
 (define-syntax (define-token stx)
   (syntax-parse stx #:literals [: Symbol Keyword]
@@ -201,9 +160,7 @@
                     (raise (make+exn v property level))))
                 ...))]))
 
-;;; https://drafts.xmlwg.org/xml-syntax/#tokenization
-;; https://drafts.xmlwg.org/xml-syntax/#component-value
-;; https://drafts.xmlwg.org/xml-syntax/#current-input-token
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-tokens xml-token #:+ XML-Token
   ([source : (U String Symbol)]
    [line : Positive-Integer]
@@ -241,8 +198,6 @@
     [xml:keyword        #:+ XML:Keyword         #:as Keyword]
     [xml:whitespace     #:+ XML:WhiteSpace      #:as String]))
 
-;; https://drafts.xmlwg.org/xml-syntax/#style-rules
-;; https://drafts.xmlwg.org/selectors/#invalid
 (define-syntax-error exn:xml #:as XML-Syntax-Error
   [exn:xml:unrecognized  #:-> exn:xml]
   [exn:xml:range         #:-> exn:xml:unrecognized]
@@ -308,9 +263,3 @@
           [(not <eof>?) (log-message logger level topic (format "~a @‹~a›" msg (xml:name-datum property)) errobj)]
           [else (let ([eof-msg (xml-token->string property errobj eof)])
                   (log-message logger level topic (format "~a @‹~a›" eof-msg (xml:name-datum property)) errobj))])))
-
-;;; https://drafts.xmlwg.org/xml-syntax/#parsing
-;; Parser Combinators and Syntax Sugars of dealing with declarations for client applications
-(define-type XML-Syntax-Any (U XML-Token EOF))
-(define-type (XML-Option xml) (U xml XML-Syntax-Error False))
-(define-type (XML:Filter xml) (-> XML-Syntax-Any (XML-Option xml)))
