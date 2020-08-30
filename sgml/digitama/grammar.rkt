@@ -8,10 +8,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type XML-Content* (U XML-Processing-Instruction* XML-Element*))
-(define-type XML-Definition* (U XML-Processing-Instruction* XML-Declaration*))
+(define-type XML-Definition* (U XML:Entity XML-Processing-Instruction* XML-Declaration* XML-Section))
 
-(define-type XML-Declaration* (Rec body (Vector XML:Name (Listof (U XML-Token body XML-Processing-Instruction*)))))
-(define-type XML-Doctype-Body* (U XML-Token XML-Declaration* XML-Processing-Instruction*))
+(define-type XML-Declaration* (Rec body (Vector XML:Name (Listof (U XML-Token body XML-Processing-Instruction* XML-Section)))))
+(define-type XML-Doctype-Body* (U XML-Token XML-Declaration* XML-Processing-Instruction* XML-Section))
 
 (define-type XML-Processing-Instruction* (MPairof XML:Name XML:String))
 (define-type XML-Element-Attribute* (Pairof XML:Name XML:String))
@@ -19,36 +19,41 @@
 (define-type XML-Element* (Rec elem (List XML:Name (Listof XML-Element-Attribute*) (Listof (U elem XML-Element-Plain-Children*)))))
 
 (struct xml-section
-  ([condition : XML-Token])
+  ([condition : (U XML:Name XML:Entity)]
+   [declarations : (Listof XML-Definition*)])
   #:transparent
   #:type-name XML-Section)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-syntax->content* : (-> (Listof XML-Token) (Values (Option XML-DocType-Metadata) XML-DTD (Listof XML-Content*)))
+(define xml-syntax->content* : (-> (Listof XML-Token) (Values (Option XML-DocType-Metadata) (Option XML:Name) (Listof XML-Definition*) (Listof XML-Content*)))
   (lambda [tokens]
-    (define dtd (make-xml-dtd))
-    
     (let syntax->grammar ([rest : (Listof XML-Token) tokens]
                           [doctype : (Option XML-DocType-Metadata) #false]
+                          [doctype-name : (Option XML:Name) #false]
+                          [definitions : (Listof XML-Definition*) null]
                           [srammarg : (Listof XML-Content*) null])
-      (cond [(null? rest) (values doctype dtd (reverse srammarg))]
+      (cond [(null? rest) (values doctype doctype-name definitions (reverse srammarg))]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
-                    (cond [(xml:whitespace? self) (syntax->grammar rest++ doctype srammarg)]
+                    (cond [(xml:whitespace? self) (syntax->grammar rest++ doctype doctype-name definitions srammarg)]
                           [(xml:decl? self)
                            (let-values ([(d r) (xml-syntax-extract-declaration* rest++)])
-                             (cond [(not d) (syntax->grammar r doctype srammarg)]
-                                   [(xml:name=:=? (vector-ref d 0) 'DOCTYPE)
-                                    (cond [(not doctype) (make+exn:xml:duplicate (vector-ref d 0)) (syntax->grammar r doctype srammarg)]
-                                          [else (let-values ([(metadata sPI) (xml-grammar-parse-doctype* d dtd)])
-                                                  (syntax->grammar r metadata (append sPI srammarg)))])]
-                                   [else (make+exn:xml:unrecognized (vector-ref d 0)) (syntax->grammar r doctype srammarg)]))]
+                             (cond [(not d) (syntax->grammar r doctype doctype-name definitions srammarg)]
+                                   [else (let ([declname (vector-ref d 0)])
+                                           (cond [(not (xml:name=:=? declname 'DOCTYPE))
+                                                  (make+exn:xml:unrecognized declname)
+                                                  (syntax->grammar r doctype declname definitions srammarg)]
+                                                 [(and doctype)
+                                                  (make+exn:xml:duplicate declname)
+                                                  (syntax->grammar r doctype declname definitions srammarg)]
+                                                 [else (let-values ([(metadata defs) (xml-grammar-parse-doctype* d)])
+                                                         (syntax->grammar r metadata declname defs srammarg))]))]))]
                           [(xml:pi? self)
                            (let-values ([(p r) (xml-syntax-extract-pi* rest++)])
-                             (syntax->grammar r doctype (if (not p) srammarg (cons p srammarg))))]
+                             (syntax->grammar r doctype doctype-name definitions (if (not p) srammarg (cons p srammarg))))]
                           [(xml:stag? self)
                            (let-values ([(e r) (xml-syntax-extract-element* rest++)])
-                             (syntax->grammar r doctype (if (not e) srammarg (cons e srammarg))))]
-                          [else (make+exn:xml:unrecognized self) (syntax->grammar rest++ doctype srammarg)]))]))))
+                             (syntax->grammar r doctype doctype-name definitions (if (not e) srammarg (cons e srammarg))))]
+                          [else (make+exn:xml:unrecognized self) (syntax->grammar rest++ doctype doctype-name definitions srammarg)]))]))))
 
 (define xml-syntax->definition* : (-> (Listof XML-Token) (Listof XML-Definition*))
   (lambda [tokens]
@@ -60,9 +65,13 @@
                           [(xml:decl? self)
                            (let-values ([(d r) (xml-syntax-extract-declaration* rest++)])
                              (syntax->grammar r (if (not d) snoitinifed (cons d snoitinifed))))]
+                          [(xml:csec? self)
+                           (let-values ([(s r) (xml-syntax-extract-section* rest++)])
+                             (syntax->grammar r (if (not s) snoitinifed (cons s snoitinifed))))]
                           [(xml:pi? self)
                            (let-values ([(p r) (xml-syntax-extract-pi* rest++)])
                              (syntax->grammar r (if (not p) snoitinifed (cons p snoitinifed))))]
+                          [(xml:entity? self) (syntax->grammar rest++ (cons self snoitinifed))]
                           [(xml:stag? self)
                            (let-values ([(e r) (xml-syntax-extract-element* rest++)])
                              (unless (not e) (make+exn:xml:misplaced (car e)))
@@ -76,22 +85,55 @@
     ;  either <! name tokens ... > or <! error >
     ;  but for the later case, the error token may not span the whole declaration
     ;   and hence some unmatched close tags
-    ;  no whitespaces except comments
     (let extract ([rest : (Listof XML-Token) tokens]
                   [name : (Option XML:Name) #false]
-                  [bodies : (Listof XML-Doctype-Body*) null])
+                  [seidob : (Listof XML-Doctype-Body*) null])
       (cond [(null? rest) (make+exn:xml:eof eof) (values #false null)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
-                    (cond [(xml:whitespace? self) (extract rest++ name bodies)]
-                          [(xml:etag? self) (values (and name (vector name (reverse bodies))) rest++)]
-                          [(xml:name? self) (if (not name) (extract rest++ self bodies) (extract rest++ name (cons self bodies)))]
+                    (cond [(xml:whitespace? self) (extract rest++ name seidob)]
+                          [(xml:etag? self) (values (and name (vector name (reverse seidob))) rest++)]
+                          [(xml:name? self) (if (not name) (extract rest++ self seidob) (extract rest++ name (cons self seidob)))]
                           [(xml:decl? self)
                            (let-values ([(d r) (xml-syntax-extract-declaration* rest++)])
-                             (extract r name (if (not d) bodies (cons d bodies))))]
+                             (extract r name (if (not d) seidob (cons d seidob))))]
+                          [(xml:csec? self)
+                           (let-values ([(s r) (xml-syntax-extract-section* rest++)])
+                             (extract r name (if (not s) seidob (cons s seidob))))]
                           [(xml:pi? self)
                            (let-values ([(p r) (xml-syntax-extract-pi* rest++)])
-                             (extract r name (if (not p) bodies (cons p bodies))))]    
-                          [else (extract rest++ name (cons self bodies))]))]))))
+                             (extract r name (if (not p) seidob (cons p seidob))))]    
+                          [else (extract rest++ name (cons self seidob))]))]))))
+
+(define xml-syntax-extract-section* : (-> (Listof XML-Token) (Values (Option XML-Section) (Listof XML-Token)))
+  (lambda [tokens]
+    ; NOTE: the tokenizer ensures the sequence of declaration tokens
+    ;  either <! condition error? [ body ]]>
+
+    (define-values (condition body-tokens)
+      (let extract-condition : (Values (U XML:Name XML:Entity False) (Listof XML-Token))
+        ([rest : (Listof XML-Token) tokens]
+         [condition : (U XML:Name XML:Entity False) #false])
+        (cond [(null? rest) (make+exn:xml:eof eof) (values #false null)]
+              [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
+                      (cond [(xml:whitespace? self) (extract-condition rest++ condition)]
+                            [(xml:delim=:=? self csec&) (values condition rest++)]
+                            [(or (xml:name? self) (xml:entity? self)) (extract-condition rest++ self)]
+                            [else (make+exn:xml:malformed self #false) (extract-condition rest++ condition)]))])))
+    
+    (let extract ([rest : (Listof XML-Token) body-tokens]
+                  [bodies : (Listof XML-Definition*) null])
+      (cond [(null? rest) (make+exn:xml:eof eof) (values #false null)]
+            [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
+                    (cond [(xml:whitespace? self) (extract rest++ bodies)]
+                          [(xml:decl? self)
+                           (let-values ([(d r) (xml-syntax-extract-declaration* rest++)])
+                             (extract r (if (not d) bodies (cons d bodies))))]
+                          [(xml:pi? self)
+                           (let-values ([(p r) (xml-syntax-extract-pi* rest++)])
+                             (extract r (if (not p) bodies (cons p bodies))))]
+                          [(xml:entity? self) (extract rest++ (cons self bodies))]
+                          [(xml:delim=:=? self $$>) (values (and condition (xml-section condition (reverse bodies))) rest++)]
+                          [else (make+exn:xml:unrecognized self condition) (extract rest++ bodies)]))]))))
 
 (define xml-syntax-extract-pi* : (-> (Listof XML-Token) (Values (Option XML-Processing-Instruction*) (Listof XML-Token)))
   ;;; https://www.w3.org/TR/xml11/#sec-pi
@@ -131,7 +173,7 @@
   ;;; https://www.w3.org/TR/xml11/#NT-Attribute
   (lambda [tagname tokens]
     ; NOTE: the tokenizer ensures the sequence of StartTag token
-    ;   < name attrname=value* /?>
+    ;   < name (attrname=value)* /?>
     ;   no whitespaces and comments among them
     ;   error spans the end of the StartTag or first whitespaces
     (let extract ([rest : (Listof XML-Token) tokens]
@@ -180,33 +222,32 @@
                           [(xml:pi? self)
                            (let-values ([(p r) (xml-syntax-extract-pi* rest++)])
                              (extract r (if (not p) nerdlidc (cons p nerdlidc))))]
-                          [(xml:delim=:=? self <!$CDATA$)
+                          [(xml:delim=:=? self <!&CDATA&)
                            ; NOTE: the tokenizer ensures the sequence of CDATA token
                            ;   <![CDATA[ text ]]>
-                           ;   no whitespaces, errors or comments among them
                            (cond [(or (null? rest++) (null? (cdr rest++))) (make+exn:xml:eof rest tagname) (extract null nerdlidc)]
                                  [else (extract (cddr rest++) (cons (assert (car rest++) xml:string?) nerdlidc))])]
                           [else (make+exn:xml:unrecognized self tagname) (extract rest++ nerdlidc)]))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-grammar-throw : (-> XML:Name (U XML-Doctype-Body* (Listof XML-Doctype-Body*)) (U Void XML-Syntax-Error))
+(define xml-grammar-throw : (-> (U XML:Name XML:Entity False) (U XML-Doctype-Body* (Listof XML-Doctype-Body*)) (U Void XML-Syntax-Error))
   (lambda [declname bad]
     (cond [(list? bad) (for ([b (in-list bad)]) (xml-grammar-throw declname bad))]
           [(xml-token? bad) (make+exn:xml:malformed bad declname)]
           [(vector? bad) (make+exn:xml:misplaced (vector-ref bad 0) declname)]
-          [(box? bad) (make+exn:xml:misplaced (car (unbox bad)) declname)])))
+          [(box? bad) (make+exn:xml:misplaced (car (unbox bad)) declname)]
+          [(xml-section? bad) (make+exn:xml:misplaced (xml-section-condition bad) declname)])))
 
-(define xml-grammar-parse-doctype* : (-> XML-Declaration* XML-DTD (Values (Option XML-DocType-Metadata) (Listof XML-Processing-Instruction*)))
-  (lambda [doctype dtd]
+(define xml-grammar-parse-doctype* : (-> XML-Declaration* (Values (Option XML-DocType-Metadata) (Listof XML-Definition*)))
+  (lambda [doctype]
     ; Whitespaces have already been filtered out.
     (define-values (declname body) (values (vector-ref doctype 0) (vector-ref doctype 1)))
     (cond [(null? body) (make+exn:xml:malformed declname) (values #false null)]
           [else (let-values ([(self rest) (values (car body) (cdr body))])
                   (cond [(not (xml:name? self)) (xml-grammar-throw declname self) (values #false null)]
-                        [else (let*-values ([(ext) (xml-grammar-extract-external* (vector-ref doctype 0) rest)]
-                                            [(metainfo) (xml-doctype-metadata (xml:name-datum self) (car ext) (cadr ext))]
-                                            [(sIP) (xml-grammar-extract-internal* self (cddr ext) dtd)])
-                                (values metainfo sIP))]))])))
+                        [else (let*-values ([(ext) (xml-grammar-extract-external* (vector-ref doctype 0) rest)])
+                                (values (xml-doctype-metadata (xml:name-datum self) (car ext) (cadr ext))
+                                        (xml-grammar-extract-internal* self (cddr ext))))]))])))
 
 (define xml-grammar-extract-external* : (-> XML:Name (Listof XML-Doctype-Body*) (List* (Option String) (Option String) (Listof XML-Doctype-Body*)))
   (lambda [declname doctype]
@@ -232,42 +273,22 @@
         #| no external definition, not an error |#
         (list* #false #false doctype))))
 
-(define xml-grammar-extract-internal* : (-> XML:Name (Listof XML-Doctype-Body*) XML-DTD (Values (Listof XML-Processing-Instruction*)))
-  (lambda [declname subset0 dtd]
+(define xml-grammar-extract-internal* : (-> XML:Name (Listof XML-Doctype-Body*) (Listof XML-Definition*))
+  (lambda [declname subset0]
     (define subset : (Listof XML-Doctype-Body*)
       (let trim ([rest : (Listof XML-Doctype-Body*) subset0])
         (cond [(null? rest) null]
               [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                       (cond [(xml:delim=:=? self #\[) rest++]
                             [else (xml-grammar-throw declname self) (trim rest++)]))])))
-    (let extract-entity ([rest : (Listof XML-Doctype-Body*) subset]
-                         [sIP : (Listof XML-Processing-Instruction*) null])
-      (cond [(null? rest) (make+exn:xml:malformed declname) sIP]
+
+    (let extract-definition ([rest : (Listof XML-Doctype-Body*) subset]
+                             [snoitinifed : (Listof XML-Definition*) null])
+      (cond [(null? rest) #| missing ']', inset is malformed |# (make+exn:xml:eof eof declname) null]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
-                    (cond [(xml:delim=:=? self #\]) (when (pair? rest++) (xml-grammar-throw declname rest++)) sIP]
-                          [(vector? self)
-                           (let ([DECL (vector-ref self 0)])
-                             (case (xml:name-datum DECL)
-                               [(ENTITY) (xml-grammar-extract-entity* declname DECL (vector-ref self 1) dtd)]
-                               [else (make+exn:xml:unimplemented DECL declname)])
-                             (extract-entity rest++ sIP))]
-                          [(box? self) (extract-entity rest++ (cons self sIP))]
-                          [(xml:entity? self) (make+exn:xml:unimplemented self declname) (extract-entity rest++ sIP)]
-                          [else (xml-grammar-throw declname self) (extract-entity rest++ sIP)]))]))))
-
-(define xml-grammar-extract-entity* : (-> XML:Name XML:Name (Listof XML-Doctype-Body*) XML-DTD Void)
-  (lambda [declname ENTITY body dtd]
-    (define-values (tokens others) (partition xml-token? body))
-    (cond [(pair? others) (xml-grammar-throw ENTITY others)]
-          [(or (null? tokens) (null? (cdr tokens))) (make+exn:xml:malformed (cons ENTITY tokens) declname)]
-          [else (let-values ([(?name ?value rest) (values (car tokens) (cadr tokens) (cddr tokens))])
-                  (if (and (xml:name? ?name) (xml:string? ?value) (null? rest))
-                      (hash-set! (xml-dtd-entities dtd) (xml:name-datum ?name) (xml-entity-value->datum ?value))
-                      (make+exn:xml:unimplemented (cons ENTITY tokens) declname)))])
-    (void)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-entity-value->datum : (-> XML:String (U String (Boxof String)))
-  (lambda [v]
-    (cond [(xml:&string? v) (box (xml:string-datum v))]
-          [else (xml:string-datum v)])))
+                    (cond [(xml:entity? self) (extract-definition rest++ (cons self snoitinifed))]
+                          [(xml-section? self) (extract-definition rest++ (cons self snoitinifed))]
+                          [(vector? self) (extract-definition rest++ (cons self snoitinifed))]
+                          [(mpair? self) (extract-definition rest++ (cons self snoitinifed))]
+                          [(xml:delim=:=? self #\]) (reverse snoitinifed)]
+                          [else (xml-grammar-throw declname self) (extract-definition rest++ snoitinifed)]))]))))

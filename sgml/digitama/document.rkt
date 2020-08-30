@@ -4,6 +4,7 @@
 
 (provide (all-defined-out))
 
+(require "dtd.rkt")
 (require "doctype.rkt")
 (require "grammar.rkt")
 (require "digicore.rkt")
@@ -16,12 +17,14 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (struct xml-document
   ([doctype : XML-DocType]
+   [dtd : XML-Plain-DTD]
    [elements : (Listof XML-Content)])
   #:transparent
   #:type-name XML-Document)
 
 (struct xml-document*
   ([doctype : XML-DocType]
+   [internal-dtd : XML-DTD]
    [elements : (Listof XML-Content*)])
   #:transparent
   #:type-name XML-Document*)
@@ -33,39 +36,43 @@
     (define tokens : (Listof XML-Datum) (read-xml-tokens /dev/xmlin))
     (define-values (doctype dtd grammars) (xml-syntax->content tokens))
     (define-values (maybe-name external) (xml-doctype-values doctype))
+    
     (define name : Symbol
       (cond [(or maybe-name) maybe-name]
             [else (let ([maybe-first-element (findf list? grammars)])
                     (cond [(pair? maybe-first-element) (car maybe-first-element)]
                           [else '||]))]))
 
-    (xml-document (xml-doctype (sgml-port-name /dev/xmlin) version encoding standalone? name external dtd)
-                  grammars)))
+    (xml-document (xml-doctype (sgml-port-name /dev/xmlin) version encoding standalone? name external)
+                  dtd grammars)))
 
 (define read-xml-document* : (-> SGML-StdIn XML-Document*)
   (lambda [/dev/rawin]
     (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin #true))
     (define source : (U Symbol String) (sgml-port-name /dev/xmlin))
     (define tokens : (Listof XML-Token) (read-xml-tokens* /dev/xmlin source))
-    (define-values (doctype dtd grammars) (xml-syntax->content* tokens))
+    (define-values (doctype doctype-name definitions grammars) (xml-syntax->content* tokens))
     (define-values (maybe-name external) (xml-doctype-values doctype))
+    
     (define name : Symbol
       (cond [(or maybe-name) maybe-name]
             [else (let ([maybe-first-element (findf list? grammars)])
                     (cond [(pair? maybe-first-element) (xml:name-datum (car maybe-first-element))]
                           [else '||]))]))
 
-    (xml-document* (xml-doctype source version encoding standalone? name external dtd)
+    (xml-document* (xml-doctype source version encoding standalone? name external)
+                   (xml-make-definition source doctype-name definitions)
                    grammars)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define read-xml-document*->document : (-> XML-Document* XML-Document)
   (lambda [doc.xml]
     (xml-document (xml-document*-doctype doc.xml)
-                  (map xml-grammar->datum (xml-document*-elements doc.xml)))))
+                  (make-hasheq)
+                  (map xml-content->datum (xml-document*-elements doc.xml)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-grammar->datum : (-> XML-Content* XML-Content)
+(define xml-content->datum : (-> XML-Content* XML-Content)
   (lambda [g]
     (cond [(list? g) (xml-element->datum g)]
           [else (xml-pi->datum g)])))

@@ -148,14 +148,14 @@
                     (xml-make-syntax-error subexn v)))
                 ...
 
-                (define make+exn : (->* ((U XML-Syntax-Any (Listof XML-Token))) ((Option XML:Name) Log-Level) XML-Syntax-Error)
+                (define make+exn : (->* ((U XML-Syntax-Any (Listof XML-Token))) ((U XML:Name XML:Entity False) Log-Level) XML-Syntax-Error)
                   (lambda [v [property #false] [level 'warning]]
                     (define errobj : XML-Syntax-Error (xml-make-syntax-error subexn v))
                     (xml-log-syntax-error errobj property level)
                     errobj))
                 ...
 
-                (define throw-exn : (->* ((U XML-Syntax-Any (Listof XML-Token))) ((Option XML:Name) Log-Level) Nothing)
+                (define throw-exn : (->* ((U XML-Syntax-Any (Listof XML-Token))) ((U XML:Name XML:Entity False) Log-Level) Nothing)
                   (lambda [v [property #false] [level 'warning]]
                     (raise (make+exn v property level))))
                 ...))]))
@@ -176,7 +176,9 @@
    [xml:etag            #:+ XML:ETag            #:-> xml:close]
    [xml:cstag           #:+ XML:CSTag           #:-> xml:delim]
    [xml:oetag           #:+ XML:OETag           #:-> xml:delim]
-   [xml:conds           #:+ XML:CondS           #:-> xml:delim]
+
+   [xml:csec            #:+ XML:CSec            #:-> xml:open]
+   [xml:csec$           #:+ XML:CSec$           #:-> xml:delim]
    
    [xml:pi              #:+ XML:PI              #:-> xml:open]
    [xml:decl            #:+ XML:Decl            #:-> xml:open]
@@ -253,13 +255,13 @@
         [(list main others ...) (tokens->exn main (filter-not xml:whitespace? others))]
         [(? xml-token?) (token->exn any)]))))
   
-(define xml-log-syntax-error : (->* (XML-Syntax-Error) ((Option XML:Name) Log-Level) Void)
+(define xml-log-syntax-error : (->* (XML-Syntax-Error) ((U XML:Name XML:Entity False) Log-Level) Void)
   (lambda [errobj [property #false] [level 'warning]]
     (define logger : Logger (current-logger))
     (define topic : Symbol 'exn:xml:syntax)
     (define msg : String (exn-message errobj))
     (define <eof>? : Boolean (regexp-match? #px"#<eof>" msg))
     (cond [(not property) (log-message logger level topic msg errobj)]
-          [(not <eof>?) (log-message logger level topic (format "~a @‹~a›" msg (xml:name-datum property)) errobj)]
+          [(not <eof>?) (log-message logger level topic (format "~a @‹~a›" msg (xml-token->datum property)) errobj)]
           [else (let ([eof-msg (xml-token->string property errobj eof)])
-                  (log-message logger level topic (format "~a @‹~a›" eof-msg (xml:name-datum property)) errobj))])))
+                  (log-message logger level topic (format "~a @‹~a›" eof-msg (xml-token->datum property)) errobj))])))

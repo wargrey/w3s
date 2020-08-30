@@ -83,9 +83,10 @@
                          [(eq? datum </) (xml-make-token source prev-env end xml:oetag datum)] ; not an open delimiter
                          [(eq? datum <?) (xml-make-token source prev-env end xml:pi datum)]
                          [(eq? datum <!) (xml-make-token source prev-env end xml:decl datum)]
-                         [(or (eq? datum <!$) (eq? datum <!$CDATA$)) (xml-make-token source prev-env end xml:open datum)]
+                         [(eq? datum <!&) (xml-make-token source prev-env end xml:csec datum)]
+                         [(eq? datum csec&) (xml-make-token source prev-env end xml:csec$ datum)]
+                         [(eq? datum <!&CDATA&) (xml-make-token source prev-env end xml:open datum)]
                          [(or (eq? datum ?>) (eq? datum $$>)) (xml-make-token source prev-env end xml:close datum)]
-                         [(eq? datum cond$) (xml-make-token source prev-env end xml:conds datum)]
                          [else (xml-make-token source prev-env end xml:entity datum)])]
                   [(string? datum) (xml-make-token source prev-env end xml:string datum)]
                   [(box? datum) (xml-make-token source prev-env end xml:&string (assert (unbox datum) string?))]

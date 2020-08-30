@@ -8,24 +8,13 @@
 (define-type XML-Entities (HashTable Symbol (U String (Boxof String))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(struct xml-dtd
-  ([entities : XML-Entities])
-  #:transparent
-  #:type-name XML-DTD)
-
-(define make-xml-dtd : (-> XML-DTD)
-  (lambda []
-    (xml-dtd (make-hasheq))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (struct xml-doctype
   ([location : (U String Symbol)]
    [version : (Option Nonnegative-Flonum)]
    [encoding : (Option String)]
    [standalone? : Boolean]
    [name : Symbol]
-   [external : XML-External-ID]
-   [internal-dtd : XML-DTD])
+   [external : XML-External-ID])
   #:transparent
   #:type-name XML-DocType)
 

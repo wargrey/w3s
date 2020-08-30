@@ -19,10 +19,12 @@
 (define-type XML-Element-Plain-Children (U String XML-Processing-Instruction XML-White-Space Index Symbol))
 (define-type XML-Element (Rec elem (List Symbol (Listof XML-Element-Attribute) (Listof (U elem XML-Element-Plain-Children)))))
 
+(define-type XML-Plain-DTD XML-Entities)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-syntax->content : (-> (Listof XML-Datum) (Values (Option XML-DocType-Metadata) XML-DTD (Listof XML-Content)))
+(define xml-syntax->content : (-> (Listof XML-Datum) (Values (Option XML-DocType-Metadata) XML-Plain-DTD (Listof XML-Content)))
   (lambda [tokens]
-    (define dtd : XML-DTD (make-xml-dtd))
+    (define dtd : XML-Plain-DTD (make-hasheq))
     
     (let syntax->grammar ([rest : (Listof XML-Datum) tokens]
                           [doctype : (Option XML-DocType-Metadata) #false]
@@ -130,13 +132,13 @@
                           [(eq? self <?)
                            (let-values ([(p r) (xml-syntax-extract-pi rest++)])
                              (extract r (if (not p) nerdlidc (cons p nerdlidc))))]
-                          [(eq? self <!$CDATA$)
+                          [(eq? self <!&CDATA&)
                            (cond [(or (null? rest++) (null? (cdr rest++))) #| unexpected EOF |# (extract null nerdlidc)]
                                  [else (extract (cddr rest++) (cons (assert (car rest++) string?) nerdlidc))])]
                           [else #| should not happen |# (extract rest++ nerdlidc)]))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-grammar-parse-doctype : (-> XML-Declaration XML-DTD (Values (Option XML-DocType-Metadata) (Listof XML-Processing-Instruction)))
+(define xml-grammar-parse-doctype : (-> XML-Declaration XML-Plain-DTD (Values (Option XML-DocType-Metadata) (Listof XML-Processing-Instruction)))
   (lambda [doctype dtd]
     ; Whitespaces have already been filtered out.
     (define-values (declname body) (values (vector-ref doctype 0) (vector-ref doctype 1)))
@@ -170,7 +172,7 @@
         #| no external definition, not an error |#
         (list* #false #false doctype))))
 
-(define xml-grammar-extract-internal : (-> Symbol (Listof XML-Doctype-Body) XML-DTD (Listof XML-Processing-Instruction))
+(define xml-grammar-extract-internal : (-> Symbol (Listof XML-Doctype-Body) XML-Plain-DTD (Listof XML-Processing-Instruction))
   (lambda [declname subset0 dtd]
     (define subset : (Listof XML-Doctype-Body)
       (let trim ([rest : (Listof XML-Doctype-Body) subset0])
@@ -191,7 +193,7 @@
                           [(mpair? self) (extract-entity rest++ (cons self sIP))]
                           [else (extract-entity rest++ sIP)]))]))))
 
-(define xml-grammar-extract-entity : (-> Symbol Symbol (Listof XML-Doctype-Body) XML-DTD Void)
+(define xml-grammar-extract-entity : (-> Symbol Symbol (Listof XML-Doctype-Body) XML-Plain-DTD Void)
   (lambda [declname ENTITY body dtd]
     (define-values (decls others) (partition vector? body))
     (define-values (PIs tokens) (partition mpair? others))
@@ -199,7 +201,7 @@
           [(or (null? tokens) (null? (cdr tokens))) (void)]
           [else (let-values ([(?name ?value rest) (values (car tokens) (cadr tokens) (cddr tokens))])
                   (when (and (symbol? ?name) (xml-value-string? ?value) (null? rest))
-                    (hash-set! (xml-dtd-entities dtd) ?name ?value)))])
+                    (hash-set! dtd ?name ?value)))])
     (void)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

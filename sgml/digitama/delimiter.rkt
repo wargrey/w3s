@@ -6,8 +6,8 @@
 (define <? : Symbol (string->uninterned-symbol "<?"))
 (define ?> : Symbol (string->uninterned-symbol "?>"))
 (define <! : Symbol (string->uninterned-symbol "<!"))
-(define <!$ : Symbol (string->uninterned-symbol "<!["))
-(define <!$CDATA$ : Symbol (string->uninterned-symbol "<![CDATA["))
+(define <!& : Symbol (string->uninterned-symbol "<!["))
+(define <!&CDATA& : Symbol (string->uninterned-symbol "<![CDATA["))
 (define $$> : Symbol (string->uninterned-symbol "]]>"))
 (define /> : Symbol (string->uninterned-symbol "/>"))
 
@@ -15,7 +15,7 @@
 ;;    but these are not open and close delimiters 
 (define stag> : Symbol (string->uninterned-symbol ">"))
 (define </ : Symbol (string->uninterned-symbol "</"))
-(define cond$ : Symbol (string->uninterned-symbol "["))
+(define csec& : Symbol (string->uninterned-symbol "["))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-delim-symbol? : (-> Symbol Boolean)

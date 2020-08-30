@@ -1,7 +1,7 @@
 #lang typed/racket/base
 
 (provide (all-defined-out))
-(provide (struct-out XML-Type-Definition) read-xml-type-definition)
+(provide (struct-out XML-DTD) read-xml-type-definition)
 
 (require "digitama/dtd.rkt")
 

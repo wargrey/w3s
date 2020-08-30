@@ -81,7 +81,7 @@
 (define xml-consume-token:start-condition-block : XML-Token-Consumer
   ;;; https://www.w3.org/TR/xml11/#sec-condition-sect
   (lambda [/dev/xmlin ch scope]
-    (cond [(eq? ch #\[) (values cond$ xml-consume-token:* scope)]
+    (cond [(eq? ch #\[) (values csec& xml-consume-token:* scope)]
           [(char-whitespace? ch) (xml-skip-whitespace /dev/xmlin) (xml-consume-token /dev/xmlin xml-consume-token:start-condition-block scope)]
           [else (values (xml-consume-chars-literal/exclusive /dev/xmlin #\[ (list ch)) xml-consume-token:start-condition-block scope)])))
 
@@ -182,8 +182,8 @@
     (cond [(eq? maybe-ch #\!)
            (let ([dispatcher (peek-char /dev/xmlin 1)])
              (cond [(eq? dispatcher #\[)
-                    (cond [(equal? (peek-string 6 2 /dev/xmlin) "CDATA[") (read-string 8 /dev/xmlin) (values <!$CDATA$ xml-consume-token:cdata scope)]
-                          [else (read-string 2 /dev/xmlin) (values <!$ xml-consume-token:start-condition scope)])]
+                    (cond [(equal? (peek-string 6 2 /dev/xmlin) "CDATA[") (read-string 8 /dev/xmlin) (values <!&CDATA& xml-consume-token:cdata scope)]
+                          [else (read-string 2 /dev/xmlin) (values <!& xml-consume-token:start-condition scope)])]
                    [(and (eq? dispatcher #\-) (eq? (peek-char /dev/xmlin 2) #\-))
                     (read-string 3 /dev/xmlin) (values (xml-consume-comment-tail /dev/xmlin) consume scope)]
                    [else (read-char /dev/xmlin) (values <! xml-consume-token:start-decl-name scope)]))]
