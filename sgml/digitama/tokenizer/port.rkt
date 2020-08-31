@@ -58,7 +58,7 @@
                     (if (xml-name-start-char? ch)
                         (let ([kw (xml-consume-nmtoken /dev/xmlin ch)])
                           (case kw
-                            [(PUBLIC SYSTEM ENTITY) (values kw xml-consume-token:* kw)]
+                            [(PUBLIC SYSTEM) (values kw xml-consume-token:* kw)]
                             [else (values kw xml-consume-token:* scope)]))
                         (case ch
                           [(#\<) (xml-consume-open-token /dev/xmlin xml-consume-token:* scope)]
@@ -66,8 +66,7 @@
                           [(#\= #\( #\) #\[) (values ch xml-consume-token:* scope)]
                           [(#\' #\") (xml-consume-token:literals /dev/xmlin ch scope)]
                           [(#\? #\/ #\]) (xml-consume-close-token /dev/xmlin ch xml-consume-token:* scope)]
-                          [(#\&) (values (xml-consume-reference-token /dev/xmlin ch) xml-consume-token:* scope)]
-                          [(#\%) (values (xml-consume-parameter-entity-token /dev/xmlin ch) xml-consume-token:* scope)]
+                          [(#\& #\%) (values (xml-consume-reference-token /dev/xmlin ch) xml-consume-token:* scope)]
                           [else (values ch xml-consume-token:* scope)])))])))
 
 (define xml-consume-token:start-condition : XML-Token-Consumer
@@ -88,7 +87,27 @@
 (define xml-consume-token:start-decl-name : XML-Token-Consumer
   (lambda [/dev/xmlin ch scope]
     (cond [(not (xml-name-start-char? ch)) (values (xml-consume-chars-literal/within-tag /dev/xmlin (list ch)) xml-consume-token:* scope)]
-          [else (let ([DECLNAME (xml-consume-nmtoken /dev/xmlin ch)]) (values DECLNAME xml-consume-token:* DECLNAME))])))
+          [else (let ([DECLNAME (xml-consume-nmtoken /dev/xmlin ch)])
+                  (values DECLNAME
+                          (case DECLNAME
+                            [(ENTITY) xml-consume-token:entity-name]
+                            [else xml-consume-token:*])
+                          DECLNAME))])))
+
+(define xml-consume-token:entity-name : XML-Token-Consumer
+  ;;; https://www.w3.org/TR/xml11/#sec-entity-decl
+  (lambda [/dev/xmlin ch scope]
+    (cond [(char-whitespace? ch) (xml-skip-whitespace /dev/xmlin) (xml-consume-token /dev/xmlin xml-consume-token:entity-name scope)]
+          [(eq? ch #\%)
+           (cond [(eq? scope 'ENTITY) (values ch xml-consume-token:entity-name 'ENTITY%)]
+                 [else (values (xml-consume-chars-literal/within-tag /dev/xmlin (list ch)) xml-consume-token:* xml-default-scope)])]
+          [(xml-name-start-char? ch)
+           (let ([name (xml-consume-namechars /dev/xmlin ch)])
+             (values (if (eq? scope 'ENTITY)
+                         (string->unreadable-symbol name)
+                         (string->keyword name))
+                     xml-consume-token:* 'ENTITY))]
+          [else (values (xml-consume-chars-literal/within-tag /dev/xmlin (list ch)) xml-consume-token:* xml-default-scope)])))
 
 (define xml-consume-token:literals : XML-Token-Consumer
   ;;; https://www.w3.org/TR/xml11/#NT-EntityValue
@@ -211,7 +230,7 @@
   (lambda [/dev/xmlin leader]
     (string->symbol (xml-consume-namechars /dev/xmlin leader))))
 
-(define xml-consume-reference-token : (-> Input-Port Char (U Symbol Index XML-Error))
+(define xml-consume-reference-token : (-> Input-Port Char (U Symbol Keyword Index XML-Error))
   ;;; https://www.w3.org/TR/xml11/#sec-references
   (lambda [/dev/xmlin leader]
     (define ch : (U Char EOF) (read-char /dev/xmlin))
@@ -223,15 +242,6 @@
                   (cond [(eof-object? char-leader) (list leader ch)]
                         [(eq? char-leader #\x) (xml-consume-char-reference /dev/xmlin #false)]
                         [else (xml-consume-char-reference /dev/xmlin char-leader)]))])))
-
-(define xml-consume-parameter-entity-token : (-> Input-Port Char (U Symbol Char XML-Error))
-  ;;; https://www.w3.org/TR/xml11/#sec-references
-  (lambda [/dev/xmlin leader]
-    (define ch : (U Char EOF) (peek-char /dev/xmlin))
-    (cond [(eof-object? ch) (list leader)]
-          [(char-whitespace? ch) leader]
-          [(eq? ch #\;) (list leader ch)]
-          [else (read-char /dev/xmlin) (xml-consume-entity-reference /dev/xmlin leader ch)])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-consume-whitespace : (-> Input-Port Char XML-White-Space)
@@ -300,17 +310,18 @@
             [(eq? ch #\;) (natural->char-entity code)]
             [else (xml-consume-chars-literal /dev/xmlin #\; (cons ch srahc))]))))
 
-(define xml-consume-entity-reference : (-> Input-Port Char Char (U Symbol XML-Error))
+(define xml-consume-entity-reference : (-> Input-Port Char Char (U Symbol Keyword XML-Error))
   ;;; https://www.w3.org/TR/xml11/#NT-EntityRef
   (lambda [/dev/xmlin type leader]
     (define parameter-entity? : Boolean (eq? type #\%))
     (cond [(not (xml-name-start-char? leader)) (xml-consume-chars-literal /dev/xmlin #\; (list leader type))]
-          [else (let read-entity-reference ([srahc : (Listof Char) (if (not parameter-entity?) (list leader) (list leader type))])
+          [else (let read-entity-reference ([srahc : (Listof Char) (list leader)])
                   (define ch : (U EOF Char) (read-char /dev/xmlin))
                   (cond [(eof-object? ch) (reverse srahc)]
                         [(xml-name-char? ch) (read-entity-reference (cons ch srahc))]
-                        [(eq? ch #\;) (string->unreadable-symbol (list->string (reverse srahc)))]
-                        [else (xml-consume-chars-literal /dev/xmlin #\; (cons ch srahc))]))])))
+                        [(not (eq? ch #\;)) (xml-consume-chars-literal /dev/xmlin #\; (cons ch srahc))]
+                        [(eq? type #\%) (string->keyword (list->string (reverse srahc)))]
+                        [else (string->unreadable-symbol (list->string (reverse srahc)))]))])))
 
 (define xml-consume-entity-value : (-> Input-Port Char (U String (Boxof String) XML-Error))
   ;;; https://www.w3.org/TR/xml11/#NT-EntityValue

@@ -1,5 +1,11 @@
-# SVG: An SVG Engine written in Typed Racket
+# SVG: An Engine Written in Typed Racket
 
 wargrey
 
-_The next engine on the list._
+```racket
+ (require svg) package: [w3s](https://pkgs.racket-lang.org/package/w3s)
+```
+
+The package is on its way...
+
+See `sgml/xml` for its foundation.

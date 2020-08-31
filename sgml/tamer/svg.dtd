@@ -1,12 +1,84 @@
 #lang sgml/dtd
 
 <!-- ....................................................................... -->
+<!-- SVG 1.1 DTD ........................................................... -->
+<!-- file: svg11.dtd
+-->
+
+<!-- SVG 1.1 DTD
+
+     This is SVG, a language for describing two-dimensional graphics in XML.
+
+     The Scalable Vector Graphics (SVG)
+     Copyright 2001, 2002, 2011 World Wide Web Consortium
+        (Massachusetts Institute of Technology, Institut National de
+         Recherche en Informatique et en Automatique, Keio University).
+         All Rights Reserved.
+
+     Permission to use, copy, modify and distribute the SVG DTD and its
+     accompanying documentation for any purpose and without fee is hereby
+     granted in perpetuity, provided that the above copyright notice and
+     this paragraph appear in all copies.  The copyright holders make no
+     representation about the suitability of the DTD for any purpose.
+
+     It is provided "as is" without expressed or implied warranty.
+
+        Author:   Jun Fujisawa <fujisawa.jun@canon.co.jp>
+        Revision: $Id: svg11-flat-20110816.dtd,v 1.1 2011/08/10 04:19:02 cmccorma Exp $
+
+-->
+<!-- This is the driver file for version 1.1 of the SVG DTD.
+
+     This DTD is identified by the PUBLIC and SYSTEM identifiers:
+
+        PUBLIC "-//W3C//DTD SVG 1.1//EN"
+        SYSTEM "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"
+-->
+<!ENTITY % SVG.version "-//W3C//DTD SVG 1.1//EN" >
+
+<!-- Use this URI to identify the default namespace:
+
+        "http://www.w3.org/2000/svg"
+
+     See the Qualified Names module for information
+     on the use of namespace prefixes in the DTD.
+-->
+<!ENTITY % NS.prefixed "IGNORE" >
+<!ENTITY % SVG.prefix "" >
+
+<!-- reserved for future use with document profiles -->
+<!ENTITY % SVG.profile "" >
+
+<!-- ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::: -->
+
+<!-- Pre-Framework Redeclaration Placeholder ..................... -->
+<!ENTITY % svg-prefw-redecl.module "IGNORE" >
+<![%svg-prefw-redecl.module;[
+%svg-prefw-redecl.mod;]]>
+
+<!-- Document Model Module ....................................... -->
+<!ENTITY % svg-model.mod
+    PUBLIC "-//W3C//ENTITIES SVG 1.1 Document Model//EN"
+           "svg11-model.mod" >
+
+<!-- Attribute Collection Module ................................. -->
+<!ENTITY % svg-attribs.mod
+    PUBLIC "-//W3C//ENTITIES SVG 1.1 Attribute Collection//EN"
+           "svg11-attribs.mod" >
+
+<!-- Modular Framework Module .................................... -->
+<!ENTITY % svg-framework.module "INCLUDE" >
+<![%svg-framework.module;[
+<!ENTITY % svg-framework.mod
+    PUBLIC "-//W3C//ENTITIES SVG 1.1 Modular Framework//EN"
+           "svg-framework.mod" >
+<!-- ....................................................................... -->
 <!-- SVG 1.1 Modular Framework Module ...................................... -->
 <!-- file: svg-framework.mod
 
      This is SVG, a language for describing two-dimensional graphics in XML.
-     Copyright 2001, 2002, 2011 W3C (MIT, INRIA, Keio), All Rights Reserved.
-     Revision: $Id: svgdtd.html,v 1.2 2011/08/10 04:43:17 schepers Exp $
+     Copyright 2001, 2001, 2011 W3C (MIT, INRIA, Keio), All Rights Reserved.
+     Revision: $Id: svg11-flat-20110816.dtd,v 1.1 2011/08/10 04:19:02 cmccorma Exp $
 
      This DTD module is identified by the PUBLIC and SYSTEM identifiers:
 
@@ -31,23 +103,91 @@
 <!ENTITY % svg-datatypes.mod
     PUBLIC "-//W3C//ENTITIES SVG 1.1 Datatypes//EN"
            "svg-datatypes.mod" >
-%svg-datatypes.mod;]]>
+<!-- ....................................................................... -->
+<!-- SVG 1.1 Datatypes Module .............................................. -->
+<!-- file: svg-datatypes.mod
 
-<!ENTITY % svg-qname.module "INCLUDE" >
-<![%svg-qname.module;[
-<!ENTITY % svg-qname.mod
-    PUBLIC "-//W3C//ENTITIES SVG 1.1 Qualified Name//EN"
-           "svg-qname.mod" >
-%svg-qname.mod;]]>
+     This is SVG, a language for describing two-dimensional graphics in XML.
+     Copyright 2001, 2001, 2011 W3C (MIT, INRIA, Keio), All Rights Reserved.
+     Revision: $Id: svg11-flat-20110816.dtd,v 1.1 2011/08/10 04:19:02 cmccorma Exp $
 
-<!ENTITY % svg-model.module "INCLUDE" >
-<![%svg-model.module;[
-<!-- instantiate the Document Model declared in the DTD driver -->
-%svg-model.mod;]]>
+     This DTD module is identified by the PUBLIC and SYSTEM identifiers:
 
-<!ENTITY % svg-attribs.module "INCLUDE" >
-<![%svg-attribs.module;[
-<!-- instantiate the Attribute Collection declared in the DTD driver -->
-%svg-attribs.mod;]]>
+        PUBLIC "-//W3C//ENTITIES SVG 1.1 Datatypes//EN"
+        SYSTEM "http://www.w3.org/Graphics/SVG/1.1/DTD/svg-datatypes.mod"
 
-<!-- end of svg-framework.mod -->
+     ....................................................................... -->
+
+<!-- Datatypes
+
+     This module declares common data types for properties and attributes.
+-->
+
+<!-- feature specification -->
+<!ENTITY % Boolean.datatype "( false | true )" >
+
+<!-- 'clip-rule' or 'fill-rule' property/attribute value -->
+<!ENTITY % ClipFillRule.datatype "( nonzero | evenodd | inherit )" >
+
+<!-- media type, as per [RFC2045] -->
+<!ENTITY % ContentType.datatype "CDATA" >
+
+<!-- a <coordinate> -->
+<!ENTITY % Coordinate.datatype "CDATA" >
+
+<!-- a list of <coordinate>s -->
+<!ENTITY % Coordinates.datatype "CDATA" >
+
+<!-- a <color> value -->
+<!ENTITY % Color.datatype "CDATA" >
+
+<!-- a <integer> -->
+<!ENTITY % Integer.datatype "CDATA" >
+
+<!-- a language code, as per [BCP47] -->
+<!ENTITY % LanguageCode.datatype "NMTOKEN" >
+
+<!-- comma-separated list of language codes, as per [BCP47] -->
+<!ENTITY % LanguageCodes.datatype "CDATA" >
+
+<!-- a <length> -->
+<!ENTITY % Length.datatype "CDATA" >
+
+<!-- a list of <length>s -->
+<!ENTITY % Lengths.datatype "CDATA" >
+
+<!-- a <number> -->
+<!ENTITY % Number.datatype "CDATA" >
+
+<!-- a list of <number>s -->
+<!ENTITY % Numbers.datatype "CDATA" >
+
+<!-- opacity value (e.g., <number>) -->
+<!ENTITY % OpacityValue.datatype "CDATA" >
+
+<!-- a path data specification -->
+<!ENTITY % PathData.datatype "CDATA" >
+
+<!-- 'preserveAspectRatio' attribute specification -->
+<!ENTITY % PreserveAspectRatioSpec.datatype "CDATA" >
+
+<!-- script expression -->
+<!ENTITY % Script.datatype "CDATA" >
+
+<!-- An SVG color value (RGB plus optional ICC) -->
+<!ENTITY % SVGColor.datatype "CDATA" >
+
+<!-- arbitrary text string -->
+<!ENTITY % Text.datatype "CDATA" >
+
+<!-- list of transforms -->
+<!ENTITY % TransformList.datatype "CDATA" >
+
+<!-- a Uniform Resource Identifier, see [URI] -->
+<!ENTITY % URI.datatype "CDATA" >
+
+<!-- 'viewBox' attribute specification -->
+<!ENTITY % ViewBoxSpec.datatype "CDATA" >
+
+<!-- end of svg-datatypes.mod -->
+]]>

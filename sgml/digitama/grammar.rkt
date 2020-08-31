@@ -8,19 +8,19 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type XML-Content* (U XML-Processing-Instruction* XML-Element*))
-(define-type XML-Definition* (U XML:Entity XML-Processing-Instruction* XML-Declaration* XML-Section))
+(define-type XML-Definition* (U XML:PEReference XML-Processing-Instruction* XML-Declaration* XML-Section))
 
 (define-type XML-Declaration* (Rec body (Vector XML:Name (Listof (U XML-Token body XML-Processing-Instruction* XML-Section)))))
 (define-type XML-Doctype-Body* (U XML-Token XML-Declaration* XML-Processing-Instruction* XML-Section))
 
 (define-type XML-Processing-Instruction* (MPairof XML:Name XML:String))
 (define-type XML-Element-Attribute* (Pairof XML:Name XML:String))
-(define-type XML-Element-Plain-Children* (U XML:String XML-Processing-Instruction* XML:WhiteSpace XML:Entity))
-(define-type XML-Element* (Rec elem (List XML:Name (Listof XML-Element-Attribute*) (Listof (U elem XML-Element-Plain-Children*)))))
+(define-type XML-Subdatum* (U XML:String XML-Processing-Instruction* XML:WhiteSpace XML:Reference))
+(define-type XML-Element* (Rec elem (List XML:Name (Listof XML-Element-Attribute*) (Listof (U elem XML-Subdatum*)))))
 
 (struct xml-section
-  ([condition : (U XML:Name XML:Entity)]
-   [declarations : (Listof XML-Definition*)])
+  ([condition : (U XML:Name XML:PEReference)]
+   [body : (Listof XML-Definition*)])
   #:transparent
   #:type-name XML-Section)
 
@@ -57,26 +57,26 @@
 
 (define xml-syntax->definition* : (-> (Listof XML-Token) (Listof XML-Definition*))
   (lambda [tokens]
-    (let syntax->grammar ([rest : (Listof XML-Token) tokens]
-                          [snoitinifed : (Listof XML-Definition*) null])
+    (let syntax->definition ([rest : (Listof XML-Token) tokens]
+                             [snoitinifed : (Listof XML-Definition*) null])
       (cond [(null? rest) (reverse snoitinifed)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
-                    (cond [(xml:whitespace? self) (syntax->grammar rest++ snoitinifed)]
+                    (cond [(xml:whitespace? self) (syntax->definition rest++ snoitinifed)]
                           [(xml:decl? self)
                            (let-values ([(d r) (xml-syntax-extract-declaration* rest++)])
-                             (syntax->grammar r (if (not d) snoitinifed (cons d snoitinifed))))]
+                             (syntax->definition r (if (not d) snoitinifed (cons d snoitinifed))))]
                           [(xml:csec? self)
                            (let-values ([(s r) (xml-syntax-extract-section* rest++)])
-                             (syntax->grammar r (if (not s) snoitinifed (cons s snoitinifed))))]
+                             (syntax->definition r (if (not s) snoitinifed (cons s snoitinifed))))]
                           [(xml:pi? self)
                            (let-values ([(p r) (xml-syntax-extract-pi* rest++)])
-                             (syntax->grammar r (if (not p) snoitinifed (cons p snoitinifed))))]
-                          [(xml:entity? self) (syntax->grammar rest++ (cons self snoitinifed))]
+                             (syntax->definition r (if (not p) snoitinifed (cons p snoitinifed))))]
+                          [(xml:pereference? self) (syntax->definition rest++ (cons self snoitinifed))]
                           [(xml:stag? self)
                            (let-values ([(e r) (xml-syntax-extract-element* rest++)])
                              (unless (not e) (make+exn:xml:misplaced (car e)))
-                             (syntax->grammar r snoitinifed))]
-                          [else (make+exn:xml:unrecognized self) (syntax->grammar rest++ snoitinifed)]))]))))
+                             (syntax->definition r snoitinifed))]
+                          [else (make+exn:xml:unrecognized self) (syntax->definition rest++ snoitinifed)]))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-syntax-extract-declaration* : (-> (Listof XML-Token) (Values (Option XML-Declaration*) (Listof XML-Token)))
@@ -85,24 +85,28 @@
     ;  either <! name tokens ... > or <! error >
     ;  but for the later case, the error token may not span the whole declaration
     ;   and hence some unmatched close tags
-    (let extract ([rest : (Listof XML-Token) tokens]
-                  [name : (Option XML:Name) #false]
-                  [seidob : (Listof XML-Doctype-Body*) null])
+    (let extract-declaration ([rest : (Listof XML-Token) tokens]
+                              [name : (Option XML:Name) #false]
+                              [seidob : (Listof XML-Doctype-Body*) null])
       (cond [(null? rest) (make+exn:xml:eof eof) (values #false null)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
-                    (cond [(xml:whitespace? self) (extract rest++ name seidob)]
+                    (cond [(xml:whitespace? self) (extract-declaration rest++ name seidob)]
                           [(xml:etag? self) (values (and name (vector name (reverse seidob))) rest++)]
-                          [(xml:name? self) (if (not name) (extract rest++ self seidob) (extract rest++ name (cons self seidob)))]
+                          [(xml:name? self)
+                           (cond [(not name) (extract-declaration rest++ self seidob)]
+                                 [else (extract-declaration rest++ name (cons self seidob))])]
                           [(xml:decl? self)
                            (let-values ([(d r) (xml-syntax-extract-declaration* rest++)])
-                             (extract r name (if (not d) seidob (cons d seidob))))]
+                             (extract-declaration r name (if (not d) seidob (cons d seidob))))]
                           [(xml:csec? self)
                            (let-values ([(s r) (xml-syntax-extract-section* rest++)])
-                             (extract r name (if (not s) seidob (cons s seidob))))]
+                             (when (and s)
+                               (displayln (last (xml-section-body s))))
+                             (extract-declaration r name (if (not s) seidob (cons s seidob))))]
                           [(xml:pi? self)
                            (let-values ([(p r) (xml-syntax-extract-pi* rest++)])
-                             (extract r name (if (not p) seidob (cons p seidob))))]    
-                          [else (extract rest++ name (cons self seidob))]))]))))
+                             (extract-declaration r name (if (not p) seidob (cons p seidob))))]    
+                          [else (extract-declaration rest++ name (cons self seidob))]))]))))
 
 (define xml-syntax-extract-section* : (-> (Listof XML-Token) (Values (Option XML-Section) (Listof XML-Token)))
   (lambda [tokens]
@@ -110,63 +114,65 @@
     ;  either <! condition error? [ body ]]>
 
     (define-values (condition body-tokens)
-      (let extract-condition : (Values (U XML:Name XML:Entity False) (Listof XML-Token))
+      (let extract-condition : (Values (U XML:Name XML:PEReference False) (Listof XML-Token))
         ([rest : (Listof XML-Token) tokens]
-         [condition : (U XML:Name XML:Entity False) #false])
+         [condition : (U XML:Name XML:PEReference False) #false])
         (cond [(null? rest) (make+exn:xml:eof eof) (values #false null)]
               [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                       (cond [(xml:whitespace? self) (extract-condition rest++ condition)]
-                            [(xml:delim=:=? self csec&) (values condition rest++)]
-                            [(or (xml:name? self) (xml:entity? self)) (extract-condition rest++ self)]
+                            [(or (xml:name? self) (xml:pereference? self)) (extract-condition rest++ self)]
+                            [(xml:delim=:=? self csec&) (values condition rest++)]                           
                             [else (make+exn:xml:malformed self #false) (extract-condition rest++ condition)]))])))
     
-    (let extract ([rest : (Listof XML-Token) body-tokens]
-                  [bodies : (Listof XML-Definition*) null])
-      (cond [(null? rest) (make+exn:xml:eof eof) (values #false null)]
+    (let extract-section ([rest : (Listof XML-Token) body-tokens]
+                          [seidob : (Listof XML-Definition*) null])
+      (cond [(null? rest) (make+exn:xml:eof eof condition) (values #false null)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
-                    (cond [(xml:whitespace? self) (extract rest++ bodies)]
+                    (cond [(xml:whitespace? self) (extract-section rest++ seidob)]
                           [(xml:decl? self)
                            (let-values ([(d r) (xml-syntax-extract-declaration* rest++)])
-                             (extract r (if (not d) bodies (cons d bodies))))]
+                             (extract-section r (if (not d) seidob (cons d seidob))))]
+                          [(xml:csec? self)
+                           (let-values ([(s r) (xml-syntax-extract-section* rest++)])
+                             (extract-section r (if (not s) seidob (cons s seidob))))]
                           [(xml:pi? self)
                            (let-values ([(p r) (xml-syntax-extract-pi* rest++)])
-                             (extract r (if (not p) bodies (cons p bodies))))]
-                          [(xml:entity? self) (extract rest++ (cons self bodies))]
-                          [(xml:delim=:=? self $$>) (values (and condition (xml-section condition (reverse bodies))) rest++)]
-                          [else (make+exn:xml:unrecognized self condition) (extract rest++ bodies)]))]))))
+                             (extract-section r (if (not p) seidob (cons p seidob))))]
+                          [(xml:pereference? self) (extract-section rest++ (cons self seidob))]
+                          [(xml:delim=:=? self $$>) (values (and condition (xml-section condition (reverse seidob))) rest++)]
+                          [else (make+exn:xml:unrecognized self condition) (extract-section rest++ seidob)]))]))))
 
 (define xml-syntax-extract-pi* : (-> (Listof XML-Token) (Values (Option XML-Processing-Instruction*) (Listof XML-Token)))
   ;;; https://www.w3.org/TR/xml11/#sec-pi
   (lambda [tokens]
     ; NOTE: the tokenizer ensures the sequence of PI tokens
     ;  either <? name body ?> or <? error ?> 
-    (let extract ([rest : (Listof XML-Token) tokens]
-                  [target : (Option XML:Name) #false]
-                  [body : (Option XML:String) #false])
+    (let extract-pi ([rest : (Listof XML-Token) tokens]
+                     [target : (Option XML:Name) #false]
+                     [body : (Option XML:String) #false])
       (cond [(null? rest) (make+exn:xml:eof eof) (values #false null)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
-                    (cond [(xml:name? self) (extract rest++ self body)]
-                          [(xml:string? self) (extract rest++ target self)]
+                    (cond [(xml:name? self) (extract-pi rest++ self body)]
+                          [(xml:string? self) (extract-pi rest++ target self)]
                           [(xml:delim=:=? self ?>) (values (and target body (mcons target body)) (cdr rest))]
-                          [else #| bad PI |# (extract rest++ target body)]))]))))
+                          [else #| bad PI |# (extract-pi rest++ target body)]))]))))
 
 (define xml-syntax-extract-element* : (-> (Listof XML-Token) (Values (Option XML-Element*) (Listof XML-Token)))
   ;;; https://www.w3.org/TR/xml11/#NT-STag
   ;;; https://www.w3.org/TR/xml11/#NT-ETag
   ;;; https://www.w3.org/TR/xml11/#NT-content
   (lambda [tokens]
-    (let extract ([rest : (Listof XML-Token) tokens])
-      (cond [(null? rest) (make+exn:xml:eof eof) (values #false null)]
-            [else (let-values ([(?name rest++) (values (car rest) (cdr rest))])
-                    ; broken start tag should not affect its parent and sibling elements.
-                    (define tagname : (Option XML:Name)
-                      (cond [(xml:name? ?name) ?name]
-                            [else (make+exn:xml:missing-name ?name) #false]))
-                    (let-values ([(attributes empty? rest++++) (xml-syntax-extract-element-attributes* tagname rest++)])
-                      (cond [(and empty?) (values (and tagname (list tagname attributes null)) rest++++)]
-                            [else (let-values ([(children rest++++++) (xml-syntax-extract-element-children* tagname rest++++)])
-                                    (values (and children tagname (list tagname attributes children))
-                                            rest++++++))])))]))))
+    (cond [(null? tokens) (make+exn:xml:eof eof) (values #false null)]
+          [else (let-values ([(?name rest++) (values (car tokens) (cdr tokens))])
+                  ; broken start tag should not affect its parent and sibling elements.
+                  (define tagname : (Option XML:Name)
+                    (cond [(xml:name? ?name) ?name]
+                          [else (make+exn:xml:missing-name ?name) #false]))
+                  (let-values ([(attributes empty? rest++++) (xml-syntax-extract-element-attributes* tagname rest++)])
+                    (cond [(and empty?) (values (and tagname (list tagname attributes null)) rest++++)]
+                          [else (let-values ([(children rest++++++) (xml-syntax-extract-subelement* tagname rest++++)])
+                                  (values (and children tagname (list tagname attributes children))
+                                          rest++++++))])))])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-syntax-extract-element-attributes* : (-> (Option XML:Name) (Listof XML-Token) (Values (Listof XML-Element-Attribute*) Boolean (Listof XML-Token)))
@@ -176,61 +182,60 @@
     ;   < name (attrname=value)* /?>
     ;   no whitespaces and comments among them
     ;   error spans the end of the StartTag or first whitespaces
-    (let extract ([rest : (Listof XML-Token) tokens]
-                  [setubirtta : (Listof XML-Element-Attribute*) null])
+    (let extract-element-attributes ([rest : (Listof XML-Token) tokens]
+                                     [setubirtta : (Listof XML-Element-Attribute*) null])
       (cond [(null? rest) (make+exn:xml:eof eof tagname) (values setubirtta #false null)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml:etag? self) (values (reverse setubirtta) #true rest++)]
                           [(xml:cstag? self) (values (reverse setubirtta) #false rest++)]
-                          [(not (xml:name? self)) (make+exn:xml:missing-name self tagname) (extract rest++ setubirtta)]
-                          [(or (null? rest++) (null? (cdr rest++))) (make+exn:xml:eof rest tagname) (extract null setubirtta)]
+                          [(not (xml:name? self)) (make+exn:xml:missing-name self tagname) (extract-element-attributes rest++ setubirtta)]
+                          [(or (null? rest++) (null? (cdr rest++))) (make+exn:xml:eof rest tagname) (extract-element-attributes null setubirtta)]
                           [else (let-values ([(?eq ?value rest*) (values (car rest++) (cadr rest++) (cddr rest++))])
-                                  (cond [(and (xml:eq? ?eq) (xml:string? ?value)) (extract rest* (cons (cons self ?value) setubirtta))]
-                                        [(xml:eq? ?eq) (make+exn:xml:malformed (list self ?eq ?value) tagname) (extract rest* setubirtta)]
-                                        [(xml:name? ?value) (make+exn:xml:malformed (list self ?eq) tagname) (extract (cdr rest++) setubirtta)]
-                                        [else (make+exn:xml:malformed (list self ?eq ?value) tagname) (extract rest* setubirtta)]))]))]))))
+                                  (cond [(and (xml:eq? ?eq) (xml:string? ?value)) (extract-element-attributes rest* (cons (cons self ?value) setubirtta))]
+                                        [(xml:eq? ?eq) (make+exn:xml:malformed (list self ?eq ?value) tagname) (extract-element-attributes rest* setubirtta)]
+                                        [(xml:name? ?value) (make+exn:xml:malformed (list self ?eq) tagname) (extract-element-attributes (cdr rest++) setubirtta)]
+                                        [else (make+exn:xml:malformed (list self ?eq ?value) tagname) (extract-element-attributes rest* setubirtta)]))]))]))))
 
-(define xml-syntax-extract-element-children* : (-> (Option XML:Name) (Listof XML-Token)
-                                                   (Values (Option (Listof (U XML-Element* XML-Element-Plain-Children*))) (Listof XML-Token)))
+(define xml-syntax-extract-subelement* : (-> (Option XML:Name) (Listof XML-Token) (Values (Option (Listof (U XML-Element* XML-Subdatum*))) (Listof XML-Token)))
   ;;; https://www.w3.org/TR/xml11/#NT-content
   (lambda [tagname tokens]
-    (let extract ([rest : (Listof XML-Token) tokens]
-                  [nerdlidc : (Listof (U XML-Element* XML-Element-Plain-Children*)) null])
+    (let extract-subelement ([rest : (Listof XML-Token) tokens]
+                             [nerdlidc : (Listof (U XML-Element* XML-Subdatum*)) null])
       (cond [(null? rest) (make+exn:xml:eof eof tagname) (values #false null)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
-                    (cond [(xml:whitespace? self) (extract rest++ (cons self nerdlidc))]
+                    (cond [(xml:whitespace? self) (extract-subelement rest++ (cons self nerdlidc))]
                           [(xml:stag? self)
                            (let-values ([(e r) (xml-syntax-extract-element* rest++)])
-                             (extract r (if (not e) nerdlidc (cons e nerdlidc))))]
-                          [(xml:string? self) (extract rest++ (cons self nerdlidc))]
+                             (extract-subelement r (if (not e) nerdlidc (cons e nerdlidc))))]
+                          [(xml:string? self) (extract-subelement rest++ (cons self nerdlidc))]
                           [(xml:oetag? self)
                            ; NOTE: the tokenizer ensures the sequence of EndTag token
                            ;   </ name >
                            ;   no whitespaces and comments among them
                            ;   error spans the rest part of the EndTag
-                           (cond [(or (null? rest++) (null? (cdr rest++))) (make+exn:xml:eof rest tagname) (extract null nerdlidc)]
+                           (cond [(or (null? rest++) (null? (cdr rest++))) (make+exn:xml:eof rest tagname) (extract-subelement null nerdlidc)]
                                  [else (let-values ([(?name ?etag rest*) (values (car rest++) (cadr rest++) (cddr rest++))])
                                          (if (and (xml:name? ?name) (xml:etag? ?etag))
                                              (let ([well-endtag? (and tagname (eq? (xml:name-datum tagname) (xml:name-datum ?name)))])
                                                (when (not well-endtag?) (make+exn:xml:end-tag ?name tagname))
                                                (values (and well-endtag? (reverse nerdlidc)) rest*))
                                              (let ([>rest (memf xml:etag? rest++)])
-                                               (cond [(not >rest) (make+exn:xml:eof rest++ tagname) (extract null nerdlidc)]
+                                               (cond [(not >rest) (make+exn:xml:eof rest++ tagname) (extract-subelement null nerdlidc)]
                                                      [else (make+exn:xml:malformed (take rest++ (- (length rest++) (length >rest) 1)) tagname)
                                                            (values #false (cdr >rest))]))))])]
-                          [(xml:entity? self) (extract rest++ (cons self nerdlidc))]
+                          [(xml:reference? self) (extract-subelement rest++ (cons self nerdlidc))]
                           [(xml:pi? self)
                            (let-values ([(p r) (xml-syntax-extract-pi* rest++)])
-                             (extract r (if (not p) nerdlidc (cons p nerdlidc))))]
+                             (extract-subelement r (if (not p) nerdlidc (cons p nerdlidc))))]
                           [(xml:delim=:=? self <!&CDATA&)
                            ; NOTE: the tokenizer ensures the sequence of CDATA token
                            ;   <![CDATA[ text ]]>
-                           (cond [(or (null? rest++) (null? (cdr rest++))) (make+exn:xml:eof rest tagname) (extract null nerdlidc)]
-                                 [else (extract (cddr rest++) (cons (assert (car rest++) xml:string?) nerdlidc))])]
-                          [else (make+exn:xml:unrecognized self tagname) (extract rest++ nerdlidc)]))]))))
+                           (cond [(or (null? rest++) (null? (cdr rest++))) (make+exn:xml:eof rest tagname) (extract-subelement null nerdlidc)]
+                                 [else (extract-subelement (cddr rest++) (cons (assert (car rest++) xml:string?) nerdlidc))])]
+                          [else (make+exn:xml:unrecognized self tagname) (extract-subelement rest++ nerdlidc)]))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-grammar-throw : (-> (U XML:Name XML:Entity False) (U XML-Doctype-Body* (Listof XML-Doctype-Body*)) (U Void XML-Syntax-Error))
+(define xml-grammar-throw : (-> (U XML:Name XML:PEReference False) (U XML-Doctype-Body* (Listof XML-Doctype-Body*)) (U Void XML-Syntax-Error))
   (lambda [declname bad]
     (cond [(list? bad) (for ([b (in-list bad)]) (xml-grammar-throw declname bad))]
           [(xml-token? bad) (make+exn:xml:malformed bad declname)]
@@ -282,13 +287,13 @@
                       (cond [(xml:delim=:=? self #\[) rest++]
                             [else (xml-grammar-throw declname self) (trim rest++)]))])))
 
-    (let extract-definition ([rest : (Listof XML-Doctype-Body*) subset]
-                             [snoitinifed : (Listof XML-Definition*) null])
+    (let extract-intsubset ([rest : (Listof XML-Doctype-Body*) subset]
+                            [snoitinifed : (Listof XML-Definition*) null])
       (cond [(null? rest) #| missing ']', inset is malformed |# (make+exn:xml:eof eof declname) null]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
-                    (cond [(xml:entity? self) (extract-definition rest++ (cons self snoitinifed))]
-                          [(xml-section? self) (extract-definition rest++ (cons self snoitinifed))]
-                          [(vector? self) (extract-definition rest++ (cons self snoitinifed))]
-                          [(mpair? self) (extract-definition rest++ (cons self snoitinifed))]
+                    (cond [(xml:pereference? self) (extract-intsubset rest++ (cons self snoitinifed))]
+                          [(xml-section? self) (extract-intsubset rest++ (cons self snoitinifed))]
+                          [(vector? self) (extract-intsubset rest++ (cons self snoitinifed))]
+                          [(mpair? self) (extract-intsubset rest++ (cons self snoitinifed))]
                           [(xml:delim=:=? self #\]) (reverse snoitinifed)]
-                          [else (xml-grammar-throw declname self) (extract-definition rest++ snoitinifed)]))]))))
+                          [else (xml-grammar-throw declname self) (extract-intsubset rest++ snoitinifed)]))]))))

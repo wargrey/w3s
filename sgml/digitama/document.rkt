@@ -85,11 +85,11 @@
   (lambda [e]
     (list (xml:name-datum (car e))
           (map xml-pair->datum (cadr e))
-          (map (λ [[child : (U XML-Element-Plain-Children* XML-Element*)]]
+          (map (λ [[child : (U XML-Subdatum* XML-Element*)]]
                  (cond [(list? child) (xml-element->datum child)]
                        [(xml:string? child) (xml:string-datum child)]
                        [(xml:whitespace? child) (xml-white-space (xml:whitespace-datum child))]
-                       [(xml:entity? child) (xml:entity-datum child)]
+                       [(xml:reference? child) (xml:reference-datum child)]
                        [else (xml-pi->datum child)]))
                (caddr e)))))
 

@@ -16,8 +16,8 @@
 
 (define-type XML-Processing-Instruction (MPairof Symbol String))
 (define-type XML-Element-Attribute (Pairof Symbol (U String (Boxof String))))
-(define-type XML-Element-Plain-Children (U String XML-Processing-Instruction XML-White-Space Index Symbol))
-(define-type XML-Element (Rec elem (List Symbol (Listof XML-Element-Attribute) (Listof (U elem XML-Element-Plain-Children)))))
+(define-type XML-Subdatum (U String XML-Processing-Instruction XML-White-Space Index Symbol))
+(define-type XML-Element (Rec elem (List Symbol (Listof XML-Element-Attribute) (Listof (U elem XML-Subdatum)))))
 
 (define-type XML-Plain-DTD XML-Entities)
 
@@ -51,91 +51,89 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-syntax-extract-declaration : (-> (Listof XML-Datum) (Values (Option XML-Declaration) (Listof XML-Datum)))
   (lambda [tokens]
-    (let extract ([rest : (Listof XML-Datum) tokens]
-                  [name : (Option Symbol) #false]
-                  [bodies : (Listof XML-Doctype-Body) null])
+    (let extract-declaration ([rest : (Listof XML-Datum) tokens]
+                              [name : (Option Symbol) #false]
+                              [bodies : (Listof XML-Doctype-Body) null])
       (cond [(null? rest) #| PI is at the end of the file and malformed |# (values #false null)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
-                    (cond [(xml-white-space? self) (extract rest++ name bodies)]
+                    (cond [(xml-white-space? self) (extract-declaration rest++ name bodies)]
                           [(eq? self #\>) (values (and name (vector name (reverse bodies))) rest++)]
-                          [(symbol? self) (if (not name) (extract rest++ self bodies) (extract rest++ name (cons self bodies)))]
+                          [(symbol? self) (if (not name) (extract-declaration rest++ self bodies) (extract-declaration rest++ name (cons self bodies)))]
                           [(eq? self <!)
                            (let-values ([(d r) (xml-syntax-extract-declaration rest++)])
-                             (extract r name (if (not d) bodies (cons d bodies))))]
+                             (extract-declaration r name (if (not d) bodies (cons d bodies))))]
                           [(eq? self <?)
                            (let-values ([(p r) (xml-syntax-extract-pi rest++)])
-                             (extract r name (if (not p) bodies (cons p bodies))))]
-                          [else (extract rest++ name bodies)]))]))))
+                             (extract-declaration r name (if (not p) bodies (cons p bodies))))]
+                          [else (extract-declaration rest++ name bodies)]))]))))
 
 (define xml-syntax-extract-pi : (-> (Listof XML-Datum) (Values (Option XML-Processing-Instruction) (Listof XML-Datum)))
   ;;; https://www.w3.org/TR/xml11/#sec-pi
   (lambda [tokens]
-    (let extract ([rest : (Listof XML-Datum) tokens]
-                  [target : (Option Symbol) #false]
-                  [body : (Option String) #false])
+    (let extract-pi ([rest : (Listof XML-Datum) tokens]
+                     [target : (Option Symbol) #false]
+                     [body : (Option String) #false])
       (cond [(null? rest) #| PI is at the end of the file and malformed |# (values #false null)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
-                    (cond [(symbol? self) (extract rest++ self body)]
-                          [(string? self) (extract rest++ target self)]
+                    (cond [(symbol? self) (extract-pi rest++ self body)]
+                          [(string? self) (extract-pi rest++ target self)]
                           [(eq? self ?>) (values (and target body (mcons target body)) (cdr rest))]
-                          [else #| bad PI |# (extract rest++ target body)]))]))))
+                          [else #| bad PI |# (extract-pi rest++ target body)]))]))))
 
 (define xml-syntax-extract-element : (-> (Listof XML-Datum) (Values (Option XML-Element) (Listof XML-Datum)))
   (lambda [tokens]
-    (let extract ([rest : (Listof XML-Datum) tokens])
-      (cond [(null? rest) #| unexpected EOF |# (values #false null)]
-            [else (let-values ([(?name rest++) (values (car rest) (cdr rest))])
-                    ; broken start tag should not affect its parent and sibling elements
-                    (define tagname : (Option Symbol) (and (symbol? ?name) ?name))
-                    (let-values ([(attributes empty? rest++++) (xml-syntax-extract-element-attributes rest++)])
-                      (cond [(and empty?) (values (and tagname (list tagname attributes null)) rest++++)]
-                            [else (let-values ([(children rest++++++) (xml-syntax-extract-element-children tagname rest++++)])
-                                    (values (and children tagname (list tagname attributes children))
-                                            rest++++++))])))]))))
+    (cond [(null? tokens) #| unexpected EOF |# (values #false null)]
+          [else (let-values ([(?name rest++) (values (car tokens) (cdr tokens))])
+                  ; broken start tag should not affect its parent and sibling elements
+                  (define tagname : (Option Symbol) (and (symbol? ?name) ?name))
+                  (let-values ([(attributes empty? rest++++) (xml-syntax-extract-element-attributes rest++)])
+                    (cond [(and empty?) (values (and tagname (list tagname attributes null)) rest++++)]
+                          [else (let-values ([(children rest++++++) (xml-syntax-extract-subelement tagname rest++++)])
+                                  (values (and children tagname (list tagname attributes children))
+                                          rest++++++))])))])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-syntax-extract-element-attributes : (-> (Listof XML-Datum) (Values (Listof XML-Element-Attribute) Boolean (Listof XML-Datum)))
   (lambda [tokens]
-    (let extract ([rest : (Listof XML-Datum) tokens]
-                  [setubirtta : (Listof XML-Element-Attribute) null])
+    (let extract-element-attributes ([rest : (Listof XML-Datum) tokens]
+                                     [setubirtta : (Listof XML-Element-Attribute) null])
       (cond [(null? rest) #| unexpected EOF |# (values setubirtta #false null)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(eq? self />) (values (reverse setubirtta) #true rest++)]
                           [(eq? self stag>) (values (reverse setubirtta) #false rest++)]
-                          [(not (symbol? self)) #| missing name |# (extract rest++ setubirtta)]
-                          [(or (null? rest++) (null? (cdr rest++))) #| unexpected EOF |# (extract null setubirtta)]
+                          [(not (symbol? self)) #| missing name |# (extract-element-attributes rest++ setubirtta)]
+                          [(or (null? rest++) (null? (cdr rest++))) #| unexpected EOF |# (extract-element-attributes null setubirtta)]
                           [else (let-values ([(?eq ?value rest) (values (car rest++) (cadr rest++) (cddr rest++))])
-                                  (cond [(and (eq? ?eq #\=) (xml-value-string? ?value)) (extract rest (cons (cons self ?value) setubirtta))]
-                                        [else (extract rest++ setubirtta)]))]))]))))
+                                  (cond [(and (eq? ?eq #\=) (xml-value-string? ?value)) (extract-element-attributes rest (cons (cons self ?value) setubirtta))]
+                                        [else (extract-element-attributes rest++ setubirtta)]))]))]))))
 
-(define xml-syntax-extract-element-children : (-> (Option Symbol) (Listof XML-Datum)
-                                                  (Values (Option (Listof (U XML-Element XML-Element-Plain-Children))) (Listof XML-Datum)))
+(define xml-syntax-extract-subelement : (-> (Option Symbol) (Listof XML-Datum) (Values (Option (Listof (U XML-Element XML-Subdatum))) (Listof XML-Datum)))
   (lambda [tagname tokens]
-    (let extract ([rest : (Listof XML-Datum) tokens]
-                  [nerdlidc : (Listof (U XML-Element XML-Element-Plain-Children)) null])
+    (let extract-subelement ([rest : (Listof XML-Datum) tokens]
+                             [nerdlidc : (Listof (U XML-Element XML-Subdatum)) null])
       (cond [(null? rest) #| unexpected EOF |# (values #false null)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
-                    (cond [(xml-white-space? self) (extract rest++ (cons self nerdlidc))]
+                    (cond [(xml-white-space? self) (extract-subelement rest++ (cons self nerdlidc))]
                           [(eq? self #\<)
                            (let-values ([(e r) (xml-syntax-extract-element rest++)])
-                             (extract r (if (not e) nerdlidc (cons e nerdlidc))))]
-                          [(string? self) (extract rest++ (cons self nerdlidc))]
+                             (extract-subelement r (if (not e) nerdlidc (cons e nerdlidc))))]
+                          [(string? self) (extract-subelement rest++ (cons self nerdlidc))]
                           [(eq? self </)
-                           (cond [(or (null? rest++) (null? (cdr rest++))) #| unexpected EOF |# (extract null nerdlidc)]
+                           (cond [(or (null? rest++) (null? (cdr rest++))) #| unexpected EOF |# (extract-subelement null nerdlidc)]
                                  [else (let-values ([(?name ?etag rest) (values (car rest++) (cadr rest++) (cddr rest++))])
                                          (cond [(and (symbol? ?name) (xml-etag? ?etag))
                                                 (values (and (eq? tagname ?name) (reverse nerdlidc)) rest)]
                                                [else (let ([>rest (memf xml-etag? rest++)])
-                                                       (cond [(not >rest) #| unexpected EOF |# (extract null nerdlidc)]
+                                                       (cond [(not >rest) #| unexpected EOF |# (extract-subelement null nerdlidc)]
                                                              [else #| invalid element EndTag |# (values #false (cdr >rest))]))]))])]
-                          [(or (index? self) (symbol? self)) (extract rest++ (cons self nerdlidc))]  ; entities
+                          [(or (index? self) (symbol? self)) (extract-subelement rest++ (cons self nerdlidc))]  ; entities
                           [(eq? self <?)
                            (let-values ([(p r) (xml-syntax-extract-pi rest++)])
-                             (extract r (if (not p) nerdlidc (cons p nerdlidc))))]
+                             (extract-subelement r (if (not p) nerdlidc (cons p nerdlidc))))]
                           [(eq? self <!&CDATA&)
-                           (cond [(or (null? rest++) (null? (cdr rest++))) #| unexpected EOF |# (extract null nerdlidc)]
-                                 [else (extract (cddr rest++) (cons (assert (car rest++) string?) nerdlidc))])]
-                          [else #| should not happen |# (extract rest++ nerdlidc)]))]))))
+                           (cond [(or (null? rest++) (null? (cdr rest++))) #| unexpected EOF |# (extract-subelement null nerdlidc)]
+                                 [else (extract-subelement (cddr rest++) (cons (assert (car rest++) string?) nerdlidc))])]
+                          [else #| should not happen |# (extract-subelement rest++ nerdlidc)]))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-grammar-parse-doctype : (-> XML-Declaration XML-Plain-DTD (Values (Option XML-DocType-Metadata) (Listof XML-Processing-Instruction)))
@@ -180,8 +178,8 @@
               [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                       (cond [(eq? self #\[) rest++]
                             [else (trim rest++)]))])))
-    (let extract-entity ([rest : (Listof XML-Doctype-Body) subset]
-                         [sIP : (Listof XML-Processing-Instruction) null])
+    (let extract-intsubset ([rest : (Listof XML-Doctype-Body) subset]
+                            [sIP : (Listof XML-Processing-Instruction) null])
       (cond [(null? rest) sIP]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(eq? self #\]) sIP]
@@ -189,9 +187,9 @@
                            (let ([DECL (vector-ref self 0)])
                              (case DECL
                                [(ENTITY) (xml-grammar-extract-entity declname DECL (vector-ref self 1) dtd)])
-                             (extract-entity rest++ sIP))]
-                          [(mpair? self) (extract-entity rest++ (cons self sIP))]
-                          [else (extract-entity rest++ sIP)]))]))))
+                             (extract-intsubset rest++ sIP))]
+                          [(mpair? self) (extract-intsubset rest++ (cons self sIP))]
+                          [else (extract-intsubset rest++ sIP)]))]))))
 
 (define xml-grammar-extract-entity : (-> Symbol Symbol (Listof XML-Doctype-Body) XML-Plain-DTD Void)
   (lambda [declname ENTITY body dtd]

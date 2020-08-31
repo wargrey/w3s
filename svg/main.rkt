@@ -13,4 +13,4 @@
   (provide (rename-out [xml-read-syntax read-syntax]))
   (provide (rename-out [xml-info get-info]))
   
-  (require sgml/village/xmllang/reader))
+  (require sgml/village/sgmlang/reader))

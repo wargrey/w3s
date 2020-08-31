@@ -20,8 +20,8 @@
           [(xml:&string? t) (xml-hlvalues t 'constant #false offset next-mode)]
           [(xml:string? t) (xml-hlvalues t 'string #false offset next-mode)]
           [(xml:delim? t) (xml-hlvalues t 'constant #false offset next-mode)]
-          [(xml:entity? t) (xml-hlvalues t 'constant #false offset next-mode)]
-          [(xml:keyword? t) (xml-hlvalues t 'keyword #false offset next-mode)]
+          [(xml:reference? t) (xml-hlvalues t 'constant #false offset next-mode)]
+          [(xml:pereference? t) (xml-hlvalues t 'keyword #false offset next-mode)]
           [(xml:bad? t) (xml-hlvalues t 'error #false offset next-mode)]
           [else (xml-hlvalues t 'other #false offset next-mode)])))
 

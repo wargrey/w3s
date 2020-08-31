@@ -11,7 +11,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (struct xml-dtd
   ([location : (U String Symbol)]
-   [tokens : (Listof XML-Definition*)])
+   [definitions : (Listof XML-Definition*)])
   #:transparent
   #:type-name XML-DTD)
 
