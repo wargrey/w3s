@@ -15,3 +15,5 @@
 (hash-ref (xml-type-entities ?type)
           (string->unreadable-symbol "book")
           (λ [] #false))
+
+(xml-document*-elements n:testdoc.xml)

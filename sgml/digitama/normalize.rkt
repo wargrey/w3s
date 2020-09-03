@@ -16,23 +16,29 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-normalize : (-> XML-DTD (Listof XML-DTD) (Listof XML-Content*) (Values XML-Type (Listof XML-Content*)))
   (lambda [int-dtd ext-dtds content]
-    (define dtd : XML-Type (xml-dtd-expand int-dtd ext-dtds))
-    
-    (values dtd content)))
+    (define dtype : XML-Type (xml-dtd-expand int-dtd ext-dtds))
+    (define entities : XML-Type-Entities (xml-type-entities dtype))
+
+    (let xml-content-normalize ([rest : (Listof XML-Content*) content]
+                                [clear-content : (Listof XML-Content*) null])
+      (cond [(null? rest) (values dtype (reverse clear-content))]
+            [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
+                    (cond [(list? self) (xml-content-normalize rest++ (cons (xml-element-normalize self entities) clear-content))]
+                          [else (xml-content-normalize rest++ (cons self clear-content))]))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-dtd-expand : (-> XML-DTD (Listof XML-DTD) XML-Type)
   (lambda [int-dtd ext-dtds]
-    (let expand ([rest : (Listof XML-Type-Declaration*) (xml-dtd-declarations int-dtd)]
-                 [entities : XML-Type-Entities (make-immutable-hasheq)])
+    (let expand-dtd ([rest : (Listof XML-Type-Declaration*) (xml-dtd-declarations int-dtd)]
+                     [entities : XML-Type-Entities (make-immutable-hasheq)])
       (cond [(null? rest) (xml-type entities)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml-entity? self)
-                           (cond [(not (xml-entity-value self)) (expand rest++ (xml-entity-cons self entities))]
-                                 [else (expand rest++ (xml-entity-cons (xml-dtd-expand-entity self entities) entities))])]
-                          [(xml:pereference? self) (expand (append (xml-dtd-expand-pentity self entities) rest++) entities)]
-                          [(pair? self) (expand (append (xml-dtd-expand-section (car self) (cdr self) entities) rest++) entities)]
-                          [else (expand rest++ entities)]))]))))
+                           (cond [(not (xml-entity-value self)) (expand-dtd rest++ (xml-entity-cons self entities))]
+                                 [else (expand-dtd rest++ (xml-entity-cons (xml-dtd-expand-entity self entities) entities))])]
+                          [(xml:pereference? self) (expand-dtd (append (xml-dtd-expand-pentity self entities) rest++) entities)]
+                          [(pair? self) (expand-dtd (append (xml-dtd-expand-section (car self) (cdr self) entities) rest++) entities)]
+                          [else (expand-dtd rest++ entities)]))]))))
 
 (define xml-dtd-expand-entity : (-> XML-Entity XML-Type-Entities (Option XML-Entity))
   (lambda [e entities]
@@ -63,10 +69,43 @@
           [else (make+exn:xml:unrecognized condition) null])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-entity-replacement-text : (-> String XML-Type-Entities #:GE-bypass? Boolean (Option String))
+(define xml-element-normalize : (-> XML-Element* XML-Type-Entities XML-Element*)
+  (lambda [e entities]
+    (list (car e)
+          (filter-map (λ [[name=value : (Pairof XML:Name XML:String)]]
+                        (xml-element-attribute-normalize name=value entities))
+                      (cadr e))
+          (xml-subelement-normalize (caddr e) entities))))
+
+(define xml-element-attribute-normalize : (-> (Pairof XML:Name XML:String) XML-Type-Entities (Option (Pairof XML:Name XML:String)))
+  (lambda [name=value entities]
+    (let ([value (cdr name=value)])
+      (cond [(not (xml:&string? value)) name=value]
+            [else (let ([?value (xml-entity-replacement-text (xml:string-datum value) entities #:GE-bypass? #false #:PE-unrecognize? #true)])
+                    (cond [(not ?value) (make+exn:xml:unrecognized value (car name=value)) #false]
+                          [else (cons (car name=value)
+                                      (xml-remake-token value xml:string ?value))]))]))))
+
+(define xml-subelement-normalize : (-> (Listof (U XML-Subdatum* XML-Element*)) XML-Type-Entities (Listof (U XML-Subdatum* XML-Element*)))
+  (lambda [children entities]
+    (let normalize-subelement ([rest : (Listof (U XML-Subdatum* XML-Element*)) children]
+                               [nerdlihc : (Listof (U XML-Subdatum* XML-Element*)) null])
+      (cond [(null? rest) (reverse nerdlihc)]
+            [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
+                    (cond [(list? self) (normalize-subelement rest++ (cons (xml-element-normalize self entities) nerdlihc))]
+                          [(xml:reference? self)
+                           (let ([content (xml-remake-token self xml:string (string (integer->char (xml:char-datum self))))])
+                             (normalize-subelement rest++ (cons content nerdlihc)))]
+                          [(xml:char? self)
+                           (let ([content (xml-remake-token self xml:string (string (integer->char (xml:char-datum self))))])
+                             (normalize-subelement rest++ (cons content nerdlihc)))]
+                          [else (normalize-subelement rest++ (cons self nerdlihc))]))]))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define xml-entity-replacement-text : (-> String XML-Type-Entities #:GE-bypass? Boolean [#:PE-unrecognize? Boolean] (Option String))
   ;;; https://www.w3.org/TR/xml11/#intern-replacement
   (let ([/dev/strout (open-output-string '/dev/entout)])
-    (lambda [src entities #:GE-bypass? ge-bypass?]
+    (lambda [src entities #:GE-bypass? ge-bypass? #:PE-unrecognize? [pe? #false]]
       (define size : Index (string-length src))
 
       (define okay? : (Option Void)
@@ -85,16 +124,19 @@
                                    (let-values ([(leader nchars) (values (car entity) (cdr entity))])
                                      (and (pair? nchars)
                                           (let ([estr (list->string nchars)])
-                                            (define-values (replacement bypassed?)
-                                              (cond [(eq? leader #\%) (values (xml-entity-value-ref (string->keyword estr) entities) #false)]
+                                            (define-values (replacement hintsign)
+                                              (cond [(eq? leader #\%)
+                                                     (cond [(not pe?) (values estr #\%)]
+                                                           [else (values (xml-entity-value-ref (string->keyword estr) entities)
+                                                                         #false)])]
                                                     [(eq? (car nchars) #\#) (values (xml-char-reference estr) #false)]
                                                     [(not ge-bypass?) (values (xml-entity-value-ref (string->unreadable-symbol estr) entities) #false)]
-                                                    [else (values estr #true)]))
+                                                    [else (values estr #\&)]))
 
                                             (and (string? replacement)
-                                                 (when (and bypassed?) (write-char #\& /dev/strout))
+                                                 (when (and hintsign) (write-char hintsign /dev/strout))
                                                  (write-string replacement /dev/strout)
-                                                 (when (and bypassed?) (write-char #\; /dev/strout))
+                                                 (when (and hintsign) (write-char #\; /dev/strout))
                                                  (entity-normalize idx++ null)))))))])))))
 
       (let ([?value (get-output-bytes /dev/strout #true)])

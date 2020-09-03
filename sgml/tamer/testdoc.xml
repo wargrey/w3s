@@ -41,7 +41,7 @@
 <!-- ok-comment -->
 <!-- bad comment end --->
 
-<testdoc id="t7-20020923" resp="MSM">
+<testdoc id="t7-20020923" resp="%MSM;">
 <xml-spec-example>This sample shows a &tricky; method.</xml-spec-example>
          
 <names>From Espa&ntilde;ola -- a &lsquo;test&rsquo; for you.</names>
