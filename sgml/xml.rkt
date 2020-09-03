@@ -6,7 +6,7 @@
 
 (provide (all-defined-out) SGML-StdIn XML-DTD XML-External-ID)
 (provide (struct-out XML-Document) read-xml-document)
-(provide (struct-out XML-Document*) read-xml-document*)
+(provide (struct-out XML-Document*) read-xml-document* xml-document*-normalize)
 
 (require "digitama/dtd.rkt")
 (require "digitama/doctype.rkt")

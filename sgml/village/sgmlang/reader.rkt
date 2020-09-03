@@ -45,18 +45,11 @@
              (values (car &lang.sgml) (/ (- (current-memory-use) mem0) 1024.0 1024.0) cpu real gc)))
 
          (module+ main
-           (require racket/pretty)
            (require racket/format)
            
-           (pretty-print-columns 160)
-
-           (define benchmark : String
-             (format "[~a]memory: ~aMB cpu time: ~a real time: ~a gc time: ~a"
-                     '#,lang.sgml (~r MB #:precision '(= 3)) cpu real gc))
-           
-           (define drracket? : Boolean (regexp-match? #px"DrRacket$" (find-system-path 'run-file)))
-           (if drracket? #,lang.sgml (printf "~a~n~a~n" (pretty-format #,lang.sgml) benchmark))
-           (when drracket? (displayln benchmark)))))))
+           #,lang.sgml
+           (displayln (format "[~a]memory: ~aMB cpu time: ~a real time: ~a gc time: ~a"
+                        '#,lang.sgml (~r MB #:precision '(= 3)) cpu real gc)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-read

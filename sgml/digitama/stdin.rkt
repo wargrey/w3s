@@ -88,7 +88,7 @@
     (cond [(not (regexp-try-match #px"^\\s*<[?][Xx][Mm][Ll]\\s+" /dev/xmlin)) (values 1.0 "UTF-8" #true)]
           [else (let read-property ([version : (Option Number) #false]
                                     [encoding : (Option String) #false]
-                                    [standalone? : Boolean #true])
+                                    [standalone? : Boolean #false #| https://www.w3.org/TR/xml11/#sec-rmd |#])
                   (define name=value (regexp-try-match #px"^([-a-zA-Z0-9]+)\\s*=\\s*[\"']([^\"'>]+)[\"']\\s*" /dev/xmlin))
                   (define name.value (and name=value (filter bytes? (cdr name=value))))
                   (if (not name.value)

@@ -90,8 +90,8 @@
                          [else (xml-make-token source prev-env end xml:reference datum)])]
                   [(string? datum) (xml-make-token source prev-env end xml:string datum)]
                   [(box? datum) (xml-make-token source prev-env end xml:&string (assert (unbox datum) string?))]
-                  [(index? datum) (xml-make-token source prev-env end xml:reference datum)]
+                  [(index? datum) (xml-make-token source prev-env end xml:char datum)]
                   [(keyword? datum) (xml-make-token source prev-env end xml:pereference datum)]
-                  [(eof-object? datum) eof]
-                  [else (xml-make-bad-token source prev-env end xml:bad (list->string datum))])
+                  [(list? datum) (xml-make-bad-token source prev-env end xml:bad (list->string datum))]
+                  [else eof])
             (xml-parser-env next-consume next-scope line column end))))

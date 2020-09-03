@@ -15,7 +15,7 @@
 
 (define-type XML-Processing-Instruction* (MPairof XML:Name XML:String))
 (define-type XML-Element-Attribute* (Pairof XML:Name XML:String))
-(define-type XML-Subdatum* (U XML:String XML-Processing-Instruction* XML:WhiteSpace XML:Reference))
+(define-type XML-Subdatum* (U XML:String XML-Processing-Instruction* XML:WhiteSpace XML:Char XML:Reference))
 (define-type XML-Element* (Rec elem (List XML:Name (Listof XML-Element-Attribute*) (Listof (U elem XML-Subdatum*)))))
 
 (struct xml-section
@@ -100,8 +100,6 @@
                              (extract-declaration r name (if (not d) seidob (cons d seidob))))]
                           [(xml:csec? self)
                            (let-values ([(s r) (xml-syntax-extract-section* rest++)])
-                             (when (and s)
-                               (displayln (last (xml-section-body s))))
                              (extract-declaration r name (if (not s) seidob (cons s seidob))))]
                           [(xml:pi? self)
                            (let-values ([(p r) (xml-syntax-extract-pi* rest++)])
@@ -191,7 +189,8 @@
                           [(not (xml:name? self)) (make+exn:xml:missing-name self tagname) (extract-element-attributes rest++ setubirtta)]
                           [(or (null? rest++) (null? (cdr rest++))) (make+exn:xml:eof rest tagname) (extract-element-attributes null setubirtta)]
                           [else (let-values ([(?eq ?value rest*) (values (car rest++) (cadr rest++) (cddr rest++))])
-                                  (cond [(and (xml:eq? ?eq) (xml:string? ?value)) (extract-element-attributes rest* (cons (cons self ?value) setubirtta))]
+                                  (cond [(and (xml:eq? ?eq) (xml:string? ?value))
+                                         (extract-element-attributes rest* (cons (cons self ?value) setubirtta))]
                                         [(xml:eq? ?eq) (make+exn:xml:malformed (list self ?eq ?value) tagname) (extract-element-attributes rest* setubirtta)]
                                         [(xml:name? ?value) (make+exn:xml:malformed (list self ?eq) tagname) (extract-element-attributes (cdr rest++) setubirtta)]
                                         [else (make+exn:xml:malformed (list self ?eq ?value) tagname) (extract-element-attributes rest* setubirtta)]))]))]))))
@@ -232,6 +231,7 @@
                            ;   <![CDATA[ text ]]>
                            (cond [(or (null? rest++) (null? (cdr rest++))) (make+exn:xml:eof rest tagname) (extract-subelement null nerdlidc)]
                                  [else (extract-subelement (cddr rest++) (cons (assert (car rest++) xml:string?) nerdlidc))])]
+                          [(xml:char? self) (extract-subelement rest++ (cons self nerdlidc))]
                           [else (make+exn:xml:unrecognized self tagname) (extract-subelement rest++ nerdlidc)]))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -297,3 +297,15 @@
                           [(mpair? self) (extract-intsubset rest++ (cons self snoitinifed))]
                           [(xml:delim=:=? self #\]) (reverse snoitinifed)]
                           [else (xml-grammar-throw declname self) (extract-intsubset rest++ snoitinifed)]))]))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define xml-entity-reference-exists? : (-> (Listof XML-Content*) Boolean)
+  (lambda [body]
+    (for/or ([elem (in-list body)])
+      (and (list? elem)
+           (let exists? : Boolean ([elem : XML-Element* elem])
+             (or (for/or : Boolean ([attr (in-list (cadr elem))])
+                   (xml:&string? (cdr attr)))
+                 (for/or : Boolean ([child (in-list (caddr elem))])
+                   (or (and (xml:reference? child))
+                       (and (list? child) (exists? child))))))))))

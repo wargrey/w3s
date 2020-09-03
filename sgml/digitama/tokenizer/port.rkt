@@ -23,6 +23,7 @@
 (struct xml-white-space ([raw : String]) #:type-name XML-White-Space)
 (struct xml-comment xml-white-space () #:type-name XML-Comment)
 
+(define xml-collapsed-whitespace : XML-White-Space (xml-white-space ""))
 (define xml-initial-scope : XML-Scope 'initial)
 (define xml-default-scope : XML-Scope 'dtd)
 
@@ -48,14 +49,15 @@
 (define xml-consume-token:* : XML-Token-Consumer
   (lambda [/dev/xmlin ch scope]
     ;;; Do not skip whitespace here, or the lexer will not find the right place to start an open parenthesis.
-    (cond [(char-whitespace? ch) (values (xml-consume-whitespace /dev/xmlin ch) xml-consume-token:* scope)]
-          [else (if (index? scope)
-                    (case ch
+    (if (index? scope)
+        (cond [(char-whitespace? ch) (values (xml-consume-whitespace /dev/xmlin ch) xml-consume-token:* scope)]
+              [else (case ch
                       [(#\<) (xml-consume-open-token /dev/xmlin xml-consume-token:* scope)]
                       [(#\& #\%) (values (xml-consume-reference-token /dev/xmlin ch) xml-consume-token:* scope)]
                       [(#\? #\]) (xml-consume-close-token /dev/xmlin ch xml-consume-token:* scope)] ; for PI and CDATA
-                      [else (values (xml-consume-contentchars /dev/xmlin ch) xml-consume-token:* scope)])
-                    (if (xml-name-start-char? ch)
+                      [else (values (xml-consume-contentchars /dev/xmlin ch) xml-consume-token:* scope)])])
+        (cond [(char-whitespace? ch) (xml-skip-whitespace /dev/xmlin) (values xml-collapsed-whitespace xml-consume-token:* scope)]
+              [else (if (xml-name-start-char? ch)
                         (let ([kw (xml-consume-nmtoken /dev/xmlin ch)])
                           (case kw
                             [(PUBLIC SYSTEM) (values kw xml-consume-token:* kw)]
@@ -67,7 +69,7 @@
                           [(#\' #\") (xml-consume-token:literals /dev/xmlin ch scope)]
                           [(#\? #\/ #\]) (xml-consume-close-token /dev/xmlin ch xml-consume-token:* scope)]
                           [(#\& #\%) (values (xml-consume-reference-token /dev/xmlin ch) xml-consume-token:* scope)]
-                          [else (values ch xml-consume-token:* scope)])))])))
+                          [else (values ch xml-consume-token:* scope)]))]))))
 
 (define xml-consume-token:start-condition : XML-Token-Consumer
   ;;; https://www.w3.org/TR/xml11/#sec-condition-sect
@@ -248,7 +250,6 @@
   ;;; https://www.w3.org/TR/xml11/#NT-S
   ;;; https://www.w3.org/TR/xml11/#sec-line-ends
   (lambda [/dev/xmlin leader]
-    ;; NOTE: The clients take responsibility for normalizing the End-of-Lines if required
     (let read-whitespace ([span : Nonnegative-Fixnum 0])
       (define maybe-space : (U Char EOF) (peek-char /dev/xmlin span))
       (cond [(eof-object? maybe-space) (xml-white-space (xml-read-string /dev/xmlin span leader))]
@@ -329,29 +330,20 @@
     (let consume-literal ([srahc : (Listof Char) null]
                           [ref? : Boolean #false])
       (define ch : (U EOF Char) (read-char /dev/xmlin))
-      (cond [(eq? ch quote)
-             (let ([v (list->string (reverse srahc))])
-               (if (not ref?) v (box v)))]
+      (cond [(eq? ch quote) (let ([v (list->string (reverse srahc))]) (if (not ref?) v (box v)))]
             [(eof-object? ch) (reverse srahc)]
-            [else (consume-literal (cons ch srahc)
-                                   (or ref? (eq? ch #\%) (eq? ch #\&)))]))))
+            [else (consume-literal (cons ch srahc) (or ref? (eq? ch #\%) (eq? ch #\&)))]))))
 
 (define xml-consume-attribute-value : (-> Input-Port Char (U String (Boxof String) XML-Error))
   ;;; https://www.w3.org/TR/xml11/#NT-AttValue
   (lambda [/dev/xmlin quote]
     (let consume-literal ([srahc : (Listof Char) null]
-                          [<? : Boolean #false]
                           [ref? : Boolean #false])
       (define ch : (U EOF Char) (read-char /dev/xmlin))
-      (cond [(eq? ch quote)
-             (let ([cs (reverse srahc)])
-               (cond [(and <?) cs]
-                     [(not ref?) (list->string cs)]
-                     [else (box (list->string cs))]))]
+      (cond [(eq? ch quote) (let ([v (list->string (reverse srahc))]) (if (not ref?) v (box v)))]
             [(eof-object? ch) (reverse srahc)]
-            [else (consume-literal (cons ch srahc)
-                                   (or <? (eq? ch #\<))
-                                   (or ref? (eq? ch #\&)))]))))
+            [(eq? ch #\<) (xml-consume-chars-literal /dev/xmlin quote (cons ch srahc))]
+            [else (consume-literal (cons ch srahc) (or ref? (eq? ch #\&)))]))))
 
 (define xml-consume-system-literal : (-> Input-Port Char (U String XML-Error))
   ;;; https://www.w3.org/TR/xml11/#NT-SystemLiteral

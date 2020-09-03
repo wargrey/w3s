@@ -7,6 +7,8 @@
 (require "dtd.rkt")
 (require "doctype.rkt")
 (require "grammar.rkt")
+(require "normalize.rkt")
+
 (require "digicore.rkt")
 (require "stdin.rkt")
 
@@ -17,7 +19,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (struct xml-document
   ([doctype : XML-DocType]
-   [dtd : XML-Plain-DTD]
+   [internal-dtd : XML-Plain-DTD]
    [elements : (Listof XML-Content)])
   #:transparent
   #:type-name XML-Document)
@@ -25,6 +27,7 @@
 (struct xml-document*
   ([doctype : XML-DocType]
    [internal-dtd : XML-DTD]
+   [type : (Option XML-Type)]
    [elements : (Listof XML-Content*)])
   #:transparent
   #:type-name XML-Document*)
@@ -62,7 +65,12 @@
 
     (xml-document* (xml-doctype source version encoding standalone? name external)
                    (xml-make-definition source doctype-name definitions)
-                   grammars)))
+                   #false grammars)))
+
+(define xml-document*-normalize : (->* (XML-Document*) ((Listof XML-DTD)) XML-Document*)
+  (lambda [doc [external-dtds null]]
+    (let-values ([(type contents) (xml-normalize (xml-document*-internal-dtd doc) external-dtds (xml-document*-elements doc))])
+      (xml-document* (xml-document*-doctype doc) (xml-document*-internal-dtd doc) type contents))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define read-xml-document*->document : (-> XML-Document* XML-Document)
@@ -90,6 +98,7 @@
                        [(xml:string? child) (xml:string-datum child)]
                        [(xml:whitespace? child) (xml-white-space (xml:whitespace-datum child))]
                        [(xml:reference? child) (xml:reference-datum child)]
+                       [(xml:char? child) (xml:char-datum child)]
                        [else (xml-pi->datum child)]))
                (caddr e)))))
 

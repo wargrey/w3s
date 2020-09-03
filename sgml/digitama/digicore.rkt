@@ -193,7 +193,8 @@
   (define-symbolic-tokens xml-symbolic-token #:+ XML-Symbolic-Token
     [xml:delim          #:+ XML:Delim           #:as (U Symbol Char)]
     [xml:name           #:+ XML:Name            #:as Symbol]
-    [xml:reference      #:+ XML:Reference       #:as (U Symbol Index)]
+    [xml:char           #:+ XML:Char            #:as Index]
+    [xml:reference      #:+ XML:Reference       #:as Symbol]
     [xml:pereference    #:+ XML:PEReference     #:as Keyword]
     [xml:string         #:+ XML:String          #:as String]
     [xml:whitespace     #:+ XML:WhiteSpace      #:as String]))
@@ -219,6 +220,7 @@
     [(_ here-token make-xml:token datum ...)
      #'(xml-remake-token [here-token here-token] make-xml:token datum ...)]))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-token->syntax : (-> XML-Token Syntax)
   (lambda [instance]
     (datum->syntax #false (xml-token->datum instance)

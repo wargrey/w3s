@@ -2,6 +2,7 @@
 
 (provide (all-defined-out))
 (provide (struct-out XML-DTD) read-xml-type-definition)
+(provide (struct-out XML-Type))
 
 (require "digitama/dtd.rkt")
 
