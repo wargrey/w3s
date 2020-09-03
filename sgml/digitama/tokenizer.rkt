@@ -63,6 +63,7 @@
     (define-values (datum next-consume next-scope)
       (xml-consume-token /dev/xmlin (xml-parser-env-consume prev-env) (xml-parser-env-scope prev-env)))
     (define-values (line column end) (port-next-location /dev/xmlin))
+    (define env++ : XML-Parser-ENV (xml-parser-env next-consume next-scope line column end))
 
     (values (cond [(xml-white-space? datum)
                    (if (xml-comment? datum)
@@ -94,4 +95,4 @@
                   [(keyword? datum) (xml-make-token source prev-env end xml:pereference datum)]
                   [(list? datum) (xml-make-bad-token source prev-env end xml:bad (list->string datum))]
                   [else eof])
-            (xml-parser-env next-consume next-scope line column end))))
+            env++)))

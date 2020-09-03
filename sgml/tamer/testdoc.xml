@@ -12,9 +12,23 @@
 <!ENTITY townname "Espa&ntilde;ola">
 <!ENTITY townnum "Espa&#241;ola">
 <!ENTITY scarequote1 "a &lsquo;test&rsquo; for you">
-
-<![INCLUDE[
 <!ENTITY scarequote2 "a &#x2018;test&#x2019; for you">
+
+<!ENTITY % xml-spec-replacement-text 'INCLUDE' >
+<!ENTITY % xml-spec-expansion 'INCLUDE' >
+
+<![%xml-spec-replacement-text;[
+<!ENTITY % pub    "&#xc9;ditions Gallimard" >
+<!ENTITY   rights "All rights reserved" >
+<!ENTITY   book   "La Peste: Albert Camus,
+&#xA9; 1947 %pub;. &rights;" >
+]]>
+
+<![%xml-spec-expansion;[
+<!ELEMENT xml-spec-example (#PCDATA) >
+<!ENTITY % xx '&#37;zz;'>
+<!ENTITY % zz '&#60;!ENTITY tricky "error-prone" >' >
+%xx;
 ]]>
 
 <!--ENTITY xxe SYSTEM "/etc/passwd" -->
@@ -28,6 +42,8 @@
 <!-- bad comment end --->
 
 <testdoc id="t7-20020923" resp="MSM">
+<xml-spec-example>This sample shows a &tricky; method.</xml-spec-example>
+         
 <names>From Espa&ntilde;ola -- a &lsquo;test&rsquo; for you.</names>
 <nums>From Espa&#241;ola -- a &#x2018;test&#x2019; for you.</nums>
 <names>From &townname; -- &scarequote1;.</names>

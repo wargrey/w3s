@@ -30,6 +30,8 @@
                     (cond [(xml-entity? self)
                            (cond [(not (xml-entity-value self)) (expand rest++ (xml-entity-cons self entities))]
                                  [else (expand rest++ (xml-entity-cons (xml-dtd-expand-entity self entities) entities))])]
+                          [(xml:pereference? self) (expand (append (xml-dtd-expand-pentity self entities) rest++) entities)]
+                          [(pair? self) (expand (append (xml-dtd-expand-section (car self) (cdr self) entities) rest++) entities)]
                           [else (expand rest++ entities)]))]))))
 
 (define xml-dtd-expand-entity : (-> XML-Entity XML-Type-Entities (Option XML-Entity))
@@ -37,17 +39,34 @@
     (define ?value (xml-entity-value e))
     
     (cond [(not (xml:&string? ?value)) e]
-          [else (let ([plain-value (xml-entity-replacement-text (xml-entity-value e) entities #:GE-bypass? #true)])
+          [else (let ([plain-value (xml-entity-replacement-text (xml:string-datum (xml-entity-value e)) entities #:GE-bypass? #true)])
                   (cond [(not plain-value) (make+exn:xml:unrecognized ?value (xml-entity-name e)) #false]
                         [else (struct-copy xml-entity e
                                            [value (xml-remake-token ?value xml:string plain-value)])]))])))
 
+(define xml-dtd-expand-pentity : (-> XML:PEReference XML-Type-Entities (Listof XML-Type-Declaration*))
+  (lambda [pe entities]
+    (define plain-value : (Option String) (xml-pentity-value-ref pe entities #true))
+
+    (cond [(not plain-value) (make+exn:xml:unrecognized pe) null]
+          [else (let ([pe-body (read-xml-type-definition plain-value)])
+                  (xml-dtd-declarations pe-body))])))
+
+(define xml-dtd-expand-section : (-> (U XML:Name XML:PEReference) (Listof XML-Type-Declaration*) XML-Type-Entities (Listof XML-Type-Declaration*))
+  (lambda [condition body entities]
+    (define sec-name : (U False Symbol String)
+      (cond [(xml:name? condition) (xml:name-datum condition)]
+            [else (xml-pentity-value-ref condition entities #false)]))
+
+    (cond [(or (eq? sec-name 'INCLUDE) (equal? sec-name "INCLUDE")) body]
+          [(or (eq? sec-name 'IGNORE) (equal? sec-name "IGNORE")) null]
+          [else (make+exn:xml:unrecognized condition) null])))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-entity-replacement-text : (-> XML:&String XML-Type-Entities #:GE-bypass? Boolean (Option String))
+(define xml-entity-replacement-text : (-> String XML-Type-Entities #:GE-bypass? Boolean (Option String))
   ;;; https://www.w3.org/TR/xml11/#intern-replacement
   (let ([/dev/strout (open-output-string '/dev/entout)])
-    (lambda [ev entities #:GE-bypass? ge-bypass?]
-      (define src : String (xml:string-datum ev))
+    (lambda [src entities #:GE-bypass? ge-bypass?]
       (define size : Index (string-length src))
 
       (define okay? : (Option Void)
@@ -101,6 +120,21 @@
     (and (index? ?codepoint)
          (string (integer->char ?codepoint)))))
 
+(define xml-entity-value-token-ref : (-> (U Symbol Keyword) XML-Type-Entities (Option XML:String))
+  (lambda [name entities]
+    (let ([e (hash-ref entities name (λ [] #false))])
+      (and e
+           (let ([?xstr (xml-entity-value e)])
+             (and ?xstr ?xstr))))))
+
+(define xml-pentity-value-ref : (-> XML:PEReference XML-Type-Entities Boolean (Option String))
+  (lambda [pe entities ge-bypass?]
+    (define vtoken : (Option XML:String) (xml-entity-value-token-ref (xml:pereference-datum pe) entities))
+
+    (cond [(xml:&string? vtoken) (xml-entity-replacement-text (xml:string-datum vtoken) entities #:GE-bypass? ge-bypass?)]
+          [(xml:string? vtoken) (xml:string-datum vtoken)]
+          [else #false])))
+
 (define xml-entity-value-ref : (-> (U Symbol Keyword) XML-Type-Entities (Option String))
   (lambda [name entities]
     (case name
@@ -109,8 +143,6 @@
       [(amp) "\x26\x26"]
       [(apos) "\x27"]
       [(quot) "\x22"]
-      [else (let ([e (hash-ref entities name (λ [] #false))])
-              (and e
-                   (let ([?xstr (xml-entity-value e)])
-                     (and ?xstr
-                          (xml:string-datum ?xstr)))))])))
+      [else (let ([?xstr (xml-entity-value-token-ref name entities)])
+              (and ?xstr
+                   (xml:string-datum ?xstr)))])))
