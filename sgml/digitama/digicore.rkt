@@ -232,12 +232,17 @@
     (cond [(xml:name? instance) (symbol->string (xml:name-datum instance))]
           [(xml:string? instance) (~s (xml:string-datum instance))]
           [else (~a (xml-token->datum instance))])))
+
+(define xml-token-location-string : (-> XML-Token String)
+  (lambda [instance]
+    (format "~a:~a:~a" (xml-token-source instance) (xml-token-line instance) (add1 (xml-token-column instance)))))
   
 (define xml-token->string : (->* (XML-Token) ((Option Any) (Option Any)) String)
   (lambda [instance [alt-object #false] [alt-datum #false]]
-    (format "~a:~a:~a: ~a: ~a" (xml-token-source instance) (xml-token-line instance) (add1 (xml-token-column instance))
-            (or (object-name alt-object) (object-name instance))
-            (or alt-datum (xml-token-datum->string instance)))))
+    (string-append (xml-token-location-string instance) ": "
+                   (format "~a: ~a"
+                     (or (object-name alt-object) (object-name instance))
+                     (or alt-datum (xml-token-datum->string instance))))))
 
 (define xml-make-syntax-error : (-> (-> String Continuation-Mark-Set (Listof Syntax) XML-Syntax-Error)
                                     (U XML-Syntax-Any (Listof XML-Token))

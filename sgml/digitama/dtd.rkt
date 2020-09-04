@@ -38,9 +38,9 @@
   #:type-name XML-Type)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define read-xml-type-definition : (-> SGML-StdIn XML-DTD)
-  (lambda [/dev/rawin]
-    (define /dev/dtdin : Input-Port (dtd-open-input-port /dev/rawin #true))
+(define read-xml-type-definition : (->* (SGML-StdIn) ((U False String Symbol)) XML-DTD)
+  (lambda [/dev/rawin [port-name #false]]
+    (define /dev/dtdin : Input-Port (dtd-open-input-port /dev/rawin #true port-name))
     (define source : (U Symbol String) (sgml-port-name /dev/dtdin))
     (define tokens : (Listof XML-Token) (read-xml-tokens* /dev/dtdin source))
     (define definitions : (Listof XML-Definition*) (xml-syntax->definition* tokens))

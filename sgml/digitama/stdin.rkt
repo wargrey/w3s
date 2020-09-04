@@ -55,15 +55,15 @@
                             /dev/xmlin)])
               version encoding standalone?))))
 
-(define dtd-open-input-port : (->* (SGML-StdIn) (Boolean) Input-Port)
-  (lambda [/dev/stdin [enable-line-counting? #false]]
+(define dtd-open-input-port : (->* (SGML-StdIn) (Boolean (U String Symbol False)) Input-Port)
+  (lambda [/dev/stdin [enable-line-counting? #false] [port-name #false]]
     (define /dev/dtdin : Input-Port
       (cond [(port? /dev/stdin) /dev/stdin]
             [(path? /dev/stdin) (open-input-file /dev/stdin)]
             [(regexp-match? #px"\\.dtd$" /dev/stdin) (open-input-file (~a /dev/stdin))]
-            [(string? /dev/stdin) (open-input-string /dev/stdin '/dev/dtdin/string)]
-            [(bytes? /dev/stdin) (open-input-bytes /dev/stdin '/dev/dtdin/bytes)]
-            [else (open-input-string (~s /dev/stdin) '/dev/dtdin/error)]))
+            [(string? /dev/stdin) (open-input-string /dev/stdin (or port-name '/dev/dtdin/string))]
+            [(bytes? /dev/stdin) (open-input-bytes /dev/stdin (or port-name '/dev/dtdin/bytes))]
+            [else (open-input-string (~s /dev/stdin) (or port-name '/dev/dtdin/error))]))
 
     (when (and enable-line-counting? (not (port-counts-lines? /dev/dtdin)))
       (port-count-lines! /dev/dtdin))

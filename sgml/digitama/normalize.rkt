@@ -4,10 +4,15 @@
 
 (require typed/racket/unsafe)
 
+(require racket/symbol)
+
 (require "grammar.rkt")
 (require "dtd.rkt")
 
 (require "digicore.rkt")
+(require "tokenizer.rkt")
+(require "prentity.rkt")
+(require "stdin.rkt")
 
 (unsafe-require/typed
  racket/unsafe/ops
@@ -23,7 +28,7 @@
                                 [clear-content : (Listof XML-Content*) null])
       (cond [(null? rest) (values dtype (reverse clear-content))]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
-                    (cond [(list? self) (xml-content-normalize rest++ (cons (xml-element-normalize self entities) clear-content))]
+                    (cond [(list? self) (xml-content-normalize rest++ (cons (xml-element-normalize self entities 0) clear-content))]
                           [else (xml-content-normalize rest++ (cons self clear-content))]))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -35,47 +40,74 @@
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml-entity? self)
                            (cond [(not (xml-entity-value self)) (expand-dtd rest++ (xml-entity-cons self entities))]
-                                 [else (expand-dtd rest++ (xml-entity-cons (xml-dtd-expand-entity self entities) entities))])]
-                          [(xml:pereference? self) (expand-dtd (append (xml-dtd-expand-pentity self entities) rest++) entities)]
+                                 [else (expand-dtd rest++ (xml-entity-cons (xml-dtd-included-as-literal self entities #:GE-bypass? #true) entities))])]
+                          [(xml:pereference? self) (expand-dtd (append (xml-dtd-included-as-PE self entities) rest++) entities)]
                           [(pair? self) (expand-dtd (append (xml-dtd-expand-section (car self) (cdr self) entities) rest++) entities)]
                           [else (expand-dtd rest++ entities)]))]))))
-
-(define xml-dtd-expand-entity : (-> XML-Entity XML-Type-Entities (Option XML-Entity))
-  (lambda [e entities]
-    (define ?value (xml-entity-value e))
-    
-    (cond [(not (xml:&string? ?value)) e]
-          [else (let ([plain-value (xml-entity-replacement-text (xml:string-datum (xml-entity-value e)) entities #:GE-bypass? #true)])
-                  (cond [(not plain-value) (make+exn:xml:unrecognized ?value (xml-entity-name e)) #false]
-                        [else (struct-copy xml-entity e
-                                           [value (xml-remake-token ?value xml:string plain-value)])]))])))
-
-(define xml-dtd-expand-pentity : (-> XML:PEReference XML-Type-Entities (Listof XML-Type-Declaration*))
-  (lambda [pe entities]
-    (define plain-value : (Option String) (xml-pentity-value-ref pe entities #true))
-
-    (cond [(not plain-value) (make+exn:xml:unrecognized pe) null]
-          [else (let ([pe-body (read-xml-type-definition plain-value)])
-                  (xml-dtd-declarations pe-body))])))
 
 (define xml-dtd-expand-section : (-> (U XML:Name XML:PEReference) (Listof XML-Type-Declaration*) XML-Type-Entities (Listof XML-Type-Declaration*))
   (lambda [condition body entities]
     (define sec-name : (U False Symbol String)
       (cond [(xml:name? condition) (xml:name-datum condition)]
-            [else (xml-pentity-value-ref condition entities #false)]))
+            [else (xml-pentity-value-ref condition entities)]))
 
     (cond [(or (eq? sec-name 'INCLUDE) (equal? sec-name "INCLUDE")) body]
           [(or (eq? sec-name 'IGNORE) (equal? sec-name "IGNORE")) null]
           [else (make+exn:xml:unrecognized condition) null])))
 
+(define xml-dtd-included-as-literal : (-> XML-Entity XML-Type-Entities #:GE-bypass? Boolean (Option XML-Entity))
+  ;;; https://www.w3.org/TR/xml11/#inliteral
+  ;;; https://www.w3.org/TR/xml11/#bypass
+  (lambda [e entities #:GE-bypass? ge-bypass?]
+    (define ?value (xml-entity-value e))
+    
+    (cond [(not (xml:&string? ?value)) e]
+          [else (let ([plain-value (xml-entity-replacement-text (xml:string-datum (xml-entity-value e)) entities #:GE-bypass? ge-bypass?)])
+                  (cond [(not plain-value) (make+exn:xml:unrecognized ?value (xml-entity-name e)) #false]
+                        [else (struct-copy xml-entity e
+                                           [value (xml-remake-token ?value xml:string plain-value)])]))])))
+
+(define xml-dtd-included-as-PE : (-> XML:PEReference XML-Type-Entities (Listof XML-Type-Declaration*))
+  ;;; https://www.w3.org/TR/xml11/#as-PE
+  (lambda [pe entities]
+    (define vtoken : (Option XML:String) (xml-pentity-value-token-ref pe entities))
+
+    ;;; NOTE
+    ; the `plain-value` is not surrounded by spaces since the source has already been tokenized, and
+    ; the spaces would be inserted when writing the document object into a file.
+    
+    (cond [(not vtoken) (make+exn:xml:unrecognized pe) null]
+          [else (let ([pe-body (read-xml-type-definition (xml:string-datum vtoken) (xml-token-location-string vtoken))])
+                  (xml-dtd-declarations pe-body))])))
+
+(define xml-dtd-included : (-> XML:Name XML:Reference XML-Type-Entities Index (Listof (U XML-Subdatum* XML-Element*)))
+  ;;; https://www.w3.org/TR/xml11/#included
+  (lambda [tagname e entities depth]
+    (define name : Symbol (xml:reference-datum e))
+    (define prentity-value : (Option String) (xml-prentity-value-ref name))
+
+    (cond [(and prentity-value) (list (xml-remake-token e xml:string prentity-value))]
+          [else (let ([tv (xml-entity-value-token-ref name entities)])
+                  (cond [(not tv) (make+exn:xml:unrecognized e) null]
+                        [else (let*-values ([(tag-name) (symbol->immutable-string (xml:name-datum tagname))]
+                                            [(source) (xml-token-location-string tv)]
+                                            [(/dev/subin) (dtd-open-input-port (string-append (xml:string-datum tv) "</" tag-name ">") #true source)]
+                                            [(tokens) (read-xml-content-tokens* /dev/subin source depth)]
+                                            [(children rest) (xml-syntax-extract-subelement* tagname tokens)])
+                                (cond [(and children (null? rest)) children]
+                                      [else (make+exn:xml:malformed e tagname) null]))]))])))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-element-normalize : (-> XML-Element* XML-Type-Entities XML-Element*)
-  (lambda [e entities]
-    (list (car e)
+(define xml-element-normalize : (-> XML-Element* XML-Type-Entities Index XML-Element*)
+  (lambda [e entities depth]
+    (define tagname : XML:Name (car e))
+    
+    (list tagname
           (filter-map (λ [[name=value : (Pairof XML:Name XML:String)]]
                         (xml-element-attribute-normalize name=value entities))
                       (cadr e))
-          (xml-subelement-normalize (caddr e) entities))))
+          (xml-subelement-normalize tagname (caddr e) entities
+                                    (assert (+ depth 1) index?)))))
 
 (define xml-element-attribute-normalize : (-> (Pairof XML:Name XML:String) XML-Type-Entities (Option (Pairof XML:Name XML:String)))
   (lambda [name=value entities]
@@ -86,16 +118,14 @@
                           [else (cons (car name=value)
                                       (xml-remake-token value xml:string ?value))]))]))))
 
-(define xml-subelement-normalize : (-> (Listof (U XML-Subdatum* XML-Element*)) XML-Type-Entities (Listof (U XML-Subdatum* XML-Element*)))
-  (lambda [children entities]
+(define xml-subelement-normalize : (-> XML:Name (Listof (U XML-Subdatum* XML-Element*)) XML-Type-Entities Index (Listof (U XML-Subdatum* XML-Element*)))
+  (lambda [tagname children entities depth]
     (let normalize-subelement ([rest : (Listof (U XML-Subdatum* XML-Element*)) children]
                                [nerdlihc : (Listof (U XML-Subdatum* XML-Element*)) null])
       (cond [(null? rest) (reverse nerdlihc)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
-                    (cond [(list? self) (normalize-subelement rest++ (cons (xml-element-normalize self entities) nerdlihc))]
-                          [(xml:reference? self)
-                           (let ([content (xml-remake-token self xml:string (string (integer->char (xml:char-datum self))))])
-                             (normalize-subelement rest++ (cons content nerdlihc)))]
+                    (cond [(list? self) (normalize-subelement rest++ (cons (xml-element-normalize self entities depth) nerdlihc))]
+                          [(xml:reference? self) (normalize-subelement (append (xml-dtd-included tagname self entities depth) rest++) nerdlihc)]
                           [(xml:char? self)
                            (let ([content (xml-remake-token self xml:string (string (integer->char (xml:char-datum self))))])
                              (normalize-subelement rest++ (cons content nerdlihc)))]
@@ -166,25 +196,37 @@
   (lambda [name entities]
     (let ([e (hash-ref entities name (λ [] #false))])
       (and e
-           (let ([?xstr (xml-entity-value e)])
-             (and ?xstr ?xstr))))))
+           (let ([?vtoken (xml-entity-value e)])
+             (and ?vtoken ?vtoken))))))
 
-(define xml-pentity-value-ref : (-> XML:PEReference XML-Type-Entities Boolean (Option String))
-  (lambda [pe entities ge-bypass?]
-    (define vtoken : (Option XML:String) (xml-entity-value-token-ref (xml:pereference-datum pe) entities))
+(define xml-pentity-value-token-ref : (-> XML:PEReference XML-Type-Entities (Option XML:String))
+  (lambda [pe entities]
+    (define ?vtoken : (Option XML:String) (xml-entity-value-token-ref (xml:pereference-datum pe) entities))
 
-    (cond [(xml:&string? vtoken) (xml-entity-replacement-text (xml:string-datum vtoken) entities #:GE-bypass? ge-bypass?)]
-          [(xml:string? vtoken) (xml:string-datum vtoken)]
+    (cond [(xml:&string? ?vtoken)
+           (let ([?str (xml-entity-replacement-text (xml:string-datum ?vtoken) entities #:GE-bypass? #true)])
+             (and ?str (xml-remake-token ?vtoken xml:string ?str)))]
+          [(xml:string? ?vtoken) ?vtoken]
+          [else #false])))
+
+(define xml-pentity-value-ref : (-> XML:PEReference XML-Type-Entities (Option String))
+  (lambda [pe entities]
+    (define ?vtoken : (Option XML:String) (xml-pentity-value-token-ref pe entities))
+
+    (and ?vtoken (xml:string-datum ?vtoken))))
+
+(define xml-prentity-value-ref : (-> Symbol (Option String))
+  ;;; https://www.w3.org/TR/xml11/#sec-predefined-ent
+  (lambda [name]
+    (cond [(eq? name &lt) "\x3c"]
+          [(eq? name &gt) "\x3e"]
+          [(eq? name &amp) "\x26"]
+          [(eq? name &apos) "\x27"]
+          [(eq? name &quot) "\x22"]
           [else #false])))
 
 (define xml-entity-value-ref : (-> (U Symbol Keyword) XML-Type-Entities (Option String))
   (lambda [name entities]
-    (case name
-      [(lt) "\x26\x3c"]
-      [(gt) "\x3e"]
-      [(amp) "\x26\x26"]
-      [(apos) "\x27"]
-      [(quot) "\x22"]
-      [else (let ([?xstr (xml-entity-value-token-ref name entities)])
-              (and ?xstr
-                   (xml:string-datum ?xstr)))])))
+    (or (and (symbol? name) (xml-prentity-value-ref name))
+        (let ([?xstr (xml-entity-value-token-ref name entities)])
+          (and ?xstr (xml:string-datum ?xstr))))))

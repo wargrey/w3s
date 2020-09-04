@@ -1,0 +1,31 @@
+#lang sgml/xml
+
+<?xml version="1.0"?>
+
+<!DOCTYPE normalize [
+<!ENTITY % xml-spec-replacement-text 'INCLUDE' >
+<!ENTITY % xml-spec-expansion 'INCLUDE' >
+
+<![%xml-spec-replacement-text;[
+<!ENTITY % pub    "&#xc9;ditions Gallimard" >
+<!ENTITY   rights "All rights reserved" >
+<!ENTITY   book   "La Peste: Albert Camus,
+&#xA9; 1947 %pub;. &rights;" >
+
+<!ENTITY example "<p>An ampersand (&#38;#38;) may be escaped
+numerically (&#38;#38;#38;) or with a general entity
+(&amp;amp;).</p>" >
+]]>
+
+<![%xml-spec-expansion;[
+<!ELEMENT xml-spec-example (#PCDATA) >
+<!ENTITY % xx '&#37;zz;'>
+<!ENTITY % zz '&#60;!ENTITY tricky "error-prone@AT&amp;T;" >' >
+%xx;
+]]>
+]>
+
+<normalize id="%expansion;">
+           <testcase>This sample shows a &tricky; method.</testcase>
+           &example;
+</normalize>
