@@ -210,7 +210,7 @@
   ;;; https://drafts.csswg.org/css-syntax/#consume-simple-block
   (lambda [css open close-char]
     (define-values (components close end-token) (css-consume-block-body css open close-char))
-    (css-remake-token [open end-token] css:block (css:delim-datum open) components #false)))
+    (w3s-remake-token [open end-token] css:block (css:delim-datum open) components #false)))
 
 (define css-consume-function : (-> Input-Port CSS:Function (U CSS:Function CSS:URL))
   ;;; https://drafts.csswg.org/css-syntax/#consume-a-function
@@ -223,12 +223,12 @@
                              [(fnorm) (css:function-norm func)])
                   (if (eq? fnorm 'url)
                       (let-values ([(href modifiers) (css-car components)])
-                        (css-remake-token func css:url
+                        (w3s-remake-token func css:url
                                           (if (css:string? href) (css:string-datum href) "")
                                           (css-url-modifiers-filter func modifiers)
                                           #false))
                       (let ([freadable (string->symbol (symbol->string fname))])
-                        (css-remake-token [func end-token] css:function freadable fnorm
+                        (w3s-remake-token [func end-token] css:function freadable fnorm
                                           (cond [(eq? fnorm 'var) components] ; whitespaces are meaningful in var() 
                                                 [else (filter-not css:whitespace? components)])
                                           #false))))])))
@@ -420,7 +420,7 @@
           [(css:slash? ?/)
            (define width : (Option Positive-Integer) (css:integer=<-? value exact-positive-integer?))
            (define height : (Option Positive-Integer) (css:integer=<-? ?int exact-positive-integer?))
-           (values (cond [(and width height (css-token? ?int)) (css-remake-token [value ?int] css:ratio (/ width height))]
+           (values (cond [(and width height (css-token? ?int)) (w3s-remake-token [value ?int] css:ratio (/ width height))]
                          [(css-number? value) (throw-exn:css:range value)]
                          [(css-number? ?int) (throw-exn:css:range ?int)]
                          [else (throw-exn:css:type (filter css-token? (list value ?/ ?int)))])

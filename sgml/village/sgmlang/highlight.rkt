@@ -29,8 +29,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-hlvalues
   (lambda [t type subtype offset mode]
-    (define spos (xml-token-start t))
-    (define epos (xml-token-end t))
+    (define spos (w3s-token-start t))
+    (define epos (w3s-token-end t))
     
     (values "" type subtype spos epos
             

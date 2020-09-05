@@ -48,4 +48,4 @@
 
 (define css-hlvalues ;: (-> CSS-Token Symbol (Option Symbol) Any (Values String Symbol (Option Symbol) (Option Integer) (Option Integer) Natural Any))
   (lambda [t type subtype mode]
-    (values "" type subtype (css-token-start t) (css-token-end t) 0 (not mode))))
+    (values "" type subtype (w3s-token-start t) (w3s-token-end t) 0 (not mode))))

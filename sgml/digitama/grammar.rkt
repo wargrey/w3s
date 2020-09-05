@@ -168,7 +168,7 @@
                           [else (make+exn:xml:missing-name ?name) #false]))
                   (let-values ([(attributes empty? rest++++) (xml-syntax-extract-element-attributes* tagname rest++)])
                     (cond [(and empty?) (values (and tagname (list tagname attributes null)) rest++++)]
-                          [else (let-values ([(children rest++++++) (xml-syntax-extract-subelement* tagname rest++++)])
+                          [else (let-values ([(children rest++++++) (xml-syntax-extract-subelement* tagname rest++++ #false)])
                                   (values (and children tagname (list tagname attributes children))
                                           rest++++++))])))])))
 
@@ -195,12 +195,14 @@
                                         [(xml:name? ?value) (make+exn:xml:malformed (list self ?eq) tagname) (extract-element-attributes (cdr rest++) setubirtta)]
                                         [else (make+exn:xml:malformed (list self ?eq ?value) tagname) (extract-element-attributes rest* setubirtta)]))]))]))))
 
-(define xml-syntax-extract-subelement* : (-> (Option XML:Name) (Listof XML-Token) (Values (Option (Listof (U XML-Element* XML-Subdatum*))) (Listof XML-Token)))
+(define xml-syntax-extract-subelement* : (-> (Option XML:Name) (Listof XML-Token) Boolean (Values (Option (Listof (U XML-Element* XML-Subdatum*))) (Listof XML-Token)))
   ;;; https://www.w3.org/TR/xml11/#NT-content
-  (lambda [tagname tokens]
+  (lambda [tagname tokens body-only?]
     (let extract-subelement ([rest : (Listof XML-Token) tokens]
                              [nerdlidc : (Listof (U XML-Element* XML-Subdatum*)) null])
-      (cond [(null? rest) (make+exn:xml:eof eof tagname) (values #false null)]
+      (cond [(null? rest)
+             (cond [(not body-only?) (make+exn:xml:eof eof tagname) (values #false null)]
+                   [else #| end expanding general entity |# (values (reverse nerdlidc) null)])]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml:whitespace? self) (extract-subelement rest++ (cons self nerdlidc))]
                           [(xml:stag? self)

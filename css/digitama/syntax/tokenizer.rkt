@@ -16,6 +16,7 @@
  racket/base ; the line is gauranteed to count, hence the explicitly requiring.
  [port-next-location (-> Port (Values Positive-Integer Natural Positive-Integer))])
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (struct css-srcloc
   ([in : Input-Port]
    [source : (U String Symbol)]
@@ -38,6 +39,7 @@
          (css-log-read-error (css-token->string bad))
          bad)]))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define css-consume-token : (-> Input-Port (U String Symbol) (U EOF CSS-Token))
   ;;; https://drafts.csswg.org/css-syntax/#error-handling
   ;;; https://drafts.csswg.org/css-syntax/#consume-a-token
@@ -124,7 +126,7 @@
     (define /dev/cssin : Input-Port (css-srcloc-in srcloc))
     (if (css-valid-escape? #\\ (peek-char /dev/cssin 1))
         (css-consume-ident-token srcloc (css-consume-escaped-char /dev/cssin))
-        (css-remake-token (css-make-bad-token srcloc css:bad:char struct:css:delim #\\) css:delim #\\))))
+        (w3s-remake-token (css-make-bad-token srcloc css:bad:char struct:css:delim #\\) css:delim #\\))))
 
 (define css-consume-string-token : (-> CSS-Srcloc Char (U CSS:String CSS:Bad))
   ;;; https://drafts.csswg.org/css-syntax/#consume-a-string-token

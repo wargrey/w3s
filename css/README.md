@@ -1,4 +1,4 @@
-# A CSS Engine written in Typed Racket
+# CSS: An Engine Written in Typed Racket
 
 wargrey
 

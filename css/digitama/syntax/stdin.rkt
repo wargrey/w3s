@@ -16,6 +16,7 @@
  [[read-byte-or-special css-read-syntax] (->* (Input-Port) (U CSS-Token EOF))]
  [[peek-byte-or-special css-peek-syntax] (->* (Input-Port Natural) (U CSS-Token EOF))])
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type CSS-StdIn (U Input-Port Path-String Bytes (Listof CSS-Token)))
 
 (define css-open-input-port : (-> CSS-StdIn Input-Port)
@@ -24,7 +25,7 @@
     (if (list? /dev/stdin)
         (let ([total : Index (length /dev/stdin)]
               [cursor : Integer 0])
-          (make-input-port (if (pair? /dev/stdin) (css-token-source (car /dev/stdin)) '/dev/cssin/null)
+          (make-input-port (if (pair? /dev/stdin) (w3s-token-source (car /dev/stdin)) '/dev/cssin/null)
                            (λ [[buf : Bytes]]
                              (λ _ (cond [(>= cursor total) eof]
                                         [(set! cursor (add1 cursor))

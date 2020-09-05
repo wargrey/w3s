@@ -1,11 +1,12 @@
 #lang typed/racket/base
 
 (provide (all-from-out racket/flonum racket/fixnum racket/bool racket/list racket/format))
+(provide (struct-out W3S-Token) w3s-remake-token)
 (provide (except-out (all-defined-out)
                      css-make-syntax-error css-tee-computed-value css-ref-raw
                      define-tokens define-token define-token-interface
                      define-symbolic-tokens define-numeric-tokens
-                     define-prefab-keyword define-syntax-error))
+                     define-prefab-keyword))
 
 (require racket/fixnum)
 (require racket/flonum)
@@ -15,6 +16,7 @@
 (require racket/match)
 
 (require "misc.rkt")
+(require "w3s.rkt")
 
 (require (for-syntax racket/base))
 (require (for-syntax racket/string))
@@ -211,7 +213,7 @@
   
 (define-syntax (define-tokens stx)
   (syntax-case stx []
-    [(_ token #:+ Token header
+    [(_ token header #:+ Token
         [[ptoken #:+ PToken #:-> pparent pfields] ...]
         [[ctoken #:+ CToken #:-> cparent] ...]
         (define-typical-tokens group #:+ Group rest ...) ...)
@@ -227,10 +229,10 @@
                                [<Type> (in-list (syntax->list #'(Group ...)))]
                                #:when (eq? (syntax-e <define>) 'define-symbolic-tokens))
                       (format-id <Type> "~a-Datum" (syntax-e <Type>)))])
-       #'(begin (struct token header #:transparent) (define-type Token token)
-                (struct ptoken pparent pfields #:transparent) ...  (define-type PToken ptoken) ...
+       #'(begin (struct token header () #:transparent #:type-name Token)
+                (struct ptoken pparent pfields #:transparent #:type-name PToken) ...
                 (define-typical-tokens group #:+ Group rest ...) ...
-                (struct ctoken cparent () #:transparent) ... (define-type CToken ctoken) ...
+                (struct ctoken cparent () #:transparent #:type-name CToken) ...
 
                 (define-type Token-Datum (U False Number (Pairof Number Symbol) Symbolic-Datum ...))
                 (define token->datum : (-> Token Token-Datum)
@@ -239,35 +241,6 @@
                           [(type? instance) (type->datum instance)] ...
                           [else (assert (object-name instance) symbol?)])))))]))
 
-(define-syntax (define-syntax-error stx)
-  (syntax-case stx []
-    [(_ exn:css #:as Syntax-Error [subexn #:-> parent] ...)
-     (with-syntax ([([make-exn make+exn throw-exn] ...)
-                    (for/list ([<exn> (in-list (syntax->list #'(subexn ...)))])
-                      (list (format-id <exn> "make-~a" (syntax-e <exn>))
-                            (format-id <exn> "make+~a" (syntax-e <exn>))
-                            (format-id <exn> "throw-~a" (syntax-e <exn>))))])
-       #'(begin (define-type Syntax-Error exn:css)
-                (struct exn:css exn:fail:syntax ())
-                (struct subexn parent ()) ...
-
-                (define make-exn : (-> (U CSS-Syntax-Any (Listof CSS-Token)) CSS-Syntax-Error)
-                  (lambda [v]
-                    (css-make-syntax-error subexn v)))
-                ...
-
-                (define make+exn : (->* ((U CSS-Syntax-Any (Listof CSS-Token))) ((Option CSS:Ident) Log-Level) CSS-Syntax-Error)
-                  (lambda [v [property #false] [level 'warning]]
-                    (define errobj : CSS-Syntax-Error (css-make-syntax-error subexn v))
-                    (css-log-syntax-error errobj property level)
-                    errobj))
-                ...
-
-                (define throw-exn : (->* ((U CSS-Syntax-Any (Listof CSS-Token))) ((Option CSS:Ident) Log-Level) Nothing)
-                  (lambda [v [property #false] [level 'warning]]
-                    (raise (make+exn v property level))))
-                ...))]))
-
 ;;; https://drafts.csswg.org/css-syntax/#tokenization
 ;; https://drafts.csswg.org/css-syntax/#component-value
 ;; https://drafts.csswg.org/css-syntax/#current-input-token
@@ -275,12 +248,7 @@
 (define-type CSS-Zero (U CSS:Zero CSS:Flzero))
 (define-type CSS-One (U CSS:One CSS:Flone))
 
-(define-tokens css-token #:+ CSS-Token
-  ([source : (U String Symbol)]
-   [line : Positive-Integer]
-   [column : Natural]
-   [start : Positive-Integer] ; `start` and `end` (instead of `position` and `span`) are required by color lexer.
-   [end : Positive-Integer])
+(define-tokens css-token w3s-token #:+ CSS-Token
   [[css-numeric         #:+ CSS-Numeric         #:-> css-token   ([representation : String])]
    [css:dimension       #:+ CSS:Dimension       #:-> css-numeric ([datum : Flonum] [unit : Symbol])]]
 
@@ -345,10 +313,11 @@
 
 ;; https://drafts.csswg.org/css-syntax/#style-rules
 ;; https://drafts.csswg.org/selectors/#invalid
-(define-syntax-error exn:css #:as CSS-Syntax-Error
+(define-syntax-error exn:css #:as CSS-Syntax-Error #:for CSS-Token
+  #:with [css-make-syntax-error css-log-syntax-error]
   [exn:css:resource           #:-> exn:css]
   [exn:css:deprecated         #:-> exn:css]
-  [exn:css:cyclic             #:-> exn:css]
+  [exn:css:loop               #:-> exn:css]
   [exn:css:namespace          #:-> exn:css]
   [exn:css:racket             #:-> exn:css]
   [exn:css:contract           #:-> exn:css:racket]
@@ -381,20 +350,10 @@
         (and (css:dimension? token) (eqv? (css:dimension-datum token) +nan.0))
         (and (css:percentage? token) (eqv? (css:percentage-datum token) +nan.0)))))
 
-(define-syntax (css-remake-token stx)
-  (syntax-case stx []
-    [(_ [start-token end-token] make-css:token datum extra ...)
-     #'(make-css:token (css-token-source start-token) (css-token-line start-token)
-                       (css-token-column start-token) (css-token-start start-token)
-                       (css-token-end end-token) datum extra ...)]
-    [(_ here-token make-css:token datum ...)
-     #'(css-remake-token [here-token here-token] make-css:token datum ...)]))
-
 (define css-token->syntax : (-> CSS-Token Syntax)
   (lambda [instance]
     (datum->syntax #false (css-token->datum instance)
-                   (vector (css-token-source instance) (css-token-line instance) (css-token-column instance)
-                           (css-token-start instance) (fx- (css-token-end instance) (css-token-start instance))))))
+                   (w3s-token->syntax-location instance))))
 
 (define css-token-datum->string : (-> CSS-Token String)
   (lambda [instance]
@@ -409,39 +368,27 @@
   
 (define css-token->string : (->* (CSS-Token) ((Option Any) (Option Any)) String)
   (lambda [instance [alt-object #false] [alt-datum #false]]
-    (format "~a:~a:~a: ~a: ~a" (css-token-source instance) (css-token-line instance) (add1 (css-token-column instance))
-            (or (object-name alt-object) (object-name instance))
-            (or alt-datum (css-token-datum->string instance)))))
+    (string-append (w3s-token-location-string instance) ": "
+                   (format "~a: ~a"
+                     (or (object-name alt-object) (object-name instance))
+                     (or alt-datum (css-token-datum->string instance))))))
 
-(define css-make-syntax-error : (-> (-> String Continuation-Mark-Set (Listof Syntax) CSS-Syntax-Error)
-                                    (U CSS-Syntax-Any (Listof CSS-Token))
-                                    CSS-Syntax-Error)
-  (let ([empty-stacks (continuation-marks #false)])
-    (lambda [exn:css any]
-      (define (token->exn [main : CSS-Token]) : CSS-Syntax-Error
-        (exn:css (css-token->string main exn:css) empty-stacks (list (css-token->syntax main))))
-      (define (tokens->exn [head : CSS-Token] [others : (Listof CSS-Token)]) : CSS-Syntax-Error
-        (exn:css (format "~a ~a" (css-token->string head exn:css) (map css-token-datum->string others))
-                 empty-stacks (map css-token->syntax (cons head others))))
-      (match any
-        [(or (? eof-object?) (list)) (exn:css (~a eof) empty-stacks null)]
-        [(list token) (token->exn token)]
-        [(list main others ...) (tokens->exn main (filter-not css:whitespace? others))]
-        [(? css:function? main) (tokens->exn main (css:function-arguments main))]
-        [(? css:λracket? main) (tokens->exn main (css:λracket-arguments main))]
-        [(? css:block? main) (tokens->exn main (css:block-components main))]
-        [(? css-token?) (token->exn any)]))))
-  
-(define css-log-syntax-error : (->* (CSS-Syntax-Error) ((Option CSS:Ident) Log-Level) Void)
+(define #:forall (Error) css-make-syntax-error : (-> (-> String Continuation-Mark-Set (Listof Syntax) Error)
+                                                     (U CSS-Syntax-Any (Listof CSS-Token))
+                                                     Error)
+  (lambda [exn:css any]
+    (match any
+      [(or (? eof-object?) (list)) (exn:css (~a eof) (current-continuation-marks) null)]
+      [(list token) (w3s-token->exn exn:css css-token->string css-token->syntax token)]
+      [(list main others ...) (w3s-token->exn exn:css css-token->string css-token->syntax css-token-datum->string main (filter-not css:whitespace? others))]
+      [(? css:function? main) (w3s-token->exn exn:css css-token->string css-token->syntax css-token-datum->string main (css:function-arguments main))]
+      [(? css:λracket? main) (w3s-token->exn exn:css css-token->string css-token->syntax css-token-datum->string main (css:λracket-arguments main))]
+      [(? css:block? main) (w3s-token->exn exn:css css-token->string css-token->syntax css-token-datum->string main (css:block-components main))]
+      [(? css-token?) (w3s-token->exn exn:css css-token->string css-token->syntax any)])))
+
+(define css-log-syntax-error : (->* (CSS-Syntax-Error) ((Option CSS-Token) Log-Level) Void)
   (lambda [errobj [property #false] [level 'warning]]
-    (define logger : Logger (current-logger))
-    (define topic : Symbol 'exn:css:syntax)
-    (define msg : String (exn-message errobj))
-    (define <eof>? : Boolean (regexp-match? #px"#<eof>" msg))
-    (cond [(not property) (log-message logger level topic msg errobj)]
-          [(not <eof>?) (log-message logger level topic (format "~a @‹~a›" msg (css:ident-datum property)) errobj)]
-          [else (let ([eof-msg (css-token->string property errobj eof)])
-                  (log-message logger level topic (format "~a @‹~a›" eof-msg (css:ident-datum property)) errobj))])))
+    (w3s-log-syntax-error 'exn:xml:syntax css-token->string css-token->datum errobj property level)))
 
 ;;; https://drafts.csswg.org/css-syntax/#parsing
 ;; Parser Combinators and Syntax Sugars of dealing with declarations for client applications
