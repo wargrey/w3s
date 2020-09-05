@@ -6,6 +6,10 @@
 <!ENTITY % xml-spec-replacement-text 'INCLUDE' >
 <!ENTITY % xml-spec-expansion 'INCLUDE' >
 
+<!ENTITY d "&#xD;">
+<!ENTITY a "&#xA;">
+<!ENTITY da "&#xD;&#xA;">
+
 <!ENTITY recursive1 "&recursive3;">
 <!ENTITY recursive2 "&recursive1;">
 <!ENTITY recursive3 "<recursive>this is a bad &recursive2; exmaple</recursive>">
@@ -29,7 +33,7 @@ numerically (&#38;#38;#38;) or with a general entity
 ]]>
 ]>
 
-<normalize id="%expansion;">
+<normalize id="&#xd;&#xd;A&#xa;&#xa;B&#xd;&#xa;" pe="%expansion;" recur="&recursive2;">
            <testcase>This sample shows a &tricky; method.</testcase>
            &recursive3;
            &example;

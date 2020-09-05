@@ -65,9 +65,10 @@
     (define ?value (xml-entity-value e))
     
     (cond [(not (xml:&string? ?value)) e]
-          [else (let ([?new-value (xml-dtd-entity-replacement-text ?value entities)])
-                  (cond [(not ?new-value) (make+exn:xml:unrecognized ?value (xml-entity-name e)) #false]
-                        [else (struct-copy xml-entity e [value ?new-value])]))])))
+          [else (let ([?new-value (xml-dtd-entity-replace (xml-entity-name e) ?value entities)])
+                  (and ?new-value
+                       (struct-copy xml-entity e
+                                    [value ?new-value])))])))
 
 (define xml-dtd-included-as-PE : (-> XML:PEReference XML-Type-Entities (Listof XML-Type-Declaration*))
   ;;; https://www.w3.org/TR/xml11/#as-PE
@@ -118,11 +119,12 @@
 
 (define xml-element-attribute-normalize : (-> (Pairof XML:Name XML:String) XML-Type-Entities (Option (Pairof XML:Name XML:String)))
   (lambda [name=value entities]
-    (let ([value (cdr name=value)])
+    (let ([name (car name=value)]
+          [value (cdr name=value)])
       (cond [(not (xml:&string? value)) name=value]
-            [else (let ([?value (xml-dtd-entity-replacement-text value entities)])
-                    (cond [(not ?value) (make+exn:xml:unrecognized value (car name=value)) #false]
-                          [else (cons (car name=value) ?value)]))]))))
+            [else (let ([?value (xml-attr-entity-replace name value entities)])
+                    (and (xml:string? ?value)
+                         (cons name ?value)))]))))
 
 (define xml-subelement-normalize : (-> XML:Name (Listof (U XML-Subdatum* XML-Element*)) XML-Type-Entities Index (Listof Symbol)
                                        (U (Listof (U XML-Subdatum* XML-Element*)) exn:xml:loop))
@@ -157,9 +159,9 @@
 ;;
 ;; Besides, Char references are expanded immediately in all contexts.
 
-(define xml-dtd-entity-replacement-text : (-> XML:&String XML-Type-Entities (Option XML:String))
-  (let ([/dev/eout (open-output-string '/dev/eout)])
-    (lambda [etoken entities]
+(define xml-dtd-entity-replace : (-> XML-Token XML:&String XML-Type-Entities (Option XML:String))
+  (let ([/dev/evout (open-output-string '/dev/evout)])
+    (lambda [ename etoken entities]
       (define src : String (xml:string-datum etoken))
       (define size : Index (string-length src))
       (define false-idx : Nonnegative-Fixnum (+ size 1))
@@ -167,35 +169,86 @@
       (let dtd-entity-normalize ([idx : Nonnegative-Fixnum 0]
                                  [leader : (Option Char) #false]
                                  [srahc : (Listof Char) null]
-                                 [ge-exists? : Boolean #false])
+                                 [gexists? : Boolean #false])
           (cond [(< idx size)
                  (let ([ch (unsafe-string-ref src idx)])
                    (define idx++ : Nonnegative-Fixnum (+ idx 1))
             
                    (if (not leader)
-                       (cond [(or (eq? ch #\%) (eq? ch #\&)) (dtd-entity-normalize idx++ ch srahc ge-exists?)]
-                             [else (write-char ch /dev/eout) (dtd-entity-normalize idx++ leader srahc ge-exists?)])
-                       (cond [(not (eq? ch #\;)) (dtd-entity-normalize idx++ leader (cons ch srahc) ge-exists?)]
-                             [(null? srahc) (dtd-entity-normalize false-idx leader srahc ge-exists?)]
+                       (cond [(or (eq? ch #\%) (eq? ch #\&)) (dtd-entity-normalize idx++ ch srahc gexists?)]
+                             [else (write-char ch /dev/evout) (dtd-entity-normalize idx++ leader srahc gexists?)])
+                       (cond [(not (eq? ch #\;)) (dtd-entity-normalize idx++ leader (cons ch srahc) gexists?)]
+                             [(null? srahc) (make+exn:xml:malformed etoken ename) (dtd-entity-normalize false-idx leader srahc gexists?)]
                              [else (let ([estr (list->string (reverse srahc))])
-                                     (define-values (replacement ge?)
-                                       (cond [(eq? leader #\%) (xml-entity-value-ref (string->keyword estr) entities)]
-                                             [(eq? (unsafe-string-ref estr 0) #\#) (values (xml-char-reference estr) #false)]
-                                             [else (values estr #\&)]))
-                                     
-                                     (cond [(not (string? replacement)) (dtd-entity-normalize false-idx #false null ge-exists?)]
-                                           [(not ge?) (write-string replacement /dev/eout) (dtd-entity-normalize idx++ #false null ge-exists?)]
-                                           [else (write-char #\& /dev/eout)
-                                                 (write-string replacement /dev/eout)
-                                                 (write-char #\; /dev/eout)
-                                                 (dtd-entity-normalize idx++ #false null #true)]))])))]
+                                     (cond [(eq? leader #\%)
+                                            (let-values ([(replacement ge?) (xml-entity-value-ref (string->keyword estr) entities)])
+                                              (cond [(not replacement) (make+exn:xml:unrecognized etoken ename) (dtd-entity-normalize false-idx #false null gexists?)]
+                                                    [else (write-string replacement /dev/evout)
+                                                          (dtd-entity-normalize idx++ #false null (or ge? gexists?))]))]
+                                             [(eq? (unsafe-string-ref estr 0) #\#)
+                                              (let ([replacement (xml-char-unreference estr)])
+                                                (cond [(not replacement) (make+exn:xml:unrecognized etoken ename) (dtd-entity-normalize false-idx #false null gexists?)]
+                                                      [else (write-char replacement /dev/evout)
+                                                            (dtd-entity-normalize idx++ #false null gexists?)]))]
+                                             [else (write-char #\& /dev/evout)
+                                                   (write-string estr /dev/evout)
+                                                   (write-char #\; /dev/evout)
+                                                   (dtd-entity-normalize idx++ #false null #true)]))])))]
                 [(= idx size)
-                 (let ([new-value : String (bytes->string/utf-8 (get-output-bytes /dev/eout #true) #\uFFFD)])
+                 (let ([new-value : String (bytes->string/utf-8 (get-output-bytes /dev/evout #true) #\uFFFD)])
                    (cond [(string=? new-value src) etoken]
-                         [(not ge-exists?) (w3s-remake-token etoken xml:string new-value)]
+                         [(not gexists?) (w3s-remake-token etoken xml:string new-value)]
                          [else (w3s-remake-token etoken xml:&string new-value)]))]
                 
-                [else (not (get-output-bytes /dev/eout #true))])))))
+                [else (not (get-output-bytes /dev/evout #true))])))))
+
+(define xml-attr-entity-replace : (->* (XML:Name XML:String XML-Type-Entities) ((Listof Symbol)) (U XML:String Boolean))
+  ;;; https://www.w3.org/TR/xml11/#sec-line-ends
+  ;;; https://www.w3.org/TR/xml11/#AVNormalize
+  (let ([/dev/avout (open-output-string '/dev/avout)])
+    (lambda [attname vtoken entities [rstack : (Listof Symbol) null]]
+      (define src : String (xml:string-datum vtoken))
+      (define size : Index (string-length src))
+      (define false-idx : Nonnegative-Fixnum (+ size 1))
+        
+      (let attr-value-normalize ([idx : Nonnegative-Fixnum 0]
+                                 [leader : (Option Symbol) #false]
+                                 [srahc : (Listof Char) null])
+        (cond [(< idx size)
+               (let ([ch (unsafe-string-ref src idx)])
+                 (define idx++ : Nonnegative-Fixnum (+ idx 1))
+                 
+                 (cond [(eq? leader '&)
+                        (cond [(not (eq? ch #\;)) (attr-value-normalize idx++ leader (cons ch srahc))]
+                              [(null? srahc) (make+exn:xml:malformed vtoken attname) (attr-value-normalize false-idx leader srahc)]
+                              [else (let ([estr (list->string (reverse srahc))])
+                                      (if (eq? (unsafe-string-ref estr 0) #\#)
+                                          (let ([replacement (xml-char-unreference estr)])
+                                            (cond [(not replacement) (make+exn:xml:unrecognized vtoken attname) (attr-value-normalize false-idx #false null)]
+                                                  [else (write-char replacement /dev/avout) (attr-value-normalize idx++ #false null)]))
+                                          (let ([ename (string->unreadable-symbol estr)])
+                                            (cond [(memv ename rstack) (make+exn:xml:loop vtoken attname) (attr-value-normalize false-idx #false null)]
+                                                  [else (let ([etoken (xml-entity-value-token-ref ename entities)])
+                                                          (cond [(not etoken) (make+exn:xml:unrecognized vtoken attname) (attr-value-normalize false-idx #false null)]
+                                                                [else (let ([raction (xml-attr-entity-replace attname etoken entities (cons ename rstack))])
+                                                                        (cond [(not raction) (attr-value-normalize false-idx #false null)]
+                                                                              [else (attr-value-normalize idx++ #false null)]))]))]))))])]
+                       [(eq? leader 'xD)
+                        ; NOTE: the EOL handling and attribute normalization conincide here.
+                        (write-char #\space /dev/avout)
+                        (if (or (eq? ch #\newline) (eq? ch #\u0085))
+                            (attr-value-normalize idx++ #false srahc)
+                            (attr-value-normalize idx #false srahc))]
+                       [(eq? ch #\&) (attr-value-normalize idx++ '& srahc)]
+                       [(eq? ch #\return) (attr-value-normalize idx++ 'xD srahc)]
+                       [(eq? ch #\u0085) (write-char #\space /dev/avout) (attr-value-normalize idx++ leader srahc)]
+                       [(eq? ch #\u2028) (write-char #\space /dev/avout) (attr-value-normalize idx++ leader srahc)]
+                       [else (write-char ch /dev/avout) (attr-value-normalize idx++ leader srahc)]))]
+              [(= idx size)
+               (cond [(pair? rstack) #true]
+                     [else (w3s-remake-token vtoken xml:string
+                                             (bytes->string/utf-8 (get-output-bytes /dev/avout #true) #\uFFFD))])]
+              [else (and (null? rstack) (get-output-bytes /dev/avout #true) #false)])))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-entity-cons : (-> (Option XML-Entity) XML-Type-Entities XML-Type-Entities)
@@ -206,7 +259,7 @@
                   (cond [(not (hash-has-key? entities name)) (hash-set entities name e)]
                         [else (make+exn:xml:duplicate ntoken) entities]))])))
 
-(define xml-char-reference : (-> String (Option String))
+(define xml-char-unreference : (-> String (Option Char))
   (lambda [estr]
     (define ?codepoint : (Option Complex)
       (if (regexp-match? #rx"^#x" estr)
@@ -214,7 +267,7 @@
           (string->number (substring estr 1) 10)))
 
     (and (index? ?codepoint)
-         (string (integer->char ?codepoint)))))
+         (integer->char ?codepoint))))
 
 (define xml-entity-value-token-ref : (-> (U Symbol Keyword) XML-Type-Entities (Option XML:String))
   (lambda [name entities]

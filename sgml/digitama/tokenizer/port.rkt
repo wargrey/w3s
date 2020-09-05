@@ -343,7 +343,8 @@
       (cond [(eq? ch quote) (let ([v (list->string (reverse srahc))]) (if (not ref?) v (box v)))]
             [(eof-object? ch) (reverse srahc)]
             [(eq? ch #\<) (xml-consume-chars-literal /dev/xmlin quote (cons ch srahc))]
-            [else (consume-literal (cons ch srahc) (or ref? (eq? ch #\&)))]))))
+            [else (consume-literal (cons ch srahc)
+                                   (or ref? (eq? ch #\&) (char-whitespace? ch)))]))))
 
 (define xml-consume-system-literal : (-> Input-Port Char (U String XML-Error))
   ;;; https://www.w3.org/TR/xml11/#NT-SystemLiteral
