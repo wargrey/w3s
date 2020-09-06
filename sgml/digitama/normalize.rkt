@@ -108,9 +108,15 @@
     (define tagname : XML:Name (car e))
     
     (define attributes : (Listof (Pairof XML:Name XML:String))
-      (filter-map (λ [[name=value : (Pairof XML:Name XML:String)]]
-                        (xml-element-attribute-normalize name=value entities))
-                  (cadr e)))
+      (let attribute-filter-map ([rest : (Listof (Pairof XML:Name XML:String)) (cadr e)]
+                                 [setubirtta : (Listof (Pairof XML:Name XML:String)) null]
+                                 [names : (Listof Symbol) null])
+        (cond [(null? rest) (reverse setubirtta)]
+              [else (let*-values ([(self rest++) (values (car rest) (cdr rest))]
+                                  [(?attr) (xml-element-attribute-normalize self entities names tagname)])
+                      (cond [(not ?attr) (attribute-filter-map rest++ setubirtta names)]
+                            [else (attribute-filter-map rest++ (cons ?attr setubirtta)
+                                                        (cons (xml:name-datum (car ?attr)) names))]))])))
 
     (define ?children : (U (Listof (U XML-Subdatum* XML-Element*)) exn:xml:loop)
       (xml-subelement-normalize tagname (caddr e) entities (assert (+ depth 1) index?)
@@ -119,11 +125,14 @@
     (cond [(list? ?children) (list tagname attributes ?children)]
           [else ?children])))
 
-(define xml-element-attribute-normalize : (-> (Pairof XML:Name XML:String) XML-Type-Entities (Option (Pairof XML:Name XML:String)))
-  (lambda [name=value entities]
+(define xml-element-attribute-normalize : (->* ((Pairof XML:Name XML:String) XML-Type-Entities (Listof Symbol))
+                                               ((Option XML-Token))
+                                               (Option (Pairof XML:Name XML:String)))
+  (lambda [name=value entities attrnames [tagname #false]]
     (let ([name (car name=value)]
           [value (cdr name=value)])
-      (cond [(not (xml:&string? value)) name=value]
+      (cond [(memq (xml:name-datum name) attrnames) (make+exn:xml:unique name tagname) #false]
+            [(not (xml:&string? value)) name=value]
             [else (let ([?value (xml-attr-entity-replace name value entities)])
                     (and (xml:string? ?value)
                          (cons name ?value)))]))))

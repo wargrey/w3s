@@ -40,7 +40,7 @@ numerically (&#38;#38;#38;) or with a general entity
 ]]>
 ]>
 
-<normalize id="&#xd;&#xd;A&#xa;&#xa;B&#xd;&#xa;" pe="%expansion;" recur="&recursive2;">
+<normalize id="&#xd;&#xd;A&#xa;&#xa;B&#xd;&#xa;" pe="%expansion;" recur="&recursive2;" pe="dup">
            <testcase>This sample shows a &tricky; method.</testcase>
            &recursive3;
            &example;
