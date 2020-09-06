@@ -49,8 +49,8 @@
     (xml-document (xml-doctype (sgml-port-name /dev/xmlin) version encoding standalone? name external)
                   dtd grammars)))
 
-(define read-xml-document* : (-> SGML-StdIn XML-Document*)
-  (lambda [/dev/rawin]
+(define read-xml-document* : (-> SGML-StdIn [#:normalize? Boolean] XML-Document*)
+  (lambda [/dev/rawin #:normalize? [normalize? #false]]
     (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin #true))
     (define source : (U Symbol String) (sgml-port-name /dev/xmlin))
     (define tokens : (Listof XML-Token) (read-xml-tokens* /dev/xmlin source))
@@ -63,13 +63,17 @@
                     (cond [(pair? maybe-first-element) (xml:name-datum (car maybe-first-element))]
                           [else '||]))]))
 
-    (xml-document* (xml-doctype source version encoding standalone? name external)
-                   (xml-make-definition source doctype-name definitions)
-                   #false grammars)))
+    (define doc : XML-Document*
+      (xml-document* (xml-doctype source version encoding standalone? name external)
+                     (xml-make-definition source doctype-name definitions)
+                     #false grammars))
 
-(define xml-document*-normalize : (->* (XML-Document*) ((Listof XML-DTD)) XML-Document*)
-  (lambda [doc [external-dtds null]]
-    (let-values ([(type contents) (xml-normalize (xml-document*-internal-dtd doc) external-dtds (xml-document*-elements doc))])
+    (cond [(not normalize?) doc]
+          [else (xml-document*-normalize doc)])))
+
+(define xml-document*-normalize : (-> XML-Document* XML-Document*)
+  (lambda [doc]
+    (let-values ([(type contents) (xml-normalize (xml-document*-internal-dtd doc) (xml-document*-elements doc))])
       (xml-document* (xml-document*-doctype doc) (xml-document*-internal-dtd doc) type contents))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

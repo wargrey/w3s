@@ -32,37 +32,26 @@
              (define path.css (if (regexp-match? #px"\\.css$" src.css) src.css (path-replace-extension src.css ".css")))
              (string->symbol (path->string path.css))]
             [else '|this should not happen| 'lang.css]))
+    
     (strip-context
      #`(module #,lang.css typed/racket/base
-         (provide #,lang.css)
          (provide (all-from-out css/syntax))
-
+         (provide #,lang.css)
+         
          (require css/syntax)
+         (require css/village/hashlang/w3s)
 
          ;;; NOTE
          ; Prefab structures can be handled at compile time, however reading the stylesheet is reasonably efficient,
          ; therefore do not waste time in struggling to optimize the reading process.
+
          (define-values (#,lang.css MB cpu real gc)
-           (let ([/dev/rawin (open-input-bytes #,bytes-bag '#,src)]
-                 [mem0 (current-memory-use)])
-             (port-count-lines! /dev/rawin)
-             (set-port-next-location! /dev/rawin #,line #,column #,position)
-             (define-values (&lang.css cpu real gc) (time-apply read-css-stylesheet (list /dev/rawin)))
-             (values (car &lang.css) (/ (- (current-memory-use) mem0) 1024.0 1024.0) cpu real gc)))
+           (w3s-read-doc '#,src #,bytes-bag #,line #,column #,position
+                         read-css-stylesheet))
 
          (module+ main
-           (require racket/pretty)
-           (require racket/format)
-           
-           (pretty-print-columns 160)
-
-           (define benchmark : String
-             (format "[~a]memory: ~aMB cpu time: ~a real time: ~a gc time: ~a"
-                     '#,lang.css (~r MB #:precision '(= 3)) cpu real gc))
-           
-           (define drracket? : Boolean (regexp-match? #px"DrRacket$" (find-system-path 'run-file)))
-           (if drracket? #,lang.css (printf "~a~n~a~n" (pretty-format #,lang.css) benchmark))
-           (when drracket? (displayln benchmark)))))))
+           #,lang.css
+           (w3s-display-times '#,lang.css MB cpu real gc))))))
 
 (define (css-info in mod line col pos)
   (lambda [key default]

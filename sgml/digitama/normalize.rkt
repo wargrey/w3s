@@ -19,9 +19,9 @@
  [unsafe-string-ref (-> String Index Char)])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-normalize : (-> XML-DTD (Listof XML-DTD) (Listof XML-Content*) (Values XML-Type (Listof XML-Content*)))
-  (lambda [int-dtd ext-dtds content]
-    (define dtype : XML-Type (xml-dtd-expand int-dtd ext-dtds))
+(define xml-normalize : (-> XML-DTD (Listof XML-Content*) (Values XML-Type (Listof XML-Content*)))
+  (lambda [int-dtd content]
+    (define dtype : XML-Type (xml-dtd-expand int-dtd))
     (define entities : XML-Type-Entities (xml-type-entities dtype))
 
     (let xml-content-normalize ([rest : (Listof XML-Content*) content]
@@ -34,8 +34,8 @@
                           [else (xml-content-normalize rest++ (cons self clear-content))]))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-dtd-expand : (-> XML-DTD (Listof XML-DTD) XML-Type)
-  (lambda [int-dtd ext-dtds]
+(define xml-dtd-expand : (-> XML-DTD XML-Type)
+  (lambda [int-dtd]
     (let expand-dtd ([rest : (Listof XML-Type-Declaration*) (xml-dtd-declarations int-dtd)]
                      [entities : XML-Type-Entities (make-immutable-hasheq)]
                      [notations : XML-Type-Notations (make-immutable-hasheq)])
@@ -296,8 +296,9 @@
     (let ([e (hash-ref entities name (λ [] #false))])
       (cond [(not e) (make+exn:xml:undeclared ntoken context) #false]
             [else (let ([?vtoken (xml-entity-value e)])
-                    (cond [(not ?vtoken) (make+exn:xml:external ntoken context) #false]
-                          [else ?vtoken]))]))))
+                    (cond [(xml:string? ?vtoken) ?vtoken]
+                          [(not (xml-entity-ndata e)) (make+exn:xml:external ntoken context) #false]
+                          [else (make+exn:xml:foreign ntoken context) #false]))]))))
 
 (define xml-prentity-value-ref : (-> Symbol (Option String))
   ;;; https://www.w3.org/TR/xml11/#sec-predefined-ent

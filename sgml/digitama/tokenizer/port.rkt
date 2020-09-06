@@ -364,7 +364,8 @@
             [(eof-object? ch) (cons (reverse srahc) !eof)]
             [(eq? ch #\<) (cons (xml-consume-chars-literal /dev/xmlin quote (cons ch srahc)) !char)]
             [else (consume-literal (cons ch srahc)
-                                   (or unnormalized? (eq? ch #\&) (char-whitespace? ch)))]))))
+                                   (or unnormalized? (eq? ch #\&)
+                                       (char-whitespace? ch)))]))))
 
 (define xml-consume-system-literal : (-> Input-Port Char (U String XML-Error))
   ;;; https://www.w3.org/TR/xml11/#NT-SystemLiteral

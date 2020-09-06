@@ -18,7 +18,7 @@
     (read-sgml-document /dev/xmlin)))
 
 (define sgml-read-syntax
-  (lambda [read-sgml-document* sgml px.sgml .ext src /dev/sgmlin]
+  (lambda [read-sgml-document* sgml px.sgml .ext src /dev/sgmlin [sgml-normalize #false]]
     (regexp-match #px"^\\s*" /dev/sgmlin) ; skip blanks before real sgml content
     (define-values (line column position) (port-next-location /dev/sgmlin))
     (define bytes-bag (port->bytes /dev/sgmlin))
@@ -30,26 +30,28 @@
                (string->symbol (path->string path.sgml)))]
             [else '|this should not happen| (string->symbol (format "lang~a" .ext))]))
 
+    (define lang.sgml*
+      (string->symbol
+       (string-append
+        (symbol->string lang.sgml)
+        "*")))
+
     (strip-context
      #`(module #,lang.sgml typed/racket/base
          (provide (all-from-out #,sgml) #,lang.sgml)
 
          (require #,sgml)
+         (require css/village/hashlang/w3s)
 
          (define-values (#,lang.sgml MB cpu real gc)
-           (let ([/dev/rawin (open-input-bytes #,bytes-bag '#,src)]
-                 [mem0 (current-memory-use)])
-             (port-count-lines! /dev/rawin)
-             (set-port-next-location! /dev/rawin #,line #,column #,position)
-             (define-values (&lang.sgml cpu real gc) (time-apply #,read-sgml-document* (list /dev/rawin)))
-             (values (car &lang.sgml) (/ (- (current-memory-use) mem0) 1024.0 1024.0) cpu real gc)))
+           (w3s-read-doc '#,src #,bytes-bag #,line #,column #,position
+                         #,read-sgml-document*)) 
 
          (module+ main
-           (require racket/format)
-           
            #,lang.sgml
-           (displayln (format "[~a]memory: ~aMB cpu time: ~a real time: ~a gc time: ~a"
-                        '#,lang.sgml (~r MB #:precision '(= 3)) cpu real gc)))))))
+           (w3s-display-times '#,lang.sgml MB cpu real gc))
+
+         (w3s-doc-process #,sgml-normalize #,lang.sgml* MB* cpu* real* gc* #,lang.sgml)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-read
@@ -58,7 +60,8 @@
 
 (define xml-read-syntax
   (lambda [[src #false] [/dev/xmlin (current-input-port)]]
-    (sgml-read-syntax 'read-xml-document* 'sgml/xml #px"\\.xml$" ".xml" src /dev/xmlin)))
+    (sgml-read-syntax 'read-xml-document* 'sgml/xml #px"\\.xml$" ".xml" src /dev/xmlin
+                      'xml-document*-normalize)))
 
 (define dtd-read
   (lambda [[/dev/xmlin (current-input-port)]]

@@ -21,6 +21,9 @@
 <!ENTITY open-hatch PUBLIC "-//Textuality//TEXT Standard open-hatch boilerplate//EN" "http://www.textuality.com/boilerplate/OpenHatch.xml">
 <!ENTITY hatch-pic SYSTEM "../grafix/OpenHatch.gif" NDATA gif >
 
+<!ENTITY Pub-Status "This is a pre-release of the
+specification.">
+
 <![%xml-spec-replacement-text;[
 <!ENTITY % pub    "&#xc9;ditions Gallimard" >
 <!ENTITY   rights "All rights reserved" >
@@ -40,7 +43,7 @@ numerically (&#38;#38;#38;) or with a general entity
 ]]>
 ]>
 
-<normalize id="&#xd;&#xd;A&#xa;&#xa;B&#xd;&#xa;" pe="%expansion;" recur="&recursive2;" pe="dup">
+<normalize id="&#xd;&#xd;A&#xa;&#xa;B&#xd;&#xa;" pe="%expansion;" recur="&recursive2;" pe="dup" ext="&open-hatch;" ndata="&hatch-pic;">
            <testcase>This sample shows a &tricky; method.</testcase>
            &recursive3;
            &example;
