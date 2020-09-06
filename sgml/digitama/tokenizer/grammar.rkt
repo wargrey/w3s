@@ -5,8 +5,9 @@
 (require racket/list)
 
 (require "port.rkt")
+(require "delimiter.rkt")
+
 (require "../doctype.rkt")
-(require "../delimiter.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type XML-Content (U XML-Processing-Instruction XML-Element))

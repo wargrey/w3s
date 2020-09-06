@@ -2,7 +2,7 @@
 
 <?xml version="1.0"?>
 
-<!DOCTYPE normalize [
+<!DOCTYPE normalize PUBLIC "digimon" "w3s" [
 <!ENTITY % xml-spec-replacement-text 'INCLUDE' >
 <!ENTITY % xml-spec-expansion 'INCLUDE' >
 
@@ -13,6 +13,13 @@
 <!ENTITY recursive1 "&recursive3;">
 <!ENTITY recursive2 "&recursive1;">
 <!ENTITY recursive3 "<recursive>this is a bad &recursive2; exmaple</recursive>">
+
+<!NOTATION public PUBLIC "public.dtd">
+<!NOTATION system SYSTEM "system.dtd">
+<!NOTATION pubsys PUBLIC "public.dtd" "system.dtd">
+
+<!ENTITY open-hatch PUBLIC "-//Textuality//TEXT Standard open-hatch boilerplate//EN" "http://www.textuality.com/boilerplate/OpenHatch.xml">
+<!ENTITY hatch-pic SYSTEM "../grafix/OpenHatch.gif" NDATA gif >
 
 <![%xml-spec-replacement-text;[
 <!ENTITY % pub    "&#xc9;ditions Gallimard" >

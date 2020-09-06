@@ -50,13 +50,12 @@
              (eq? ch #\&)
              (eq? ch #\%)))))
 
-(define xml-pubid-char? : (-> Char Boolean)
+(define xml-pubid-char/no-spaces? : (-> Char Boolean)
   (lambda [ch]
     (or (char<=? #\a ch #\z)
         (char<=? #\A ch #\Z)
         (char-numeric? ch)
-        (and (memq ch (list #\space #\newline #\return
-                            #\- #\' #\( #\) #\+ #\, #\. #\/ #\:
+        (and (memq ch (list #\- #\' #\( #\) #\+ #\, #\. #\/ #\:
                             #\= #\? #\; #\! #\* #\# #\@ #\$ #\_ #\%))
              #true))))
 

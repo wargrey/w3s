@@ -110,7 +110,7 @@
                 (define-typical-tokens group #:+ Group rest ...) ...
                 (struct ctoken cparent () #:transparent #:type-name CToken) ...
 
-                (define-type Token-Datum (U False Number (Pairof Number Symbol) Symbolic-Datum ...))
+                (define-type Token-Datum (U False Symbolic-Datum ...))
                 (define token->datum : (-> Token Token-Datum)
                   (lambda [instance]
                     (cond [(type? instance) (type->datum instance)] ...
@@ -147,10 +147,7 @@
    
    [xml:comment         #:+ XML:Comment         #:-> xml:whitespace]]
 
-  ; WARNING: Carefully defining types to avoid happening to mess up '(list? datum)'. 
-  (define-symbolic-tokens xml-bad-token #:+ XML-Bad-Token
-    [xml:bad            #:+ XML:Bad             #:as String])
-    
+  ; WARNING: Carefully defining types to avoid happening to mess up '(list? datum)'
   ; TODO: Typed Racket is buggy if there are more than 11 conditions
   (define-symbolic-tokens xml-symbolic-token #:+ XML-Symbolic-Token
     [xml:delim          #:+ XML:Delim           #:as (U Symbol Char)]
@@ -159,21 +156,40 @@
     [xml:reference      #:+ XML:Reference       #:as Symbol]
     [xml:pereference    #:+ XML:PEReference     #:as Keyword]
     [xml:string         #:+ XML:String          #:as String]
-    [xml:whitespace     #:+ XML:WhiteSpace      #:as String]))
+    [xml:whitespace     #:+ XML:WhiteSpace      #:as String]
+    [xml:bad            #:+ XML:Bad             #:as (Pairof String Symbol)]))
 
 (define-syntax-error exn:xml #:as XML-Syntax-Error #:for XML-Token
+  ;;; https://www.w3.org/TR/xml11/#sec-terminology
   #:with [xml-make-syntax-error xml-log-syntax-error]
-  [exn:xml:unrecognized  #:-> exn:xml]
-  [exn:xml:range         #:-> exn:xml:unrecognized]
-  [exn:xml:eof           #:-> exn:xml:unrecognized]
-  [exn:xml:malformed     #:-> exn:xml]
-  [exn:xml:end-tag       #:-> exn:xml]
+  [exn:xml:error         #:-> exn:xml]
+  [exn:xml:fatal         #:-> exn:xml]
+  [exn:xml:eof           #:-> exn:xml]
+  [exn:xml:reserved      #:-> exn:xml]
+  [exn:xml:multiple      #:-> exn:xml]
+  [exn:xml:unimplemented #:-> exn:xml]
+  
+  [exn:xml:vc            #:-> exn:xml:error]
+  [exn:xml:token         #:-> exn:xml:vc]
+  [exn:xml:duplicate     #:-> exn:xml:vc]
+  [exn:xml:type          #:-> exn:xml:vc]
+  [exn:xml:entity        #:-> exn:xml:vc]
+  [exn:xml:nest          #:-> exn:xml:vc]
+  
+  [exn:xml:wfc           #:-> exn:xml:fatal]
+  [exn:xml:unique        #:-> exn:xml:wfc]
+  [exn:xml:external      #:-> exn:xml:wfc]
+  [exn:xml:char          #:-> exn:xml:wfc]
+  [exn:xml:loop          #:-> exn:xml:wfc]
+  [exn:xml:misplaced     #:-> exn:xml:wfc]
+  [exn:xml:undeclared    #:-> exn:xml:wfc]
+  [exn:xml:mismatch      #:-> exn:xml:wfc]
+  [exn:xml:malformed     #:-> exn:xml:wfc]
+
   [exn:xml:missing-name  #:-> exn:xml:malformed]
   [exn:xml:missing-value #:-> exn:xml:malformed]
-  [exn:xml:misplaced     #:-> exn:xml:malformed]
-  [exn:xml:duplicate     #:-> exn:xml:malformed]
-  [exn:xml:unimplemented #:-> exn:xml]
-  [exn:xml:loop          #:-> exn:xml])
+  
+  [exn:xml:space         #:-> exn:xml:char])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-token->syntax : (-> XML-Token Syntax)
@@ -185,6 +201,7 @@
   (lambda [instance]
     (cond [(xml:name? instance) (symbol->string (xml:name-datum instance))]
           [(xml:string? instance) (~s (xml:string-datum instance))]
+          [(xml:bad? instance) (~s (car (xml:bad-datum instance)))]
           [else (~a (xml-token->datum instance))])))
 
 (define xml-token->string : (->* (XML-Token) ((Option Any) (Option Any)) String)
@@ -202,6 +219,10 @@
       [(list main others ...) (w3s-token->exn exn:xml xml-token->string xml-token->syntax xml-token-datum->string main (filter-not xml:whitespace? others))]
       [(? xml-token?) (w3s-token->exn exn:xml xml-token->string xml-token->syntax any)])))
 
-(define xml-log-syntax-error : (->* (XML-Syntax-Error) ((Option XML-Token) Log-Level) Void)
-  (lambda [errobj [property #false] [level 'warning]]
-    (w3s-log-syntax-error 'exn:xml:syntax xml-token->string xml-token->datum errobj property level)))
+(define xml-log-syntax-error : (->* (XML-Syntax-Error) ((Option XML-Token) (Option Log-Level)) Void)
+  (lambda [errobj [property #false] [level #false]]
+    (w3s-log-syntax-error 'exn:xml:syntax xml-token->string xml-token->datum
+                          errobj property (or level
+                                              (cond [(exn:xml:error? errobj) 'error]
+                                                    [(exn:xml:fatal? errobj) 'fatal]
+                                                    [else 'warning])))))

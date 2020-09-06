@@ -142,16 +142,14 @@
   (syntax-parse stx #:literals [: Symbol Keyword]
     [(_ id : Number parent #:as Type #:=? type=? #:with id? id-datum)
      (with-syntax ([id=? (format-id #'id "~a=?" (syntax-e #'id))])
-       #'(begin (define-type Number id)
-                (struct id parent ([datum : Type]) #:transparent)
+       #'(begin (struct id parent ([datum : Type]) #:transparent #:type-name Number)
                 (define (id=? [t1 : Number] [t2 : Number]) : Boolean (type=? (id-datum t1) (id-datum t2)))
                 (define-token-interface id : Type id? id-datum #:+ Number #:= type=?)))]
     [(_ id : Identifier parent ((~and (~or Symbol Keyword) Type) #:ci rest ...) #:with id? id-datum)
      (with-syntax ([id=? (format-id #'id "~a=?" (syntax-e #'id))]
                    [id-norm=? (format-id #'id "~a-norm=?" (syntax-e #'id))]
                    [id-norm (format-id #'id "~a-norm" (syntax-e #'id))])
-       #'(begin (define-type Identifier id)
-                (struct id parent ([datum : Type] [norm : Type] rest ...) #:transparent)
+       #'(begin (struct id parent ([datum : Type] [norm : Type] rest ...) #:transparent #:type-name Identifier)
                 (define (id=? [t1 : Identifier] [t2 : Identifier]) : Boolean (eq? (id-datum t1) (id-datum t2)))
                 (define (id-norm=? [t1 : Identifier] [t2 : Identifier]) : Boolean (eq? (id-norm t1) (id-norm t2)))
                 (define-token-interface id : Type id? id-datum #:+ Identifier #:eq? eq?)
@@ -159,8 +157,7 @@
     [(_ id : Otherwise parent (Type rest ...) #:with id? id-datum)
      (with-syntax ([type=? (case (syntax-e #'Type) [(String) #'string=?] [(Char) #'char=?] [else #'equal?])]
                    [id=? (format-id #'id "~a=?" (syntax-e #'id))])
-       #'(begin (define-type Otherwise id)
-                (struct id parent ([datum : Type] rest ...) #:transparent)
+       #'(begin (struct id parent ([datum : Type] rest ...) #:transparent #:type-name Otherwise)
                 (define (id=? [t1 : Otherwise] [t2 : Otherwise]) : Boolean (type=? (id-datum t1) (id-datum t2)))
                 (define-token-interface id : Type id? id-datum #:+ Otherwise #:eq? type=?)))]))
 
@@ -173,7 +170,7 @@
                     (for/list ([<id> (in-list (syntax->list #'(id ...)))])
                       (list (format-id <id> "~a?" (syntax-e <id>))
                             (format-id <id> "~a-datum" (syntax-e <id>))))])
-       #'(begin (struct token css-token () #:transparent) (define-type Token token)
+       #'(begin (struct token css-token () #:transparent #:type-name Token)
                 (define-token id : ID token (Type rest ...) #:with id? id-datum) ...
                 (define-type Token-Datum (U Type ...))
                 (define (token->datum [t : Token]) : (Option Token-Datum) (cond [(id? t) (id-datum t)] ... [else #false]))))]))
@@ -207,7 +204,7 @@
                               (cond [(string-contains? type-name "Flonum") #'fl=]
                                     [(string-contains? type-name "Fixnum") #'fx=]
                                     [else #'=]))))])
-       #'(begin (struct token css-numeric () #:transparent) (define-type Token token)
+       #'(begin (struct token css-numeric () #:transparent #:type-name Token)
                 (define-token id : ID token #:as Type #:=? type=? #:with id? id-datum) ...
                 (define (token->datum [t : Token]) : (U Type ...) (cond [(id? t) (id-datum t)] ... [else nan]))))]))
   
@@ -386,9 +383,10 @@
       [(? css:block? main) (w3s-token->exn exn:css css-token->string css-token->syntax css-token-datum->string main (css:block-components main))]
       [(? css-token?) (w3s-token->exn exn:css css-token->string css-token->syntax any)])))
 
-(define css-log-syntax-error : (->* (CSS-Syntax-Error) ((Option CSS-Token) Log-Level) Void)
-  (lambda [errobj [property #false] [level 'warning]]
-    (w3s-log-syntax-error 'exn:xml:syntax css-token->string css-token->datum errobj property level)))
+(define css-log-syntax-error : (->* (CSS-Syntax-Error) ((Option CSS-Token) (Option Log-Level)) Void)
+  (lambda [errobj [property #false] [level #false]]
+    (w3s-log-syntax-error 'exn:xml:syntax css-token->string css-token->datum
+                          errobj property (or level 'warning))))
 
 ;;; https://drafts.csswg.org/css-syntax/#parsing
 ;; Parser Combinators and Syntax Sugars of dealing with declarations for client applications
@@ -428,11 +426,9 @@
 (define-syntax (define-css-value stx)
   (syntax-case stx [:]
     [(_ datum #:as Datum (fields ...) options ...)
-     #'(begin (define-type Datum datum)
-              (struct datum (fields ...) #:transparent options ...))]
+     #'(struct datum (fields ...) #:type-name Datum #:transparent options ...)]
     [(_ datum #:as Datum #:=> parent (fields ...) options ...)
-     #'(begin (define-type Datum datum)
-              (struct datum parent (fields ...) #:transparent options ...))]))
+     #'(struct datum parent (fields ...) #:type-name Datum #:transparent options ...)]))
 
 (define-syntax (define-prefab-keyword stx)
   (syntax-case stx [:]

@@ -24,8 +24,8 @@
                     (make-syntax-error subexn v)))
                 ...
 
-                (define make+exn : (->* ((U EOF Token (Listof Token))) ((Option Token) Log-Level) subexn)
-                  (lambda [v [property #false] [level 'warning]]
+                (define make+exn : (->* ((U EOF Token (Listof Token))) ((Option Token) (Option Log-Level)) subexn)
+                  (lambda [v [property #false] [level #false]]
                     (define errobj : subexn (make-syntax-error subexn v))
                     (log-syntax-error errobj property level)
                     errobj))
@@ -66,6 +66,15 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define w3s-empty-stack : Continuation-Mark-Set (continuation-marks #false))
+
+(define w3s-log-exn : (->* ((U exn String) Symbol) (Any Log-Level) Void)
+  (lambda [errobj topic [src #false] [level 'debug]]
+    (define message : String
+      (cond [(string? errobj) errobj]
+            [else (format "@~s: ~a: ~a" src
+                    (object-name errobj) (exn-message errobj))]))
+    
+    (log-message (current-logger) level topic message errobj)))
 
 (define #:forall (T Error) w3s-token->exn
   : (case-> [(-> String Continuation-Mark-Set (Listof Syntax) Error) (->* (T) ((Option Any) (Option Any)) String) (-> T Syntax) T -> Error]

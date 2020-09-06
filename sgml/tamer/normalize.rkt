@@ -19,7 +19,7 @@
 
 (define dtype : XML-Type (assert (xml-document*-type n:normalize.xml)))
 
-(xml-type-entities dtype)
+dtype
 
 (xml-entity-ref dtype 'book)
 (xml-entity-ref dtype 'tricky)

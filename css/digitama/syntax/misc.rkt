@@ -4,9 +4,12 @@
 
 (require racket/promise)
 
+(require "w3s.rkt")
+
 (require (for-syntax racket/base))
 (require (for-syntax racket/syntax))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-syntax (define-css-parameter stx)
   (syntax-case stx [:]
     [(_ id : Type #:= defval)
@@ -35,18 +38,14 @@
 
 (define-type (Listof+ css) (Pairof css (Listof css)))
 
-(define css-log-error : (->* ((U exn String)) (Any Log-Level Symbol) Void)
-  (lambda [errobj [src #false] [level 'debug] [topic 'exn:css:fail]]
-    (define message : String (if (string? errobj) errobj (format "@~s: ~a: ~a" src (object-name errobj) (exn-message errobj))))
-    (log-message (current-logger) level topic message errobj)))
-  
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;  
 (define css-log-read-error : (->* ((U exn String)) (Any Log-Level) Void)
   (lambda [errobj [src #false] [level 'debug]]
-    (css-log-error errobj src level 'exn:css:read)))
+    (w3s-log-exn errobj 'exn:css:read src level)))
 
 (define css-log-eval-error : (->* ((U exn String)) (Any Log-Level) Void)
   (lambda [errobj [src #false] [level 'debug]]
-    (css-log-error errobj src level 'exn:css:eval)))
+    (w3s-log-exn errobj 'exn:css:eval src level)))
 
 (define hash-set++ : (-> (HashTable Symbol Any) (Listof+ Symbol) Any (HashTable Symbol Any))
   (lambda [data++ tags v]

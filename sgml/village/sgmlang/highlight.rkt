@@ -4,7 +4,7 @@
 
 (require sgml/digitama/digicore)
 (require sgml/digitama/tokenizer)
-(require sgml/digitama/delimiter)
+(require sgml/digitama/tokenizer/delimiter)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-lexer

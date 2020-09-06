@@ -2,10 +2,11 @@
 
 (provide (all-defined-out))
 
-(require "digicore.rkt")
-(require "delimiter.rkt")
-(require "misc.rkt")
+(require css/digitama/syntax/w3s)
 
+(require "digicore.rkt")
+
+(require "tokenizer/delimiter.rkt")
 (require "tokenizer/port.rkt")
 
 (require typed/racket/unsafe)
@@ -25,8 +26,8 @@
 (define-syntax (xml-make-bad-token stx)
   (syntax-case stx []
     [(_ source prev-env end xml:bad:sub datum)
-     #'(let ([bad (xml-make-token source prev-env end xml:bad:sub (~s datum))])
-         (xml-log-read-error (xml-token->string bad))
+     #'(let ([bad (xml-make-token source prev-env end xml:bad:sub datum)])
+         (w3s-log-exn (xml-token->string bad) 'exn:xml:read)
          bad)]))
 
 (define-syntax (xml-datum->token stx)
@@ -60,7 +61,7 @@
              [(box? datum) (xml-make-token source prev-env end xml:&string (assert (unbox datum) string?))]
              [(index? datum) (xml-make-token source prev-env end xml:char datum)]
              [(keyword? datum) (xml-make-token source prev-env end xml:pereference datum)]
-             [(list? datum) (xml-make-bad-token source prev-env end xml:bad (list->string datum))]
+             [(pair? datum) (xml-make-bad-token source prev-env end xml:bad (cons (list->string (car datum)) (cdr datum)))]
              [else eof])]))
 
 (struct xml-parser-env
