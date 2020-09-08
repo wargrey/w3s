@@ -38,16 +38,19 @@
   (lambda [int-dtd]
     (let expand-dtd ([rest : (Listof XML-Type-Declaration*) (xml-dtd-declarations int-dtd)]
                      [entities : XML-Type-Entities (make-immutable-hasheq)]
-                     [notations : XML-Type-Notations (make-immutable-hasheq)])
-      (cond [(null? rest) (xml-type entities notations)]
+                     [notations : XML-Type-Notations (make-immutable-hasheq)]
+                     [attributes : XML-Type-Attributes (make-immutable-hasheq)])
+      (cond [(null? rest) (xml-type entities notations attributes)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml-entity? self)
-                           (cond [(not (xml-entity-value self)) (expand-dtd rest++ (xml-entity-cons self entities) notations)]
-                                 [else (expand-dtd rest++ (xml-entity-cons (xml-dtd-included-as-literal self entities) entities) notations)])]
-                          [(xml:pereference? self) (expand-dtd (append (xml-dtd-included-as-PE self entities) rest++) entities notations)]
-                          [(pair? self) (expand-dtd (append (xml-dtd-expand-section (car self) (cdr self) entities) rest++) entities notations)]
-                          [(xml-notation? self) (expand-dtd rest++ entities (xml-notation-cons self notations))]
-                          [else (expand-dtd rest++ entities notations)]))]))))
+                           ; NOTE: NDATA only concerns validity constraint, and therefore is not handled here. 
+                           (if (xml-entity-value self)
+                               (expand-dtd rest++ (xml-entity-cons (xml-dtd-included-as-literal self entities) entities) notations attributes)
+                               (expand-dtd rest++ (xml-entity-cons self entities) notations attributes))]
+                          [(xml:pereference? self) (expand-dtd (append (xml-dtd-included-as-PE self entities) rest++) entities notations attributes)]
+                          [(pair? self) (expand-dtd (append (xml-dtd-expand-section (car self) (cdr self) entities) rest++) entities notations attributes)]
+                          [(xml-notation? self) (expand-dtd rest++ entities (xml-notation-cons self notations) attributes)]
+                          [else (expand-dtd rest++ entities notations attributes)]))]))))
 
 (define xml-dtd-expand-section : (-> (U XML:Name XML:PEReference) (Listof XML-Type-Declaration*) XML-Type-Entities (Listof XML-Type-Declaration*))
   (lambda [condition body entities]
@@ -216,54 +219,56 @@
                 
                 [else (not (get-output-bytes /dev/evout #true))])))))
 
-(define xml-attr-entity-replace : (->* (XML:Name XML:String XML-Type-Entities) ((Listof Symbol)) (U XML:String Boolean))
+(define xml-attr-entity-replace : (->* (XML:Name XML:String XML-Type-Entities) ((Listof Symbol) (Listof Char)) (U XML:String (Listof Char) False))
   ;;; https://www.w3.org/TR/xml11/#sec-line-ends
   ;;; https://www.w3.org/TR/xml11/#AVNormalize
-  (let ([/dev/avout (open-output-string '/dev/avout)])
-    (lambda [attname vtoken entities [rstack : (Listof Symbol) null]]
-      (define src : String (xml:string-datum vtoken))
-      (define size : Index (string-length src))
-      (define false-idx : Nonnegative-Fixnum (+ size 1))
-        
-      (let attr-value-normalize ([idx : Nonnegative-Fixnum 0]
-                                 [leader : (Option Symbol) #false]
-                                 [srahc : (Listof Char) null])
-        (cond [(< idx size)
-               (let ([ch (unsafe-string-ref src idx)])
-                 (define idx++ : Nonnegative-Fixnum (+ idx 1))
-                 
-                 (cond [(eq? leader '&)
-                        (cond [(not (eq? ch #\;)) (attr-value-normalize idx++ leader (cons ch srahc))]
-                              [(null? srahc) (make+exn:xml:malformed vtoken attname) (attr-value-normalize false-idx leader srahc)]
-                              [else (let ([estr (list->string (reverse srahc))])
-                                      (if (eq? (unsafe-string-ref estr 0) #\#)
-                                          (let ([replacement (xml-char-unreference vtoken estr attname)])
-                                            (cond [(not replacement) (attr-value-normalize false-idx #false null)]
-                                                  [else (write-char replacement /dev/avout) (attr-value-normalize idx++ #false null)]))
-                                          (let ([ename (string->unreadable-symbol estr)])
-                                            (cond [(memv ename rstack) (make+exn:xml:loop vtoken attname) (attr-value-normalize false-idx #false null)]
-                                                  [else (let ([etoken (xml-entity-value-token-ref vtoken ename entities attname)])
-                                                          (cond [(not etoken) (attr-value-normalize false-idx #false null)]
-                                                                [else (let ([raction (xml-attr-entity-replace attname etoken entities (cons ename rstack))])
-                                                                        (cond [(not raction) (attr-value-normalize false-idx #false null)]
-                                                                              [else (attr-value-normalize idx++ #false null)]))]))]))))])]
-                       [(eq? leader 'xD)
-                        ; NOTE: the EOL handling and attribute normalization conincide here.
-                        (write-char #\space /dev/avout)
-                        (if (or (eq? ch #\newline) (eq? ch #\u0085))
-                            (attr-value-normalize idx++ #false srahc)
-                            (attr-value-normalize idx #false srahc))]
-                       [(eq? ch #\&) (attr-value-normalize idx++ '& srahc)]
-                       [(eq? ch #\return) (attr-value-normalize idx++ 'xD srahc)]
-                       [(eq? ch #\u0085) (write-char #\space /dev/avout) (attr-value-normalize idx++ leader srahc)]
-                       [(eq? ch #\u2028) (write-char #\space /dev/avout) (attr-value-normalize idx++ leader srahc)]
-                       [else (write-char ch /dev/avout) (attr-value-normalize idx++ leader srahc)]))]
-              
-              [(= idx size)
-               (cond [(pair? rstack) #true]
-                     [else (w3s-remake-token vtoken xml:string
-                                             (bytes->string/utf-8 (get-output-bytes /dev/avout #true) #\uFFFD))])]
-              [else (and (null? rstack) (get-output-bytes /dev/avout #true) #false)])))))
+  (lambda [attname vtoken entities [rstack : (Listof Symbol) null] [prev-eulav : (Listof Char) null]]
+    (define src : String (xml:string-datum vtoken))
+    (define size : Index (string-length src))
+    (define false-idx : Nonnegative-Fixnum (+ size 1))
+    
+    (let attr-value-normalize ([idx : Nonnegative-Fixnum 0]
+                               [leader : (Option Symbol) #false]
+                               [srahc : (Listof Char) null]
+                               [eulav : (Listof Char) prev-eulav])
+      (cond [(< idx size)
+             (let ([ch (unsafe-string-ref src idx)])
+               (define idx++ : Nonnegative-Fixnum (+ idx 1))
+               
+               (cond [(eq? leader '&)
+                      (cond [(not (eq? ch #\;)) (attr-value-normalize idx++ leader (cons ch srahc) eulav)]
+                            [(null? srahc) (make+exn:xml:malformed vtoken attname) (attr-value-normalize false-idx leader srahc eulav)]
+                            [else (let ([estr (list->string (reverse srahc))])
+                                    (if (eq? (unsafe-string-ref estr 0) #\#)
+                                        (let ([replacement (xml-char-unreference vtoken estr attname)])
+                                          (cond [(not replacement) (attr-value-normalize false-idx #false null eulav)]
+                                                [else (attr-value-normalize idx++ #false null (cons replacement eulav))]))
+                                        (let ([ename (string->unreadable-symbol estr)])
+                                          (cond [(memv ename rstack) (make+exn:xml:loop vtoken attname) (attr-value-normalize false-idx #false null eulav)]
+                                                [else (let ([etoken (xml-entity-value-token-ref vtoken ename entities attname)])
+                                                        (cond [(not etoken) (attr-value-normalize false-idx #false null eulav)]
+                                                              [else (let ([raction (xml-attr-entity-replace attname etoken entities (cons ename rstack) eulav)])
+                                                                      (cond [(list? raction) (attr-value-normalize idx++ #false null raction)]
+                                                                            [else (attr-value-normalize false-idx #false null eulav)]))]))]))))])]
+
+                     ; NOTE: the EOL handling and attribute normalization conincide here.
+                     [(eq? leader 'xD)
+                      (if (or (eq? ch #\newline) (eq? ch #\u0085))
+                          (attr-value-normalize idx++ #false srahc (cons #\space eulav))
+                          (attr-value-normalize idx #false srahc (cons #\space eulav)))]
+                     [(eq? ch #\&) (attr-value-normalize idx++ '& srahc eulav)]
+                     [(eq? ch #\return) (attr-value-normalize idx++ 'xD srahc eulav)]
+                     [(eq? ch #\u0085) (attr-value-normalize idx++ leader srahc (cons #\space eulav))]
+                     [(eq? ch #\u2028) (attr-value-normalize idx++ leader srahc (cons #\space eulav))]
+                     [(eq? ch #\newline) (attr-value-normalize idx++ leader srahc (cons #\space eulav))]
+                     ; End EOL
+                     
+                     [else (attr-value-normalize idx++ leader srahc (cons ch eulav))]))]
+            
+            [(= idx size)
+             (cond [(null? rstack) (w3s-remake-token vtoken xml:string (list->string (reverse eulav)))]
+                   [else eulav])]
+            [else #false]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-entity-cons : (-> (Option XML-Entity) XML-Type-Entities XML-Type-Entities)

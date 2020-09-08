@@ -9,7 +9,6 @@
 
 (require syntax/strip-context)
 
-(require sgml/digitama/digicore)
 (require sgml/digitama/document)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -20,21 +19,22 @@
 (define sgml-read-syntax
   (lambda [read-sgml-document* sgml px.sgml .ext src /dev/sgmlin [sgml-normalize #false]]
     (regexp-match #px"^\\s*" /dev/sgmlin) ; skip blanks before real sgml content
+    
     (define-values (line column position) (port-next-location /dev/sgmlin))
     (define bytes-bag (port->bytes /dev/sgmlin))
     
     (define lang.sgml
       (cond [(path? src)
-             (let* ([src.sgml (path-replace-extension (file-name-from-path src) "")]
+             (let* ([src.sgml (path-replace-extension (file-name-from-path src) #"")]
                     [path.sgml (if (regexp-match? px.sgml src.sgml) src.sgml (path-replace-extension src.sgml .ext))])
                (string->symbol (path->string path.sgml)))]
             [else '|this should not happen| (string->symbol (format "lang~a" .ext))]))
 
-    (define lang.sgml*
+    (define lang*.sgml
       (string->symbol
-       (string-append
-        (symbol->string lang.sgml)
-        "*")))
+       (format "~a*~a"
+         (path-replace-extension (symbol->string lang.sgml) #"")
+         .ext)))
 
     (strip-context
      #`(module #,lang.sgml typed/racket/base
@@ -51,7 +51,9 @@
            #,lang.sgml
            (w3s-display-times '#,lang.sgml MB cpu real gc))
 
-         (w3s-doc-process #,sgml-normalize #,lang.sgml* MB* cpu* real* gc* #,lang.sgml)))))
+         (w3s-doc-process #,sgml-normalize #,lang*.sgml
+                          MB* cpu* real* gc*
+                          #,lang.sgml)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-read

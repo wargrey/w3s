@@ -8,7 +8,9 @@
 (require "tokenizer.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-type XML-Type-Definition* (U XML-Processing-Instruction* XML-Entity XML-Notation))
+(define-type XML-Type-Definition*
+  (U XML-Processing-Instruction* XML-Entity XML-Notation
+     (MPairof XML:Name (Listof XML-Attribute))))
 
 (define-type XML-Type-Declaration*
   (Rec defs (U XML-Type-Definition* XML:PEReference
@@ -30,6 +32,11 @@
   #:transparent
   #:type-name XML-Notation)
 
+(struct xml-attribute
+  ()
+  #:transparent
+  #:type-name XML-Attribute)
+
 (struct xml-dtd
   ([location : (U String Symbol)]
    [declarations : (Listof XML-Type-Declaration*)]
@@ -40,10 +47,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type XML-Type-Entities (Immutable-HashTable (U Symbol Keyword) XML-Entity))
 (define-type XML-Type-Notations (Immutable-HashTable Symbol XML-Notation))
+(define-type XML-Type-Attributes (Immutable-HashTable Symbol (Listof XML-Attribute)))
 
 (struct xml-type
   ([entities : XML-Type-Entities]
-   [notations : XML-Type-Notations])
+   [notations : XML-Type-Notations]
+   [attributes : XML-Type-Attributes])
   #:transparent
   #:type-name XML-Type)
 
