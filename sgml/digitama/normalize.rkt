@@ -47,6 +47,7 @@
                            (if (xml-entity-value self)
                                (expand-dtd rest++ (xml-entity-cons (xml-dtd-included-as-literal self entities) entities) notations attributes)
                                (expand-dtd rest++ (xml-entity-cons self entities) notations attributes))]
+                          [(xml-attribute-list? self) (expand-dtd rest++ entities notations (xml-attributes-cons self attributes))]
                           [(xml:pereference? self) (expand-dtd (append (xml-dtd-included-as-PE self entities) rest++) entities notations attributes)]
                           [(pair? self) (expand-dtd (append (xml-dtd-expand-section (car self) (cdr self) entities) rest++) entities notations attributes)]
                           [(xml-notation? self) (expand-dtd rest++ entities (xml-notation-cons self notations) attributes)]
@@ -285,6 +286,19 @@
            [name (xml:name-datum ntoken)])
       (cond [(not (hash-has-key? notations name)) (hash-set notations name e)]
             [else (make+exn:xml:duplicate ntoken) notations]))))
+
+(define xml-attributes-cons : (-> XML-Type-Attribute-List XML-Type-Attributes XML-Type-Attributes)
+  (let ([empty-attributes ((inst make-immutable-hasheq Symbol XML-Attribute))])
+    (lambda [as attributes]
+      (let* ([etoken (xml-attribute-list-element as)]
+             [ename (xml:name-datum etoken)])
+        (hash-set attributes ename
+                  (for/fold ([apool : (Immutable-HashTable Symbol XML-Attribute) (hash-ref attributes ename (λ [] empty-attributes))])
+                            ([a (in-list (xml-attribute-list-body as))])
+                    (let* ([atoken (xml-attribute-name a)]
+                           [aname (xml:name-datum atoken)])
+                      (cond [(not (hash-has-key? apool aname)) (hash-set apool aname a)]
+                            [else (make+exn:xml:duplicate atoken etoken) apool]))))))))
 
 (define xml-char-unreference : (->* (XML-Token String) ((Option XML-Token)) (Option Char))
   (lambda [etoken estr [context #false]]

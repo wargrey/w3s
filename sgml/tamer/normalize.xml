@@ -24,6 +24,16 @@
 <!ENTITY Pub-Status "This is a pre-release of the
 specification.">
 
+<!ATTLIST termdef
+id      ID      #REQUIRED
+name    CDATA   #IMPLIED>
+
+<!ATTLIST list
+type    (bullets|ordered|glossary)  "ordered">
+
+<!ATTLIST form
+method  CDATA   #FIXED "POST">
+
 <![%xml-spec-replacement-text;[
 <!ENTITY name "Albert Camus">
 <!ENTITY % pub    "&#xc9;ditions Gallimard" >

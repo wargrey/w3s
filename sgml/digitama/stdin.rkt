@@ -42,22 +42,11 @@
       (read-line /dev/rawin))
     
     (let-values ([(version encoding standalone?) (xml-read-declaration /dev/rawin)])
-      (values (cond [(or (not encoding) (string-ci=? encoding "UTF-8")) /dev/rawin]
-                    [else (with-handlers ([exn? (λ _ /dev/rawin)])
-                            (define-values (line column position) (port-next-location /dev/rawin))
-                            (define /dev/xmlin : Input-Port
-                              (reencode-input-port /dev/rawin encoding #false #true (object-name /dev/rawin) #true
-                                                   (λ [[msg : String] [port : Input-Port]] : Nothing
-                                                     (error 'xml-input-port (string-append encoding ": ~e: " msg) port))))
-                            (when (and line column position)
-                              (port-count-lines! /dev/xmlin)
-                              (set-port-next-location! /dev/xmlin line column position))
-                            /dev/xmlin)])
-              version encoding standalone?))))
+      (values (xml-reencode-port /dev/rawin encoding) version encoding standalone?))))
 
 (define dtd-open-input-port : (->* (SGML-StdIn) (Boolean (U String Symbol False)) Input-Port)
   (lambda [/dev/stdin [enable-line-counting? #false] [port-name #false]]
-    (define /dev/dtdin : Input-Port
+    (define /dev/rawin : Input-Port
       (cond [(port? /dev/stdin) /dev/stdin]
             [(path? /dev/stdin) (open-input-file /dev/stdin)]
             [(regexp-match? #px"\\.dtd$" /dev/stdin) (open-input-file (~a /dev/stdin))]
@@ -65,14 +54,15 @@
             [(bytes? /dev/stdin) (open-input-bytes /dev/stdin (or port-name '/dev/dtdin/bytes))]
             [else (open-input-string (~s /dev/stdin) (or port-name '/dev/dtdin/error))]))
 
-    (when (and enable-line-counting? (not (port-counts-lines? /dev/dtdin)))
-      (port-count-lines! /dev/dtdin))
+    (when (and enable-line-counting? (not (port-counts-lines? /dev/rawin)))
+      (port-count-lines! /dev/rawin))
     
     ;; skip racket `#lang` line
-    (when (regexp-match-peek #px"^#(lang|!)" /dev/dtdin)
-      (read-line /dev/dtdin))
-    
-    /dev/dtdin))
+    (when (regexp-match-peek #px"^#(lang|!)" /dev/rawin)
+      (read-line /dev/rawin))
+
+    (let-values ([(version encoding standalone?) (xml-read-declaration /dev/rawin)])
+      (xml-reencode-port /dev/rawin encoding))))
 
 (define sgml-port-name : (-> Input-Port (U String Symbol))
   (lambda [/dev/xmlin]
@@ -100,6 +90,20 @@
                               [(bytes=? name #"encoding") (read-property version (xml-fallback-charset value) standalone?)]
                               [(bytes=? name #"standalone") (read-property version encoding (regexp-match? #px#"^[Yy][Ee][Ss]$" value))]
                               [else (read-property version encoding standalone?)]))))])))
+
+(define xml-reencode-port : (-> Input-Port (Option String) Input-Port)
+  (lambda [/dev/rawin encoding]
+    (cond [(or (not encoding) (string-ci=? encoding "UTF-8")) /dev/rawin]
+          [else (with-handlers ([exn? (λ _ /dev/rawin)])
+                  (define-values (line column position) (port-next-location /dev/rawin))
+                  (define /dev/xmlin : Input-Port
+                    (reencode-input-port /dev/rawin encoding #false #true (object-name /dev/rawin) #true
+                                         (λ [[msg : String] [port : Input-Port]] : Nothing
+                                           (error 'dtd-input-port (string-append encoding ": ~e: " msg) port))))
+                  (when (and line column position)
+                    (port-count-lines! /dev/xmlin)
+                    (set-port-next-location! /dev/xmlin line column position))
+                  /dev/xmlin)])))
 
 (define xml-fallback-charset : (-> Bytes String)
   (lambda [from]

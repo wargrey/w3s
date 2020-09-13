@@ -60,7 +60,7 @@
                       [(#\? #\]) (xml-consume-close-token /dev/xmlin ch xml-consume-token:* scope)] ; for PI and CDATA
                       [else (values (xml-consume-contentchars /dev/xmlin ch) xml-consume-token:* scope)])])
         (cond [(char-whitespace? ch) (xml-skip-whitespace /dev/xmlin) (values xml-collapsed-whitespace xml-consume-token:* scope)]
-              [else (if (xml-name-start-char? ch)
+              [else (if (or (xml-name-char? ch) (eq? ch #\#))
                         (let ([kw (xml-consume-nmtoken /dev/xmlin ch)])
                           (case kw
                             [(PUBLIC SYSTEM) (values kw xml-consume-token:* kw)]
@@ -93,11 +93,11 @@
   (lambda [/dev/xmlin ch scope]
     (if (xml-name-start-char? ch)
         (let ([DECLNAME (xml-consume-nmtoken /dev/xmlin ch)])
-                  (values DECLNAME
-                          (case DECLNAME
-                            [(ENTITY) xml-consume-token:entity-name]
-                            [else xml-consume-token:*])
-                          DECLNAME))
+          (values DECLNAME
+                  (case DECLNAME
+                    [(ENTITY) xml-consume-token:entity-name]
+                    [else xml-consume-token:*])
+                  DECLNAME))
         (values (cons (xml-consume-chars-literal/within-tag /dev/xmlin (list ch))
                       (xml-!char-errno ch))
                 xml-consume-token:* scope))))
@@ -124,6 +124,7 @@
   ;;; https://www.w3.org/TR/xml11/#NT-EntityValue
   (lambda [/dev/xmlin ch scope]
     (case scope
+      [(ATTLIST) (values (xml-consume-attribute-value /dev/xmlin ch) xml-consume-token:* scope)]
       [(ENTITY) (values (xml-consume-entity-value /dev/xmlin ch) xml-consume-token:* xml-default-scope)]
       [(PUBLIC) (values (xml-consume-pubid-literal /dev/xmlin ch) xml-consume-token:* 'SYSTEM)]
       [else (values (xml-consume-system-literal /dev/xmlin ch) xml-consume-token:* xml-default-scope)])))

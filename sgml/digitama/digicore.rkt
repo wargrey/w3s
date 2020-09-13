@@ -25,40 +25,14 @@
     [(_ symbolic-prefix : Type id? id-datum #:+ XML:ID #:eq? type=?)
      (with-syntax ([id=<-? (format-id #'symbolic-prefix "~a=<-?" (syntax-e #'symbolic-prefix))]
                    [id=:=? (format-id #'symbolic-prefix "~a=:=?" (syntax-e #'symbolic-prefix))])
-       #'(begin (define id=<-? : (All (a) (case-> [Any (-> Type Boolean : #:+ a) -> (Option a) : #:+ XML:ID]
-                                                  [Any (U (-> Type Boolean) (Listof Type)) -> (Option Type) : #:+ XML:ID]))
-                  (lambda [token range?]
-                    (and (id? token)
-                         (let ([datum : Type (id-datum token)])
-                           (cond [(procedure? range?) (and (range? datum) datum)]
-                                 [else (and (member datum range? type=?) datum)])))))
-
-                (define id=:=? : (-> Any Type (Option Type) : #:+ XML:ID) #| for performance |#
+       #'(begin (define id=:=? : (-> Any Type (Option Type) : #:+ XML:ID) #| for performance |#
                   (lambda [t v]
                     (and (id? t)
                          (let ([d : Type (id-datum t)])
-                           (and (type=? d v) d)))))))]
-    [(_ numeric-prefix : Type id? id-datum #:+ XML:ID #:= type=?)
-     (with-syntax ([id=<-? (format-id #'numeric-prefix "~a=<-?" (syntax-e #'numeric-prefix))])
-       #'(begin (define id=<-? : (All (a) (case-> [Any (-> Type Boolean : #:+ a) -> (Option a) : #:+ XML:ID]
-                                                  [Any (-> Type Type Boolean) Type -> (Option Type) : #:+ XML:ID]
-                                                  [Any Type (-> Type Type Boolean) Type -> (Option Type) : #:+ XML:ID]
-                                                  [Any (Listof Type) -> (Option Type) : #:+ XML:ID]))
-                  (case-lambda
-                    [(token op n)   (and (id? token) (let ([d : Type (id-datum token)]) (and (op d n) d)))]
-                    [(token l op r) (and (id? token) (let ([m : Type (id-datum token)]) (and (op l m) (op m r) m)))]
-                    [(token range?) (and (id? token) (let ([d : Type (id-datum token)])
-                                                       (cond [(procedure? range?) (and (range? d) d)]
-                                                             [else (for/or : (Option Type) ([v (in-list range?)])
-                                                                     (and (type=? d v) d))])))]))))]))
+                           (and (type=? d v) d)))))))]))
 
 (define-syntax (define-token stx)
   (syntax-parse stx #:literals [: Symbol Keyword]
-    [(_ id : Number parent #:as Type #:=? type=? #:with id? id-datum)
-     (with-syntax ([id=? (format-id #'id "~a=?" (syntax-e #'id))])
-       #'(begin (struct id parent ([datum : Type]) #:transparent #:type-name Number)
-                (define (id=? [t1 : Number] [t2 : Number]) : Boolean (type=? (id-datum t1) (id-datum t2)))
-                (define-token-interface id : Type id? id-datum #:+ Number #:= type=?)))]
     [(_ id : Identifier parent ((~and (~or Symbol Keyword) Type) #:ci rest ...) #:with id? id-datum)
      (with-syntax ([id=? (format-id #'id "~a=?" (syntax-e #'id))]
                    [id-norm=? (format-id #'id "~a-norm=?" (syntax-e #'id))]
