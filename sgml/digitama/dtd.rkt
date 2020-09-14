@@ -9,9 +9,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type XML-Type-Element-Mixed (Boxof (Listof XML:Name)))
-(define-type XML-Type-Element-Sequence (Rec seq (Vectorof (Pairof (U XML:Name XML-Type-Element-Choice seq) Char))))
-(define-type XML-Type-Element-Choice (Rec choice (Listof (Pairof (U XML:Name XML-Type-Element-Sequence choice) Char))))
-(define-type XML-Type-Element-Children (Pairof (U XML-Type-Element-Sequence XML-Type-Element-Choice) Char))
+(define-type XML-Type-Element-Sequence (Vectorof (U (Pairof Char XML:Name) XML-Type-Element-Children)))
+(define-type XML-Type-Element-Choice (Listof (U (Pairof Char XML:Name) XML-Type-Element-Children)))
+(define-type XML-Type-Element-Children (U (Pairof Char XML-Type-Element-Sequence) (Pairof Char XML-Type-Element-Choice)))
 (define-type XML-Type-Element-Content (U XML-Type-Element-Mixed XML-Type-Element-Children))
 
 (define-type XML-Type-Attribute-Type (U XML:Name (Listof XML:Name)))
@@ -204,23 +204,48 @@
 (define xml-dtd-extract-element-children* : (-> (Option XML-Token) XML:Name (Listof XML-Token)
                                                 (Values (U XML-Type-Element-Children XML-Syntax-Error) (Listof XML-Token)))
   (lambda [declname elem body]
-    #;(let extract-children ([rest : (Listof XML-Token) body]
-                           [nerdlihc : (Listof XML:Name) null]
-                           [connector? : (Option Char) #false])
+    (let extract-children ([rest : (Listof XML-Token) body]
+                           [nerdlihc : (Listof (U (Pairof Char XML:Name) XML-Type-Element-Children)) null]
+                           [sep? : Boolean #true]
+                           [sep : (Option Char) #false])
       (cond [(null? body) (values (make+exn:xml:malformed (cons elem body) declname) null)]
             [else (let-values ([(?e rest++) (values (car rest) (cdr rest))])
                     (cond [(xml:name? ?e)
-                           (when (not connector?)
-                             (make+exn:xml:malformed (list elem ?e) declname))
-                           (extract-children rest++ (if (not connector?) nerdlihc (cons ?e nerdlihc)) #false)]
+                           (let-values ([(p rest*) (xml-dtd-extract-element-children-particle* rest++)])
+                             (when (not sep?) (make+exn:xml:malformed ?e elem))
+                             (extract-children rest* (if (not sep?) nerdlihc (cons (cons p ?e) nerdlihc)) #false sep))]
                           [(xml:delim? ?e)
                            (let ([delim (xml:delim-datum ?e)])
-                             (unless (not connector?) (make+exn:xml:malformed (list elem ?e) declname))
-                             (cond [(eq? delim #\|) (extract-children rest++ nerdlihc #true)]
-                                   [(eq? delim #\)) (values (reverse nerdlihc) rest++)]
-                                   [else (make+exn:xml:malformed (list elem ?e) declname) (extract-children rest++ nerdlihc connector?)]))]
-                          [else (make+exn:xml:malformed (list elem ?e) declname) (extract-children rest++ nerdlihc connector?)]))]))
-    (values (make+exn:xml:malformed (cons elem body) declname) null)))
+                             (cond [(eq? delim #\|)
+                                    (when (or sep? (and sep (not (eq? sep #\|)))) (make+exn:xml:malformed ?e elem))
+                                    (extract-children rest++ nerdlihc #true (or sep #\|))]
+                                   [(eq? delim #\,)
+                                    (when (or sep? (and sep (not (eq? sep #\,)))) (make+exn:xml:malformed ?e elem))
+                                    (extract-children rest++ nerdlihc #true (or sep #\,))]
+                                   [(eq? delim #\))
+                                    (let-values ([(p rest*) (xml-dtd-extract-element-children-particle* rest++)]
+                                                 [(content) (reverse nerdlihc)])
+                                      (values (cond [(eq? sep #\|) (cons p content)]
+                                                    [else (cons p (list->vector content))])
+                                              rest*))]
+                                   [(eq? delim #\()
+                                    (let-values ([(?content rest*) (extract-children rest++ null #true #false)])
+                                      (extract-children rest* (if (exn:xml? ?content) nerdlihc (cons ?content nerdlihc)) #false sep))]
+                                   [else (make+exn:xml:malformed ?e elem) (extract-children rest++ nerdlihc sep? sep)]))]
+                          [else (make+exn:xml:malformed ?e elem) (extract-children rest++ nerdlihc sep? sep)]))]))))
+
+(define xml-dtd-extract-element-children-particle* : (-> (Listof XML-Token) (Values Char (Listof XML-Token)))
+  (lambda [body]
+    (define defchar : Char #\1)
+
+    (cond [(null? body) (values defchar body)]
+          [else (let-values ([(?p rest) (values (car body) (cdr body))])
+                  (cond [(xml:delim? ?p)
+                         (let ([p (xml:delim-datum ?p)])
+                           (if (memq p '(#\+ #\* #\?))
+                               (values (assert p char?) rest)
+                               (values defchar body)))]
+                        [else (values defchar body)]))])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-dtd-extract-attributes* : (-> (Option XML-Token) XML:Name (Listof XML-Doctype-Body*) (U XML-Attribute-List XML-Syntax-Error Void))
@@ -266,8 +291,9 @@
                     (cond [(xml:string? ?v) (values ?v (and fixed? #true) rest++)]
                           [(and fixed?) (make+exn:xml:malformed (list attr fixed? ?v) declname) (values #false #true rest++)]
                           [(xml:name? ?v)
-                           (cond [(eq? (xml:name-datum ?v) '|#FIXED|) (extract-default rest++ ?v)]
-                                 [else (values ?v fixed? rest++)])]
+                           (if (eq? (xml:name-datum ?v) '|#FIXED|)
+                               (extract-default rest++ ?v)
+                               (values ?v fixed? rest++))]
                           [else (make+exn:xml:malformed (list attr ?v) declname) (values #false fixed? rest++)]))]))))
 
 (define xml-dtd-extract-enumeration* : (-> (Option XML-Token) XML:Name (Listof XML-Token) Boolean (Values (U (Listof XML:Name) XML-Syntax-Error) (Listof XML-Token)))
@@ -278,16 +304,15 @@
       (cond [(null? body) (values (make+exn:xml:malformed (cons attr body) declname) null)]
             [else (let-values ([(?e rest++) (values (car rest) (cdr rest))])
                     (cond [(xml:name? ?e)
-                           (when (not bar?)
-                             (make+exn:xml:malformed (list attr ?e) declname))
+                           (when (not bar?) (make+exn:xml:malformed ?e attr))
                            (extract-enum rest++ (if (not bar?) smune (cons ?e smune)) #false)]
                           [(xml:delim? ?e)
                            (let ([delim (xml:delim-datum ?e)])
-                             (unless (not bar?) (make+exn:xml:malformed (list attr ?e) declname))
+                             (unless (not bar?) (make+exn:xml:malformed ?e attr))
                              (cond [(eq? delim #\|) (extract-enum rest++ smune #true)]
                                    [(eq? delim #\)) (values (reverse smune) rest++)]
-                                   [else (make+exn:xml:malformed (list attr ?e) declname) (extract-enum rest++ smune bar?)]))]
-                          [else (make+exn:xml:malformed (list attr ?e) declname) (extract-enum rest++ smune bar?)]))]))))
+                                   [else (make+exn:xml:malformed ?e attr) (extract-enum rest++ smune bar?)]))]
+                          [else (make+exn:xml:malformed ?e attr) (extract-enum rest++ smune bar?)]))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-dtd-filter-tokens : (-> XML-Token (Listof XML-Doctype-Body*) (U (Listof XML-Token) XML-Syntax-Error Void))
