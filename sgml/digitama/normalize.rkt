@@ -39,19 +39,21 @@
     (let expand-dtd ([rest : (Listof XML-Type-Declaration*) (xml-dtd-declarations int-dtd)]
                      [entities : XML-Type-Entities (make-immutable-hasheq)]
                      [notations : XML-Type-Notations (make-immutable-hasheq)]
+                     [elements : XML-Type-Elements (make-immutable-hasheq)]
                      [attributes : XML-Type-Attributes (make-immutable-hasheq)])
-      (cond [(null? rest) (xml-type entities notations attributes)]
+      (cond [(null? rest) (xml-type entities notations elements attributes)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml-entity? self)
                            ; NOTE: NDATA only concerns validity constraint, and therefore is not handled here. 
                            (if (xml-entity-value self)
-                               (expand-dtd rest++ (xml-entity-cons (xml-dtd-included-as-literal self entities) entities) notations attributes)
-                               (expand-dtd rest++ (xml-entity-cons self entities) notations attributes))]
-                          [(xml-attribute-list? self) (expand-dtd rest++ entities notations (xml-attributes-cons self attributes))]
-                          [(xml:pereference? self) (expand-dtd (append (xml-dtd-included-as-PE self entities) rest++) entities notations attributes)]
-                          [(pair? self) (expand-dtd (append (xml-dtd-expand-section (car self) (cdr self) entities) rest++) entities notations attributes)]
-                          [(xml-notation? self) (expand-dtd rest++ entities (xml-notation-cons self notations) attributes)]
-                          [else (expand-dtd rest++ entities notations attributes)]))]))))
+                               (expand-dtd rest++ (xml-entity-cons (xml-dtd-included-as-literal self entities) entities) notations elements attributes)
+                               (expand-dtd rest++ (xml-entity-cons self entities) notations elements attributes))]
+                          [(xml-element-content? self) (expand-dtd rest++ entities notations (xml-element-cons self elements) attributes)]
+                          [(xml-attribute-list? self) (expand-dtd rest++ entities notations elements (xml-attributes-cons self attributes))]
+                          [(xml:pereference? self) (expand-dtd (append (xml-dtd-included-as-PE self entities) rest++) entities notations elements attributes)]
+                          [(pair? self) (expand-dtd (append (xml-dtd-expand-section (car self) (cdr self) entities) rest++) entities notations elements attributes)]
+                          [(xml-notation? self) (expand-dtd rest++ entities (xml-notation-cons self notations) elements attributes)]
+                          [else (expand-dtd rest++ entities notations elements attributes)]))]))))
 
 (define xml-dtd-expand-section : (-> (U XML:Name XML:PEReference) (Listof XML-Type-Declaration*) XML-Type-Entities (Listof XML-Type-Declaration*))
   (lambda [condition body entities]
@@ -281,13 +283,20 @@
                         [else (make+exn:xml:duplicate ntoken) entities]))])))
 
 (define xml-notation-cons : (-> XML-Notation XML-Type-Notations XML-Type-Notations)
-  (lambda [e notations]
-    (let* ([ntoken (xml-notation-name e)]
+  (lambda [n notations]
+    (let* ([ntoken (xml-notation-name n)]
            [name (xml:name-datum ntoken)])
-      (cond [(not (hash-has-key? notations name)) (hash-set notations name e)]
+      (cond [(not (hash-has-key? notations name)) (hash-set notations name n)]
             [else (make+exn:xml:duplicate ntoken) notations]))))
 
-(define xml-attributes-cons : (-> XML-Type-Attribute-List XML-Type-Attributes XML-Type-Attributes)
+(define xml-element-cons : (-> XML-Element-Content XML-Type-Elements XML-Type-Elements)
+  (lambda [e elements]
+    (let* ([etoken (xml-element-content-name e)]
+           [name (xml:name-datum etoken)])
+      (cond [(not (hash-has-key? elements name)) (hash-set elements name e)]
+            [else (make+exn:xml:duplicate etoken) elements]))))
+
+(define xml-attributes-cons : (-> XML-Attribute-List XML-Type-Attributes XML-Type-Attributes)
   (let ([empty-attributes ((inst make-immutable-hasheq Symbol XML-Attribute))])
     (lambda [as attributes]
       (let* ([etoken (xml-attribute-list-element as)]

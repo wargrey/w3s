@@ -34,6 +34,13 @@ type    (bullets|ordered|glossary)  "ordered">
 <!ATTLIST form
 method  CDATA   #FIXED "POST">
 
+<!ELEMENT br EMPTY>
+<!ELEMENT p (#PCDATA|emph)* >
+<!ELEMENT container ANY>
+
+<!ELEMENT spec (front, body, back?)>
+<!ELEMENT div1 (head, (p | list | note)*, div2*)>
+
 <![%xml-spec-replacement-text;[
 <!ENTITY name "Albert Camus">
 <!ENTITY % pub    "&#xc9;ditions Gallimard" >

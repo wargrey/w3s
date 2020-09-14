@@ -8,12 +8,18 @@
 (require "tokenizer.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define-type XML-Type-Element-Mixed (Boxof (Listof XML:Name)))
+(define-type XML-Type-Element-Sequence (Rec seq (Vectorof (Pairof (U XML:Name XML-Type-Element-Choice seq) Char))))
+(define-type XML-Type-Element-Choice (Rec choice (Listof (Pairof (U XML:Name XML-Type-Element-Sequence choice) Char))))
+(define-type XML-Type-Element-Children (Pairof (U XML-Type-Element-Sequence XML-Type-Element-Choice) Char))
+(define-type XML-Type-Element-Content (U XML-Type-Element-Mixed XML-Type-Element-Children))
+
 (define-type XML-Type-Attribute-Type (U XML:Name (Listof XML:Name)))
 (define-type XML-Type-Attribute-Default (U XML:Name XML:String))
 
 (define-type XML-Type-Definition*
   (U XML-Processing-Instruction* XML-Entity XML-Notation
-     XML-Type-Attribute-List XML-Declaration*))
+     XML-Element-Content XML-Attribute-List XML-Declaration*))
 
 (define-type XML-Type-Declaration*
   (Rec defs (U XML-Type-Definition* XML:PEReference
@@ -48,7 +54,13 @@
   ([element : XML:Name]
    [body : (Listof XML-Attribute)])
   #:transparent
-  #:type-name XML-Type-Attribute-List)
+  #:type-name XML-Attribute-List)
+
+(struct xml-element-content
+  ([name : XML:Name]
+   [body : (U XML:Name XML-Type-Element-Content)])
+  #:transparent
+  #:type-name XML-Element-Content)
 
 (struct xml-dtd
   ([location : (U String Symbol)]
@@ -60,11 +72,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type XML-Type-Entities (Immutable-HashTable (U Symbol Keyword) XML-Entity))
 (define-type XML-Type-Notations (Immutable-HashTable Symbol XML-Notation))
+(define-type XML-Type-Elements (Immutable-HashTable Symbol XML-Element-Content))
 (define-type XML-Type-Attributes (Immutable-HashTable Symbol (Immutable-HashTable Symbol XML-Attribute)))
 
 (struct xml-type
   ([entities : XML-Type-Entities]
    [notations : XML-Type-Notations]
+   [elements : XML-Type-Elements]
    [attributes : XML-Type-Attributes])
   #:transparent
   #:type-name XML-Type)
@@ -93,13 +107,17 @@
                                  [(ENTITY)
                                   (let ([e (xml-dtd-extract-entity* declname DECL (vector-ref self 1))])
                                     (filter-definition rest++ (if (xml-entity? e) (cons e snoitaralced) snoitaralced)))]
+                                 [(ATTLIST)
+                                  (cond [(and extsubset?) (filter-definition rest++ (cons self snoitaralced))]
+                                        [else (let ([a (xml-dtd-extract-attributes* declname DECL (vector-ref self 1))])
+                                                (filter-definition rest++ (if (xml-attribute-list? a) (cons a snoitaralced) snoitaralced)))])]
+                                 [(ELEMENT)
+                                  (cond [(and extsubset?) (filter-definition rest++ (cons self snoitaralced))]
+                                        [else (let ([e (xml-dtd-extract-element* declname DECL (vector-ref self 1))])
+                                                (filter-definition rest++ (if (xml-element-content? e) (cons e snoitaralced) snoitaralced)))])]
                                  [(NOTATION)
                                   (let ([e (xml-dtd-extract-notation* declname DECL (vector-ref self 1))])
                                     (filter-definition rest++ (if (xml-notation? e) (cons e snoitaralced) snoitaralced)))]
-                                 [(ATTLIST)
-                                  (cond [(and extsubset?) (filter-definition rest++ (cons self snoitaralced))]
-                                        [else (let ([e (xml-dtd-extract-attributes* declname DECL (vector-ref self 1))])
-                                                (filter-definition rest++ (if (xml-attribute-list? e) (cons e snoitaralced) snoitaralced)))])]
                                  [else (make+exn:xml:unimplemented DECL declname) (filter-definition rest++ snoitaralced)]))]
                             [(xml-section? self)
                              (filter-definition rest++ (cons ((inst cons (U XML:Name XML:PEReference) (Listof XML-Type-Declaration*))
@@ -150,7 +168,62 @@
                                       (cond [(pair? (cddr ext)) (make+exn:xml:malformed (cons NOTATION (cddr ext)) declname)]
                                             [else (xml-notation ?name ?public ?system)])))]))]))))
 
-(define xml-dtd-extract-attributes* : (-> (Option XML-Token) XML:Name (Listof XML-Doctype-Body*) (U XML-Type-Attribute-List XML-Syntax-Error Void))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define xml-dtd-extract-element* : (-> (Option XML-Token) XML:Name (Listof XML-Doctype-Body*) (U XML-Element-Content XML-Syntax-Error Void))
+  (lambda [declname ELEMENT body]
+    (define tokens : (U (Listof XML-Token) XML-Syntax-Error Void) (xml-dtd-filter-tokens ELEMENT body))
+    
+    (when (list? tokens)
+      (cond [(or (null? tokens) (null? (cdr tokens))) (make+exn:xml:malformed (cons ELEMENT tokens) declname)]
+            [else (let-values ([(?name rest) (values (car tokens) (cdr tokens))])
+                    (cond [(not (xml:name? ?name)) (make+exn:xml:malformed (cons ELEMENT tokens) declname)]
+                          [(null? rest) (make+exn:xml:malformed (cons ELEMENT tokens) declname)]
+                          [else (let-values ([(?content cbody) (values (car rest) (cdr rest))])
+                                  (cond [(xml:delim=:=? ?content #\()
+                                         (let-values ([(?c rest++) (xml-dtd-extract-element-content* declname ?name cbody)])
+                                           (cond [(pair? rest++) (make+exn:xml:malformed (cons ELEMENT rest++) declname)]
+                                                 [else (unless (exn:xml? ?c) (xml-element-content ?name ?c))]))]
+                                        [(not (xml:name? ?content)) (make+exn:xml:malformed (list ELEMENT ?content) declname)]
+                                        [(pair? cbody) (make+exn:xml:malformed (cons ELEMENT rest) declname)]
+                                        [else (xml-element-content ?name ?content)]))]))]))))
+
+(define xml-dtd-extract-element-content* : (-> (Option XML-Token) XML:Name (Listof XML-Token) (Values (U XML-Type-Element-Content XML-Syntax-Error) (Listof XML-Token)))
+  (lambda [declname elem body]
+    (cond [(null? body) (values (make+exn:xml:malformed (cons elem body) declname) null)]
+          [else (let-values ([(?data rest) (values (car body) (cdr body))])
+                  (cond [(xml:name=:=? ?data '|#PCDATA|)
+                         (let-values ([(pcdata rest++) (xml-dtd-extract-enumeration* declname elem rest #false)])
+                           (cond [(exn:xml? pcdata) (values pcdata rest++)]
+                                 [(null? pcdata) (values (box null) rest++)]
+                                 [(null? rest++) (values (make+exn:xml:malformed (list elem (last body)) declname) rest++)]
+                                 [else (let-values ([(?* rest*) (values (car rest++) (cdr rest++))])
+                                         (cond [(xml:delim=:=? ?* #\*) (values (box pcdata) rest*)]
+                                               [else (values (make+exn:xml:malformed (cons elem rest++) declname) rest*)]))]))]
+                        [else (xml-dtd-extract-element-children* declname elem body)]))])))
+
+(define xml-dtd-extract-element-children* : (-> (Option XML-Token) XML:Name (Listof XML-Token)
+                                                (Values (U XML-Type-Element-Children XML-Syntax-Error) (Listof XML-Token)))
+  (lambda [declname elem body]
+    #;(let extract-children ([rest : (Listof XML-Token) body]
+                           [nerdlihc : (Listof XML:Name) null]
+                           [connector? : (Option Char) #false])
+      (cond [(null? body) (values (make+exn:xml:malformed (cons elem body) declname) null)]
+            [else (let-values ([(?e rest++) (values (car rest) (cdr rest))])
+                    (cond [(xml:name? ?e)
+                           (when (not connector?)
+                             (make+exn:xml:malformed (list elem ?e) declname))
+                           (extract-children rest++ (if (not connector?) nerdlihc (cons ?e nerdlihc)) #false)]
+                          [(xml:delim? ?e)
+                           (let ([delim (xml:delim-datum ?e)])
+                             (unless (not connector?) (make+exn:xml:malformed (list elem ?e) declname))
+                             (cond [(eq? delim #\|) (extract-children rest++ nerdlihc #true)]
+                                   [(eq? delim #\)) (values (reverse nerdlihc) rest++)]
+                                   [else (make+exn:xml:malformed (list elem ?e) declname) (extract-children rest++ nerdlihc connector?)]))]
+                          [else (make+exn:xml:malformed (list elem ?e) declname) (extract-children rest++ nerdlihc connector?)]))]))
+    (values (make+exn:xml:malformed (cons elem body) declname) null)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define xml-dtd-extract-attributes* : (-> (Option XML-Token) XML:Name (Listof XML-Doctype-Body*) (U XML-Attribute-List XML-Syntax-Error Void))
   (lambda [declname ATTLIST body]
     (define tokens : (U (Listof XML-Token) XML-Syntax-Error Void) (xml-dtd-filter-tokens ATTLIST body))
     
@@ -176,7 +249,7 @@
       (cond [(null? body) (make+exn:xml:malformed (if (not notation?) attr (list attr notation?)) declname) (values #false #false null)]
             [else (let-values ([(?type rest++) (values (car rest) (cdr rest))])
                     (cond [(xml:delim=:=? ?type #\()
-                           (let-values ([(enum rest++++) (xml-dtd-extract-enumeration* declname attr rest++)])
+                           (let-values ([(enum rest++++) (xml-dtd-extract-enumeration* declname attr rest++ #true)])
                              (values (and (pair? enum) enum) (and notation? #true) rest++++))]
                           [(and notation?) (make+exn:xml:malformed (list attr notation?) declname) (values #false #true rest++)]
                           [(xml:name? ?type)
@@ -197,12 +270,12 @@
                                  [else (values ?v fixed? rest++)])]
                           [else (make+exn:xml:malformed (list attr ?v) declname) (values #false fixed? rest++)]))]))))
 
-(define xml-dtd-extract-enumeration* : (-> (Option XML-Token) XML:Name (Listof XML-Token) (Values (Listof XML:Name) (Listof XML-Token)))
-  (lambda [declname attr body]
+(define xml-dtd-extract-enumeration* : (-> (Option XML-Token) XML:Name (Listof XML-Token) Boolean (Values (U (Listof XML:Name) XML-Syntax-Error) (Listof XML-Token)))
+  (lambda [declname attr body bar?]
     (let extract-enum ([rest : (Listof XML-Token) body]
                        [smune : (Listof XML:Name) null]
-                       [bar? : Boolean #true])
-      (cond [(null? body) (make+exn:xml:malformed (cons attr body) declname) (values null null)]
+                       [bar? : Boolean bar?])
+      (cond [(null? body) (values (make+exn:xml:malformed (cons attr body) declname) null)]
             [else (let-values ([(?e rest++) (values (car rest) (cdr rest))])
                     (cond [(xml:name? ?e)
                            (when (not bar?)
