@@ -5,6 +5,7 @@
 <!DOCTYPE normalize PUBLIC "digimon" "w3s" [
 <!ENTITY % xml-spec-replacement-text 'INCLUDE' >
 <!ENTITY % xml-spec-expansion 'INCLUDE' >
+<!ENTITY % svg-xml:space "INCLUDE" >
 
 <!ENTITY d "&#xD;">
 <!ENTITY a "&#xA;">
@@ -59,6 +60,11 @@ numerically (&#38;#38;#38;) or with a general entity
 <!ENTITY % zz '&#60;!ENTITY tricky "error-prone@AT&amp;T;" >' >
 %xx;
 ]]>
+
+<![%svg-xml:space;[
+<!ATTLIST svg:text
+          xml:space  (default|preserve) "preserve">
+]]>
 ]>
 
 <normalize id="&#xd;&#xd;A&#xa;&#xa;B&#xd;&#xa;" literacy="&book;" pe="%expansion;" recur="&recursive2;" pe="dup" ext="&open-hatch;" ndata="&hatch-pic;">
@@ -66,16 +72,16 @@ numerically (&#38;#38;#38;) or with a general entity
            &recursive3;
            &example;
            
-<text xml:space='default'>
+<svg:text xml:space="default">
       WS example
       indented lines
-</text>
-<text xml:space='preserve'>WS example indented lines</text>
+</svg:text>
+<svg:text>WS example indented lines</svg:text>
 
-<text xml:space='default'>
+<svg:text xml:space='default'>
 WS example
 non-indented lines
-</text>
-<text xml:space='preserve'>WS examplenon-indented lines</text>
+</svg:text>
+<svg:text xml:space='preserve'>WS examplenon-indented lines</svg:text>
 
 </normalize>

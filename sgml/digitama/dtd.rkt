@@ -42,7 +42,8 @@
   #:type-name XML-Notation)
 
 (struct xml-attribute
-  ([name : XML:Name]
+  ([element : XML:Name]
+   [name : XML:Name]
    [type : XML-Type-Attribute-Type]
    [default : XML-Type-Attribute-Default]
    [notation? : Boolean]
@@ -264,7 +265,9 @@
                                                       [else (let*-values ([(?t notation? albody++) (xml-dtd-extract-attribute-type* declname ?attr albody)]
                                                                           [(?v fixed? albody++++) (xml-dtd-extract-attribute-default* declname ?attr albody++)])
                                                               (extract-attribute albody++++
-                                                                                 (cond [(and ?t ?v) (cons (xml-attribute ?attr ?t ?v notation? fixed?) setubirtta)]
+                                                                                 (cond [(and ?t ?v)
+                                                                                        (cons (xml-attribute ?element ?attr ?t ?v notation? fixed?)
+                                                                                              setubirtta)]
                                                                                        [else setubirtta])))]))]))]))]))))
 
 (define xml-dtd-extract-attribute-type* : (-> (Option XML-Token) XML:Name (Listof XML-Token) (Values (Option XML-Type-Attribute-Type) Boolean (Listof XML-Token)))
@@ -300,19 +303,26 @@
   (lambda [declname attr body bar?]
     (let extract-enum ([rest : (Listof XML-Token) body]
                        [smune : (Listof XML:Name) null]
+                       [enums : (Listof Symbol) null]
                        [bar? : Boolean bar?])
       (cond [(null? body) (values (make+exn:xml:malformed (cons attr body) declname) null)]
             [else (let-values ([(?e rest++) (values (car rest) (cdr rest))])
                     (cond [(xml:name? ?e)
-                           (when (not bar?) (make+exn:xml:malformed ?e attr))
-                           (extract-enum rest++ (if (not bar?) smune (cons ?e smune)) #false)]
+                           (let ([name (xml:name-datum ?e)])
+                             (cond [(not bar?)
+                                    (make+exn:xml:malformed ?e attr)
+                                    (extract-enum rest++ smune enums #false)]
+                                   [(memq name enums)
+                                    (make+exn:xml:duplicate ?e attr)
+                                    (extract-enum rest++ smune enums #false)]
+                                   [else (extract-enum rest++ (cons ?e smune) (cons name enums) #false)]))]
                           [(xml:delim? ?e)
                            (let ([delim (xml:delim-datum ?e)])
                              (unless (not bar?) (make+exn:xml:malformed ?e attr))
-                             (cond [(eq? delim #\|) (extract-enum rest++ smune #true)]
+                             (cond [(eq? delim #\|) (extract-enum rest++ smune enums #true)]
                                    [(eq? delim #\)) (values (reverse smune) rest++)]
-                                   [else (make+exn:xml:malformed ?e attr) (extract-enum rest++ smune bar?)]))]
-                          [else (make+exn:xml:malformed ?e attr) (extract-enum rest++ smune bar?)]))]))))
+                                   [else (make+exn:xml:malformed ?e attr) (extract-enum rest++ smune enums bar?)]))]
+                          [else (make+exn:xml:malformed ?e attr) (extract-enum rest++ smune enums bar?)]))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-dtd-filter-tokens : (-> XML-Token (Listof XML-Doctype-Body*) (U (Listof XML-Token) XML-Syntax-Error Void))

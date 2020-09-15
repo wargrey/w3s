@@ -22,16 +22,16 @@
 (define xml-normalize : (-> XML-DTD (Listof XML-Content*) Symbol (Values XML-Type (Listof XML-Content*)))
   (lambda [int-dtd content xml:space]
     (define dtype : XML-Type (xml-dtd-expand int-dtd))
-    (define entities : XML-Type-Entities (xml-type-entities dtype))
-
-    (let xml-content-normalize ([rest : (Listof XML-Content*) content]
-                                [clear-content : (Listof XML-Content*) null])
-      (cond [(null? rest) (values dtype (reverse clear-content))]
-            [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
-                    (cond [(list? self)
-                           (let ([?elem (xml-element-normalize self entities 0)])
-                             (xml-content-normalize rest++ (if (exn:xml:loop? ?elem) clear-content (cons ?elem clear-content))))]
-                          [else (xml-content-normalize rest++ (cons self clear-content))]))]))))
+    
+    (parameterize ([default-xml:space xml:space])
+      (let xml-content-normalize ([rest : (Listof XML-Content*) content]
+                                  [clear-content : (Listof XML-Content*) null])
+        (cond [(null? rest) (values dtype (reverse clear-content))]
+              [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
+                      (cond [(list? self)
+                             (let ([?elem (xml-element-normalize self dtype xml:space 0)])
+                               (xml-content-normalize rest++ (if (exn:xml:loop? ?elem) clear-content (cons ?elem clear-content))))]
+                            [else (xml-content-normalize rest++ (cons self clear-content))]))])))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-dtd-expand : (-> XML-DTD XML-Type)
@@ -109,56 +109,78 @@
                                       [else (make+exn:xml:malformed e tagname) null]))]))])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-element-normalize : (->* (XML-Element* XML-Type-Entities Index) ((Listof Symbol)) (U XML-Element* exn:xml:loop))
-  (lambda [e entities depth [recursion-stack null]]
+(define xml-element-normalize : (->* (XML-Element* XML-Type Symbol Index) ((Listof Symbol)) (U XML-Element* exn:xml:loop))
+  (lambda [e dtype xml:space depth [recursion-stack null]]
+    (define entities : XML-Type-Entities (xml-type-entities dtype))
     (define tagname : XML:Name (car e))
     
-    (define attributes : (Listof (Pairof XML:Name XML:String))
-      (let attribute-filter-map ([rest : (Listof (Pairof XML:Name XML:String)) (cadr e)]
-                                 [setubirtta : (Listof (Pairof XML:Name XML:String)) null]
-                                 [names : (Listof Symbol) null])
-        (cond [(null? rest) (reverse setubirtta)]
-              [else (let*-values ([(self rest++) (values (car rest) (cdr rest))]
-                                  [(?attr) (xml-element-attribute-normalize self entities names tagname)])
-                      (cond [(not ?attr) (attribute-filter-map rest++ setubirtta names)]
-                            [else (attribute-filter-map rest++ (cons ?attr setubirtta)
-                                                        (cons (xml:name-datum (car ?attr)) names))]))])))
+    (define-values (setubirtta xml:this:space)
+      (let attribute-filter-map : (Values (Listof (Pairof XML:Name XML:String)) Symbol)
+        ([rest : (Listof (Pairof XML:Name XML:String)) (cadr e)]
+         [setubirtta : (Listof (Pairof XML:Name XML:String)) null]
+         [names : (Listof Symbol) null]
+         [space : Symbol xml:space])
+        (if (pair? rest)
+            (let*-values ([(self rest++) (values (car rest) (cdr rest))]
+                          [(?attr) (xml-element-attribute-normalize self entities names tagname)])
+              (cond [(not ?attr) (attribute-filter-map rest++ setubirtta names space)]
+                    [else (let ([attr-name (xml:name-datum (car ?attr))])
+                            (attribute-filter-map rest++ (cons ?attr setubirtta) (cons attr-name names)
+                                                  (cond [(eq? attr-name 'xml:space) (xml-space-ref tagname ?attr space)]
+                                                        [else space])))]))
+            (for/fold ([setubirtta : (Listof (Pairof XML:Name XML:String)) setubirtta]
+                       [this:space : Symbol space])
+                      ([(key attr) (in-hash (hash-ref (xml-type-attributes dtype) (xml:name-datum tagname) (λ [] empty-attributes)))]
+                       #:unless (memq key names))
+              (let ([?attr (xml-element-attribute-normalize attr entities names)])
+                (cond [(not ?attr) (values setubirtta this:space)]
+                      [else (values (cons ?attr setubirtta)
+                                    (cond [(eq? key 'xml:space) (xml-space-ref tagname ?attr space)]
+                                          [else this:space]))]))))))
 
     (define ?children : (U (Listof (U XML-Subdatum* XML-Element*)) exn:xml:loop)
-      (xml-subelement-normalize tagname (caddr e) entities (assert (+ depth 1) index?)
-                                recursion-stack))
+      (xml-subelement-normalize tagname (caddr e) dtype xml:this:space
+                                (assert (+ depth 1) index?) recursion-stack))
     
-    (cond [(list? ?children) (list tagname attributes ?children)]
+    (cond [(list? ?children) (list tagname (reverse setubirtta) ?children)]
           [else ?children])))
 
-(define xml-element-attribute-normalize : (->* ((Pairof XML:Name XML:String) XML-Type-Entities (Listof Symbol))
-                                               ((Option XML-Token))
-                                               (Option (Pairof XML:Name XML:String)))
-  (lambda [name=value entities attrnames [tagname #false]]
-    (let ([name (car name=value)]
-          [value (cdr name=value)])
-      (cond [(memq (xml:name-datum name) attrnames) (make+exn:xml:unique name tagname) #false]
-            [(not (xml:&string? value)) name=value]
-            [else (let ([?value (xml-attr-entity-replace name value entities)])
-                    (and (xml:string? ?value)
-                         (cons name ?value)))]))))
+(define xml-element-attribute-normalize : (case-> [(Pairof XML:Name XML:String) XML-Type-Entities (Listof Symbol) XML-Token -> (Option (Pairof XML:Name XML:String))]
+                                                  [XML-Attribute XML-Type-Entities (Listof Symbol) -> (Option (Pairof XML:Name XML:String))])
+  (case-lambda
+    [(name=value entities attrnames tagname)
+     (let ([name (car name=value)]
+           [value (cdr name=value)])
+       (cond [(memq (xml:name-datum name) attrnames) (make+exn:xml:unique name tagname) #false]
+             [(not (xml:&string? value)) name=value]
+             [else (let ([?value (xml-attr-entity-replace name value entities)])
+                     (and (xml:string? ?value)
+                          (cons name ?value)))]))]
+    [(attr entities attrnames)
+     (let ([name (xml-attribute-name attr)]
+           [value (xml-attribute-default attr)])
+       (cond [(or (memq (xml:name-datum name) attrnames) (xml:name? value)) #false]
+             [(not (xml:&string? value)) (cons name value)]
+             [else (let ([?value (xml-attr-entity-replace name value entities)])
+                     (and (xml:string? ?value)
+                          (cons name ?value)))]))]))
 
-(define xml-subelement-normalize : (-> XML:Name (Listof (U XML-Subdatum* XML-Element*)) XML-Type-Entities Index (Listof Symbol)
+(define xml-subelement-normalize : (-> XML:Name (Listof (U XML-Subdatum* XML-Element*)) XML-Type Symbol Index (Listof Symbol)
                                        (U (Listof (U XML-Subdatum* XML-Element*)) exn:xml:loop))
-  (lambda [tagname children entities depth recursion-stack]
+  (lambda [tagname children dtype xml:space depth recursion-stack]
     (let normalize-subelement ([rest : (Listof (U XML-Subdatum* XML-Element*)) children]
                                [nerdlihc : (Listof (U XML-Subdatum* XML-Element*)) null]
                                [rstack : (Listof Symbol) recursion-stack])
       (cond [(null? rest) (reverse nerdlihc)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(list? self)
-                           (let ([?elem (xml-element-normalize self entities depth rstack)])
+                           (let ([?elem (xml-element-normalize self dtype xml:space depth rstack)])
                              (cond [(list? ?elem) (normalize-subelement rest++ (cons ?elem nerdlihc) rstack)]
                                    [else ?elem]))]
                           [(xml:reference? self)
                            (let ([selfname (xml:reference-datum self)])
                              (cond [(memq selfname rstack) (make+exn:xml:loop self tagname)]
-                                   [else (let* ([fly-elements (xml-dtd-included tagname self entities depth)]
+                                   [else (let* ([fly-elements (xml-dtd-included tagname self (xml-type-entities dtype) depth)]
                                                 [?elements (normalize-subelement fly-elements null (cons selfname rstack))])
                                            (cond [(list? ?elements) (normalize-subelement rest++ (append (reverse ?elements) nerdlihc) rstack)]
                                                  [(null? rstack) (normalize-subelement rest++ nerdlihc rstack)]
@@ -297,17 +319,24 @@
             [else (make+exn:xml:duplicate etoken) elements]))))
 
 (define xml-attributes-cons : (-> XML-Attribute-List XML-Type-Attributes XML-Type-Attributes)
-  (let ([empty-attributes ((inst make-immutable-hasheq Symbol XML-Attribute))])
-    (lambda [as attributes]
-      (let* ([etoken (xml-attribute-list-element as)]
-             [ename (xml:name-datum etoken)])
-        (hash-set attributes ename
-                  (for/fold ([apool : (Immutable-HashTable Symbol XML-Attribute) (hash-ref attributes ename (λ [] empty-attributes))])
-                            ([a (in-list (xml-attribute-list-body as))])
-                    (let* ([atoken (xml-attribute-name a)]
-                           [aname (xml:name-datum atoken)])
-                      (cond [(not (hash-has-key? apool aname)) (hash-set apool aname a)]
-                            [else (make+exn:xml:duplicate atoken etoken) apool]))))))))
+  (lambda [as attributes]
+    (let* ([etoken (xml-attribute-list-element as)]
+           [ename (xml:name-datum etoken)])
+      (hash-set attributes ename
+                (for/fold ([apool : (Immutable-HashTable Symbol XML-Attribute) (hash-ref attributes ename (λ [] empty-attributes))])
+                          ([a (in-list (xml-attribute-list-body as))])
+                  (let* ([atoken (xml-attribute-name a)]
+                         [aname (xml:name-datum atoken)])
+                    (cond [(not (hash-has-key? apool aname)) (hash-set apool aname a)]
+                          [else (make+exn:xml:duplicate atoken etoken) apool])))))))
+
+(define xml-space-ref : (-> XML-Token (Pairof XML:Name XML:String) Symbol Symbol)
+  (lambda [tagname attr inherited-space]
+    (define this:space : String (xml:string-datum (cdr attr)))
+
+    (cond [(string=? this:space "preserve") 'preserve]
+          [(string=? this:space "default") (default-xml:space)]
+          [else (make+exn:xml:enum (list (car attr) (cdr attr)) tagname) inherited-space])))
 
 (define xml-char-unreference : (->* (XML-Token String) ((Option XML-Token)) (Option Char))
   (lambda [etoken estr [context #false]]
@@ -344,3 +373,7 @@
       (cond [(not ?xstr) (values #false #false)]
             [(xml:&string? ?xstr) (values (xml:string-datum ?xstr) #true)]
             [else (values (xml:string-datum ?xstr) #false)]))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define default-xml:space : (Parameterof Symbol) (make-parameter 'default))
+(define empty-attributes : (Immutable-HashTable Symbol XML-Attribute) (make-immutable-hasheq))

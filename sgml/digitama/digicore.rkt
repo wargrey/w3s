@@ -150,6 +150,7 @@
   [exn:xml:type          #:-> exn:xml:vc]
   [exn:xml:entity        #:-> exn:xml:vc]
   [exn:xml:nest          #:-> exn:xml:vc]
+  [exn:xml:enum          #:-> exn:xml:vc]
   
   [exn:xml:wfc           #:-> exn:xml:fatal]
   [exn:xml:unique        #:-> exn:xml:wfc]
