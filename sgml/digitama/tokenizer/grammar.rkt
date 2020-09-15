@@ -15,7 +15,7 @@
 (define-type XML-Declaration (Rec body (Vector Symbol (Listof (U XML-Datum body XML-Processing-Instruction)))))
 (define-type XML-Doctype-Body (U XML-Datum XML-Declaration XML-Processing-Instruction))
 
-(define-type XML-Processing-Instruction (MPairof Symbol String))
+(define-type XML-Processing-Instruction (MPairof Symbol (Option String)))
 (define-type XML-Element-Attribute (Pairof Symbol (U String (Boxof String))))
 (define-type XML-Subdatum (U String XML-Processing-Instruction XML-White-Space Index Symbol))
 (define-type XML-Element (Rec elem (List Symbol (Listof XML-Element-Attribute) (Listof (U elem XML-Subdatum)))))
@@ -78,7 +78,7 @@
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(symbol? self) (extract-pi rest++ self body)]
                           [(string? self) (extract-pi rest++ target self)]
-                          [(eq? self ?>) (values (and target body (mcons target body)) (cdr rest))]
+                          [(eq? self ?>) (values (and target (mcons target body)) (cdr rest))]
                           [else #| bad PI |# (extract-pi rest++ target body)]))]))))
 
 (define xml-syntax-extract-element : (-> (Listof XML-Datum) (Values (Option XML-Element) (Listof XML-Datum)))

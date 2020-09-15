@@ -119,7 +119,8 @@
 
    [xml:&string         #:+ XML:&String         #:-> xml:string]
    
-   [xml:comment         #:+ XML:Comment         #:-> xml:whitespace]]
+   [xml:comment         #:+ XML:Comment         #:-> xml:whitespace]
+   [xml:newline         #:+ XML:Newline         #:-> xml:whitespace]]
 
   ; WARNING: Carefully defining types to avoid happening to mess up '(list? datum)'
   ; TODO: Typed Racket is buggy if there are more than 11 conditions

@@ -15,7 +15,7 @@
 (define-type XML-Declaration* (Rec body (Vector XML:Name (Listof (U XML-Token body XML-Processing-Instruction* XML-Section)))))
 (define-type XML-Doctype-Body* (U XML-Token XML-Declaration* XML-Processing-Instruction* XML-Section))
 
-(define-type XML-Processing-Instruction* (MPairof XML:Name XML:String))
+(define-type XML-Processing-Instruction* (MPairof XML:Name (Option XML:String)))
 (define-type XML-Element-Attribute* (Pairof XML:Name XML:String))
 (define-type XML-Subdatum* (U XML:String XML-Processing-Instruction* XML:WhiteSpace XML:Char XML:Reference))
 (define-type XML-Element* (Rec elem (List XML:Name (Listof XML-Element-Attribute*) (Listof (U elem XML-Subdatum*)))))
@@ -154,7 +154,7 @@
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml:name? self) (extract-pi rest++ self body)]
                           [(xml:string? self) (extract-pi rest++ target self)]
-                          [(xml:delim=:=? self ?>) (values (and target body (mcons target body)) (cdr rest))]
+                          [(xml:delim=:=? self ?>) (values (and target (mcons target body)) (cdr rest))]
                           [else (xml-bad-token-throw #false self) (extract-pi rest++ target body)]))]))))
 
 (define xml-syntax-extract-element* : (-> (Listof XML-Token) (Values (Option XML-Element*) (Listof XML-Token)))

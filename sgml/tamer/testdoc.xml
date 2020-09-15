@@ -59,6 +59,7 @@
 <? bad pi?>
 <?bad! pi?>
 <?this is a PI ?>
+<?pi-without-data?>
 
 <foo>&xxe;</foo>
 <test>This content holds a &#0; byte that should be skipped</test>

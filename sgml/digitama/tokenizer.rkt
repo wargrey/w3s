@@ -34,9 +34,9 @@
   (syntax-case stx []
     [(_ source prev-env end datum)
      #'(cond [(xml-white-space? datum)
-              (if (xml-comment? datum)
-                  (xml-make-token source prev-env end xml:comment (xml-white-space-raw datum))
-                  (xml-make-token source prev-env end xml:whitespace (xml-white-space-raw datum)))]
+              (cond [(xml-comment? datum) (xml-make-token source prev-env end xml:comment (xml-white-space-raw datum))]
+                    [(xml-new-line? datum) (xml-make-token source prev-env end xml:newline (xml-white-space-raw datum))]
+                    [else (xml-make-token source prev-env end xml:whitespace (xml-white-space-raw datum))])]
              [(char? datum)
               (cond [(eq? datum #\<) (xml-make-token source prev-env end xml:stag datum)]
                     [(eq? datum #\>) (xml-make-token source prev-env end xml:etag datum)] ; close delimiter for Decls and EndTags

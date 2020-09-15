@@ -24,6 +24,7 @@
 (define-type XML-Token-Consumer (Rec λ (-> Input-Port Char XML-Scope (Values (U XML-Datum EOF) λ XML-Scope))))
 
 (struct xml-white-space ([raw : String]) #:type-name XML-White-Space)
+(struct xml-new-line xml-white-space () #:type-name XML-New-Line)
 (struct xml-comment xml-white-space () #:type-name XML-Comment)
 
 (define xml-collapsed-whitespace : XML-White-Space (xml-white-space ""))
@@ -207,7 +208,8 @@
   (lambda [/dev/xmlin ch scope]
     (values (if (char-whitespace? ch)
                 (string-trim (list->string (xml-consume-chars-literal/exclusive /dev/xmlin #\? null #\>)) #:right? #false)
-                (cons (xml-consume-chars-literal/exclusive /dev/xmlin #\? (list ch) #\>) !char))
+                (or (and (eq? ch #\?) (eq? (peek-char /dev/xmlin) #\>) (read-char /dev/xmlin) ?>)
+                    (cons (xml-consume-chars-literal/exclusive /dev/xmlin #\? (list ch) #\>) !char)))
             xml-consume-token:* scope)))
 
 (define xml-consume-token:cdata : XML-Token-Consumer
@@ -290,11 +292,21 @@
   ;;; https://www.w3.org/TR/xml11/#NT-S
   ;;; https://www.w3.org/TR/xml11/#sec-line-ends
   (lambda [/dev/xmlin leader]
-    (let read-whitespace ([span : Nonnegative-Fixnum 0])
-      (define maybe-space : (U Char EOF) (peek-char /dev/xmlin span))
-      (cond [(eof-object? maybe-space) (xml-white-space (xml-read-string /dev/xmlin span leader))]
-            [(char-whitespace? maybe-space) (read-whitespace (unsafe-fx+ span 1))]
-            [else (xml-white-space (xml-read-string /dev/xmlin span leader))]))))
+    (let read-whitespace ([span : Nonnegative-Fixnum 0]
+                          [newline? : Boolean #false])
+      (define ?space : (U Char EOF) (peek-char /dev/xmlin span))
+      (cond [(eof-object? ?space) (xml-white-space (xml-read-string /dev/xmlin span leader))]
+            [(eq? ?space #\space) (read-whitespace (unsafe-fx+ span 1) newline?)]
+            [(not (char-whitespace? ?space))
+             (if (not newline?)
+                 (xml-white-space (xml-read-string /dev/xmlin span leader))
+                 (xml-new-line (xml-read-string /dev/xmlin span leader)))]
+            [else (read-whitespace (unsafe-fx+ span 1)
+                                   (or newline?
+                                       (eq? ?space #\newline)
+                                       (eq? ?space #\return)
+                                       (eq? ?space #\u0085)
+                                       (eq? ?space #\u2028)))]))))
 
 (define xml-skip-whitespace : (-> Input-Port Any)
   (lambda [/dev/xmlin]

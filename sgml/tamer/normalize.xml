@@ -65,4 +65,17 @@ numerically (&#38;#38;#38;) or with a general entity
            <testcase>This sample shows a &tricky; method.</testcase>
            &recursive3;
            &example;
+           
+<text xml:space='default'>
+      WS example
+      indented lines
+</text>
+<text xml:space='preserve'>WS example indented lines</text>
+
+<text xml:space='default'>
+WS example
+non-indented lines
+</text>
+<text xml:space='preserve'>WS examplenon-indented lines</text>
+
 </normalize>

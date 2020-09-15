@@ -19,8 +19,8 @@
  [unsafe-string-ref (-> String Index Char)])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-normalize : (-> XML-DTD (Listof XML-Content*) (Values XML-Type (Listof XML-Content*)))
-  (lambda [int-dtd content]
+(define xml-normalize : (-> XML-DTD (Listof XML-Content*) Symbol (Values XML-Type (Listof XML-Content*)))
+  (lambda [int-dtd content xml:space]
     (define dtype : XML-Type (xml-dtd-expand int-dtd))
     (define entities : XML-Type-Entities (xml-type-entities dtype))
 
