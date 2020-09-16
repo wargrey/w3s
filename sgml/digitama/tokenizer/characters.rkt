@@ -23,6 +23,13 @@
           [(and (<= #x10000 n) (<= n #x10FFFF)) n]
           [else #xFFFD])))
 
+(define xml-newline-char? : (-> Char Boolean)
+  (lambda [ch]
+    (or (eq? ch #\newline)
+        (eq? ch #\return)
+        #;(eq? ch #\u0085)
+        #;(eq? ch #\u2028))))
+
 (define xml-name-start-char? : (-> Char Boolean)
   (lambda [ch]
     (or (char-alphabetic? ch)

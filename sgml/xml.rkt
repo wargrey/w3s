@@ -4,13 +4,14 @@
 ;;; https://www.w3.org/TR/xml11/                                                                ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(provide (all-defined-out) SGML-StdIn XML-DTD XML-External-ID)
+(provide (all-defined-out) SGML-StdIn XML-DTD XML-External-ID XML:Space-Filter)
 (provide (struct-out XML-Document) read-xml-document)
 (provide (struct-out XML-Document*) read-xml-document* xml-document*-normalize)
 
 (require "digitama/dtd.rkt")
 (require "digitama/doctype.rkt")
 (require "digitama/document.rkt")
+(require "digitama/normalize.rkt")
 (require "digitama/stdin.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

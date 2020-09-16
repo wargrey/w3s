@@ -71,7 +71,13 @@ numerically (&#38;#38;#38;) or with a general entity
            <testcase>This sample shows a &tricky; method.</testcase>
            &recursive3;
            &example;
-           
+
+<!-- NOTE
+     svg has special rules to dealing with non-space whitespaces,
+     and those rules are applied subsequent to applying XML rules.
+
+     Those rules CANNOT be illustrated in `#lang sgml/xml` -->
+
 <svg:text xml:space="default">
       WS example
       indented lines

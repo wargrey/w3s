@@ -222,11 +222,11 @@
         (cond [(eof-object? ch) (reverse srahc)]
               [(eq? ch #\return)
                (let ([ach (peek-char /dev/xmlin 1)])
-                 (when (or (eq? ch #\newline) (eq? ch #\u0085))
+                 (when (or (eq? ch #\newline) #;(eq? ch #\u0085))
                    (xml-drop-string /dev/xmlin 2))
                  (consume-cdata (cons #\newline srahc)))]
-              [(eq? ch #\u0085) (consume-cdata (cons #\newline srahc))]
-              [(eq? ch #\u2028) (consume-cdata (cons #\newline srahc))]
+              ;[(eq? ch #\u0085) (consume-cdata (cons #\newline srahc))]
+              ;[(eq? ch #\u2028) (consume-cdata (cons #\newline srahc))]
               [(not (eq? ch #\])) (read-char /dev/xmlin) (consume-cdata (cons ch srahc))]
               [else (let ([ach (peek-char /dev/xmlin 1)])
                       (cond [(eof-object? ach) (read-char /dev/xmlin) (reverse (cons ch srahc))]
@@ -293,20 +293,12 @@
   ;;; https://www.w3.org/TR/xml11/#sec-line-ends
   (lambda [/dev/xmlin leader]
     (let read-whitespace ([span : Nonnegative-Fixnum 0]
-                          [newline? : Boolean #false])
+                          [newline? : Boolean (xml-newline-char? leader)])
       (define ?space : (U Char EOF) (peek-char /dev/xmlin span))
-      (cond [(eof-object? ?space) (xml-white-space (xml-read-string /dev/xmlin span leader))]
+      (cond [(eof-object? ?space) (xml-make-whitespace /dev/xmlin span leader newline?)]
             [(eq? ?space #\space) (read-whitespace (unsafe-fx+ span 1) newline?)]
-            [(not (char-whitespace? ?space))
-             (if (not newline?)
-                 (xml-white-space (xml-read-string /dev/xmlin span leader))
-                 (xml-new-line (xml-read-string /dev/xmlin span leader)))]
-            [else (read-whitespace (unsafe-fx+ span 1)
-                                   (or newline?
-                                       (eq? ?space #\newline)
-                                       (eq? ?space #\return)
-                                       (eq? ?space #\u0085)
-                                       (eq? ?space #\u2028)))]))))
+            [(char-whitespace? ?space) (read-whitespace (unsafe-fx+ span 1) (or newline? (xml-newline-char? ?space)))]
+            [else (xml-make-whitespace /dev/xmlin span leader newline?)]))))
 
 (define xml-skip-whitespace : (-> Input-Port Any)
   (lambda [/dev/xmlin]
@@ -491,3 +483,11 @@
 (define xml-!char-errno : (-> Char Symbol)
   (lambda [ch]
     (if (char-whitespace? ch) !space !char)))
+
+(define xml-make-whitespace : (-> Input-Port Nonnegative-Fixnum Char Boolean XML-White-Space)
+  (lambda [/dev/xmlin span leader newline?]
+    (define ws : String (xml-read-string /dev/xmlin span leader))
+    
+    (if (not newline?)
+        (xml-white-space ws)
+        (xml-new-line ws))))

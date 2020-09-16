@@ -49,8 +49,8 @@
     (xml-document (xml-doctype (sgml-port-name /dev/xmlin) version encoding standalone? name external)
                   dtd grammars)))
 
-(define read-xml-document* : (-> SGML-StdIn [#:normalize? Boolean] [#:xml:space Symbol] XML-Document*)
-  (lambda [/dev/rawin #:normalize? [normalize? #false] #:xml:space [xml:space 'default]]
+(define read-xml-document* : (-> SGML-StdIn [#:normalize? Boolean] [#:xml:space Symbol] [#:xml:space-filter (Option XML:Space-Filter)] XML-Document*)
+  (lambda [/dev/rawin #:normalize? [normalize? #false] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false]]
     (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin #true))
     (define source : (U Symbol String) (sgml-port-name /dev/xmlin))
     (define tokens : (Listof XML-Token) (read-xml-tokens* /dev/xmlin source))
@@ -71,9 +71,9 @@
     (cond [(not normalize?) doc]
           [else (xml-document*-normalize doc #:xml:space xml:space)])))
 
-(define xml-document*-normalize : (-> XML-Document* [#:xml:space Symbol] XML-Document*)
-  (lambda [doc #:xml:space [xml:space 'default]]
-    (let-values ([(type contents) (xml-normalize (xml-document*-internal-dtd doc) (xml-document*-elements doc) xml:space)])
+(define xml-document*-normalize : (-> XML-Document* [#:xml:space Symbol] [#:xml:space-filter (Option XML:Space-Filter)] XML-Document*)
+  (lambda [doc #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false]]
+    (let-values ([(type contents) (xml-normalize (xml-document*-internal-dtd doc) (xml-document*-elements doc) xml:space xml:space-filter)])
       (xml-document* (xml-document*-doctype doc) (xml-document*-internal-dtd doc) type contents))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
