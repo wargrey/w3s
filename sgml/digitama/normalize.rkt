@@ -19,13 +19,28 @@
  [unsafe-string-ref (-> String Index Char)])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define-type XML-Space-Position (U 'head 'body 'tail 'span))
+
 (define-type XML:Space-Filter
-  (case-> [Char -> (Option Char)]
-          [String String -> String]))
+  (case-> [Symbol (Option String) Char -> (Option Char)]
+          [Symbol (Option String) String (Option String) XML-Space-Position Boolean -> (Option String)]))
+
+(define svg:space-filter : XML:Space-Filter
+  (case-lambda
+    [(tag xml:lang ch) #\space]
+    [(tag xml:lang raw-spaces default-replace position has-newline?)
+     (cond [(not has-newline?) default-replace]
+           [else (and (eq? position 'body)
+                      (let ([size (string-length raw-spaces)])
+                        (let svg-check-space ([idx : Nonnegative-Fixnum 0])
+                          (and (< idx size)
+                               (if (eq? (unsafe-string-ref raw-spaces idx) #\linefeed)
+                                   (svg-check-space (+ idx 1))
+                                   default-replace)))))])]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-normalize : (-> XML-DTD (Listof XML-Content*) Symbol (Option XML:Space-Filter) (Values XML-Type (Listof XML-Content*)))
-  (lambda [int-dtd content xml:space xml:space-filter]
+(define xml-normalize : (-> XML-DTD (Listof XML-Content*) String Symbol (Option XML:Space-Filter) (Values XML-Type (Listof XML-Content*)))
+  (lambda [int-dtd content xml:lang xml:space xml:space-filter]
     (define dtype : XML-Type (xml-dtd-expand int-dtd))
     
     (parameterize ([default-xml:space xml:space])
@@ -34,7 +49,7 @@
         (cond [(null? rest) (values dtype (reverse clear-content))]
               [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                       (cond [(list? self)
-                             (let ([?elem (xml-element-normalize self dtype xml:space xml:space-filter 0)])
+                             (let ([?elem (xml-element-normalize self dtype (xml:lang-ref xml:lang) xml:space xml:space-filter 0)])
                                (xml-content-normalize rest++ (if (exn:xml:loop? ?elem) clear-content (cons ?elem clear-content))))]
                             [else (xml-content-normalize rest++ (cons self clear-content))]))])))))
 
@@ -114,37 +129,41 @@
                                       [else (make+exn:xml:malformed e tagname) null]))]))])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-element-normalize : (->* (XML-Element* XML-Type Symbol (Option XML:Space-Filter) Index) ((Listof Symbol)) (U XML-Element* exn:xml:loop))
-  (lambda [e dtype xml:space xml:space-filter depth [recursion-stack null]]
+(define xml-element-normalize : (->* (XML-Element* XML-Type (Option String) Symbol (Option XML:Space-Filter) Index) ((Listof Symbol)) (U XML-Element* exn:xml:loop))
+  (lambda [e dtype xml:lang xml:space xml:filter depth [recursion-stack null]]
     (define entities : XML-Type-Entities (xml-type-entities dtype))
     (define tagname : XML:Name (car e))
     
-    (define-values (setubirtta xml:this:space)
-      (let attribute-filter-map : (Values (Listof (Pairof XML:Name XML:String)) Symbol)
+    (define-values (setubirtta xml:this:lang xml:this:space)
+      (let attribute-filter-map : (Values (Listof (Pairof XML:Name XML:String)) (Option String) Symbol)
         ([rest : (Listof (Pairof XML:Name XML:String)) (cadr e)]
          [setubirtta : (Listof (Pairof XML:Name XML:String)) null]
          [names : (Listof Symbol) null]
+         [lang : (Option String) xml:lang]
          [space : Symbol xml:space])
         (if (pair? rest)
             (let*-values ([(self rest++) (values (car rest) (cdr rest))]
                           [(?attr) (xml-element-attribute-normalize self entities names tagname)])
-              (cond [(not ?attr) (attribute-filter-map rest++ setubirtta names space)]
+              (cond [(not ?attr) (attribute-filter-map rest++ setubirtta names lang space)]
                     [else (let ([attr-name (xml:name-datum (car ?attr))])
                             (attribute-filter-map rest++ (cons ?attr setubirtta) (cons attr-name names)
-                                                  (cond [(eq? attr-name 'xml:space) (xml-space-ref tagname ?attr space)]
-                                                        [else space])))]))
+                                                  (if (eq? attr-name 'xml:lang) (xml:lang-ref tagname ?attr) lang)
+                                                  (if (eq? attr-name 'xml:space) (xml:space-ref tagname ?attr space) space)))]))
             (for/fold ([setubirtta : (Listof (Pairof XML:Name XML:String)) setubirtta]
+                       [this:lang : (Option String) lang]
                        [this:space : Symbol space])
                       ([(key attr) (in-hash (hash-ref (xml-type-attributes dtype) (xml:name-datum tagname) (λ [] empty-attributes)))]
                        #:unless (memq key names))
               (let ([?attr (xml-element-attribute-normalize attr entities names)])
-                (cond [(not ?attr) (values setubirtta this:space)]
-                      [else (values (cons ?attr setubirtta)
-                                    (cond [(eq? key 'xml:space) (xml-space-ref (xml-attribute-element attr) ?attr space)]
-                                          [else this:space]))]))))))
+                (cond [(not ?attr) (values setubirtta this:lang this:space)]
+                      [else (let ([attname (xml-attribute-element attr)])
+                              (values (cons ?attr setubirtta)
+                                      (if (eq? key 'xml:lang) (xml:lang-ref attname ?attr) this:lang)
+                                      (if (eq? key 'xml:space) (xml:space-ref attname ?attr space) this:space)))]))))))
 
     (define ?children : (U (Listof (U XML-Subdatum* XML-Element*)) exn:xml:loop)
-      (xml-subelement-normalize tagname (caddr e) dtype xml:this:space xml:space-filter
+      (xml-subelement-normalize tagname (caddr e) dtype
+                                xml:this:lang xml:this:space xml:filter
                                 (assert (+ depth 1) index?) recursion-stack))
     
     (cond [(list? ?children) (list tagname (reverse setubirtta) ?children)]
@@ -170,32 +189,40 @@
                      (and (xml:string? ?value)
                           (cons name ?value)))]))]))
 
-(define xml-subelement-normalize : (-> XML:Name (Listof (U XML-Subdatum* XML-Element*)) XML-Type Symbol (Option XML:Space-Filter) Index (Listof Symbol)
+(define xml-subelement-normalize : (-> XML:Name (Listof (U XML-Subdatum* XML-Element*)) XML-Type (Option String) Symbol (Option XML:Space-Filter) Index (Listof Symbol)
                                        (U (Listof (U XML-Subdatum* XML-Element*)) exn:xml:loop))
-  (lambda [tagname children dtype xml:space xml:space-filter depth recursion-stack]
+  (lambda [tagname children dtype xml:lang xml:space xml:filter depth recursion-stack]
+    (define tag : Symbol (xml:name-datum tagname))
+    
     (let normalize-subelement ([rest : (Listof (U XML-Subdatum* XML-Element*)) children]
                                [nerdlihc : (Listof (U XML-Subdatum* XML-Element*)) null]
+                               [secaps : (Listof XML:WhiteSpace) null]
                                [rstack : (Listof Symbol) recursion-stack])
-      (cond [(null? rest) (reverse nerdlihc)]
-            [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
-                    (cond [(list? self)
-                           (let ([?elem (xml-element-normalize self dtype xml:space xml:space-filter depth rstack)])
-                             (cond [(list? ?elem) (normalize-subelement rest++ (cons ?elem nerdlihc) rstack)]
-                                   [else ?elem]))]
-                          [(xml:reference? self)
-                           (let ([selfname (xml:reference-datum self)])
-                             (cond [(memq selfname rstack) (make+exn:xml:loop self tagname)]
-                                   [else (let* ([air-elements (xml-dtd-included tagname self (xml-type-entities dtype) depth)]
-                                                [?elements (normalize-subelement air-elements null (cons selfname rstack))])
-                                           (cond [(list? ?elements) (normalize-subelement rest++ (append (reverse ?elements) nerdlihc) rstack)]
-                                                 [(null? rstack) (normalize-subelement rest++ nerdlihc rstack)]
-                                                 [else ?elements]))]))]
-                          [(xml:char? self)
-                           (let ([content (w3s-remake-token self xml:string (string (integer->char (xml:char-datum self))))])
-                             (normalize-subelement rest++ (cons content nerdlihc) rstack))]
-                          [(not (xml:whitespace? self)) (normalize-subelement rest++ (cons self nerdlihc) rstack)]
-                          [(eq? xml:space 'preserve) (normalize-subelement rest++ (cons (xml-whitespace-preserve-filter self xml:space-filter) nerdlihc) rstack)]
-                          [else (normalize-subelement rest++ (cons (xml-whitespace-preserve-filter self xml:space-filter) nerdlihc) rstack)]))]))))
+      (if (null? rest)
+          (reverse (xml-child-cons secaps nerdlihc xml:filter tag xml:lang #true))
+          (let-values ([(self rest++) (values (car rest) (cdr rest))])
+            (cond [(list? self)
+                   (let ([?elem (xml-element-normalize self dtype xml:lang xml:space xml:filter depth rstack)])
+                     (cond [(list? ?elem) (normalize-subelement rest++ (cons ?elem (xml-child-cons secaps nerdlihc xml:filter tag xml:lang)) null rstack)]
+                           [else ?elem]))]
+                  [(xml:reference? self)
+                   (let ([selfname (xml:reference-datum self)])
+                     (cond [(memq selfname rstack) (make+exn:xml:loop self tagname)]
+                           [else (let*-values ([(air0) (xml-dtd-included tagname self (xml-type-entities dtype) depth)]
+                                               [(?lspace air-elements ?tspace) (xml-air-elements-trim air0)]
+                                               [(nerdlihc++) (xml-child-cons (if (not ?lspace) secaps (cons ?lspace secaps)) nerdlihc xml:filter tag xml:lang)]
+                                               [(sp.rest++) (if (not ?tspace) rest++ (cons ?tspace rest++))]
+                                               [(?elements) (normalize-subelement air-elements null null (cons selfname rstack))])
+                                   (cond [(list? ?elements) (normalize-subelement sp.rest++ (append (reverse ?elements) nerdlihc++) null rstack)]
+                                         [(null? rstack) (normalize-subelement rest++ nerdlihc secaps rstack)]
+                                         [else ?elements]))]))]
+                  [(xml:char? self)
+                   (let ([content (w3s-remake-token self xml:string (string (integer->char (xml:char-datum self))))])
+                     (normalize-subelement rest++ (cons content (xml-child-cons secaps nerdlihc xml:filter tag xml:lang)) null rstack))]
+                  [(not (xml:whitespace? self)) (normalize-subelement rest++ (cons self (xml-child-cons secaps nerdlihc xml:filter tag xml:lang)) null rstack)]
+                  [(xml:comment? self) (normalize-subelement rest++ nerdlihc secaps rstack)]
+                  [(eq? xml:space 'preserve) (normalize-subelement rest++ (cons (xml:space=preserve tag self xml:filter xml:lang) nerdlihc) secaps rstack)]
+                  [else (normalize-subelement rest++ nerdlihc (cons self secaps) rstack)]))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; NOTE
@@ -374,7 +401,13 @@
             [else (values (xml:string-datum ?xstr) #false)]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-space-ref : (-> XML-Token (Pairof XML:Name XML:String) Symbol Symbol)
+(define xml:lang-ref : (case-> [String -> (Option String)]
+                               [XML-Token (Pairof XML:Name XML:String) -> (Option String)])
+  (case-lambda
+    [(lang) (and (> (string-length lang) 0) lang)]
+    [(tagname attr) (xml:lang-ref (xml:string-datum (cdr attr)))]))
+
+(define xml:space-ref : (-> XML-Token (Pairof XML:Name XML:String) Symbol Symbol)
   (lambda [tagname attr inherited-space]
     (define this:space : String (xml:string-datum (cdr attr)))
 
@@ -382,37 +415,112 @@
           [(string=? this:space "default") (default-xml:space)]
           [else (make+exn:xml:enum (list (car attr) (cdr attr)) tagname) inherited-space])))
 
-(define xml-whitespace-preserve-filter : (-> XML:WhiteSpace (Option XML:Space-Filter) XML:WhiteSpace)
-  (lambda [ws xml:space-filter]
+(define xml:space=preserve : (-> Symbol XML:WhiteSpace (Option XML:Space-Filter) (Option String) XML:WhiteSpace)
+  (lambda [tag ws xml:filter xml:lang]
     (define has-newline? : Boolean (xml:newline? ws))
-    (cond [(not (or xml:space-filter has-newline?)) ws]
-          [else (let* ([space-filter (or xml:space-filter values)]
+
+    (cond [(not (or xml:filter has-newline?)) ws]
+          [else (let* ([space-filter (or xml:filter xml:space-values)]
                        [spaces : String (xml:whitespace-datum ws)]
                        [size : Index (string-length spaces)])
-                  (let whitespace-filter ([idx : Nonnegative-Fixnum 0]
-                                          [xD? : Boolean #false]
-                                          [secaps : (Option (Listof Char)) #false])
+                  (let preserve-filter ([idx : Nonnegative-Fixnum 0]
+                                        [xD? : Boolean #false]
+                                        [secaps : (Option (Listof Char)) #false])
                     (if (>= idx size)
-                        (let ([sp-chars (if (not xD?) secaps (assert (xml-whitespace-cons spaces idx #\newline #\return space-filter 0 secaps)))])
+                        (let ([sp-chars (if (not xD?) secaps (assert (xml:space-cons spaces idx #\newline #\return space-filter 0 secaps tag xml:lang)))])
+                          ; NOTE: XML:NewLine is designed to indicate if newlines have been normalized
                           (if (not sp-chars) ws (w3s-remake-token ws xml:whitespace (list->string (reverse sp-chars)))))
                         (let ([ch (unsafe-string-ref spaces idx)]
                               [idx+1 (+ idx 1)])
                           (cond [(not xD?)
-                                 (cond [(eq? ch #\return) (whitespace-filter idx+1 #true secaps)]
+                                 (cond [(eq? ch #\return) (preserve-filter idx+1 #true secaps)]
                                        #;[(eq? ch #\u2028) (whitespace-filter idx+1 #false (xml-whitespace-cons spaces idx #\newline ch space-filter 0 secaps))]
                                        #;[(eq? ch #\u0085) (whitespace-filter idx+1 #false (xml-whitespace-cons spaces idx #\newline ch space-filter 0 secaps))]
-                                       [else (whitespace-filter idx+1 #false (xml-whitespace-cons spaces idx ch ch space-filter 0 secaps))])]
+                                       [else (preserve-filter idx+1 #false (xml:space-cons spaces idx ch ch space-filter 0 secaps tag xml:lang))])]
                                 [(or (eq? ch #\newline) #;(eq? ch #\u0085))
-                                 (whitespace-filter idx+1 #false (xml-whitespace-cons spaces idx #\newline #\return space-filter 1 secaps))]
-                                [else (whitespace-filter idx #false (xml-whitespace-cons spaces (- idx 1) #\newline #\return space-filter 0 secaps))])))))])))
+                                 (preserve-filter idx+1 #false (xml:space-cons spaces idx #\newline #\return space-filter 1 secaps tag xml:lang))]
+                                [else (preserve-filter idx #false (xml:space-cons spaces (- idx 1) #\newline #\return space-filter 0 secaps tag xml:lang))])))))])))
 
-(define xml-whitespace-cons : (-> String Fixnum Char Char (-> Char (Option Char)) (U Zero One) (Option (Listof Char)) (Option (Listof Char)))
-  (lambda [spaces idx s os filter nl-span secaps0]
-    (define ns : (Option Char) (filter s))
+(define xml:space-cons : (-> String Fixnum Char Char (-> Symbol (Option String) Char (Option Char)) (U Zero One) (Option (Listof Char))
+                             Symbol (Option String) (Option (Listof Char)))
+  (lambda [spaces idx s os filter nl-span secaps0 tagname xml:lang]
+    (define ns : (Option Char) (filter tagname xml:lang s))
     (cond [(eq? ns os) (if (list? secaps0) (cons s secaps0) secaps0)]
           [else (let ([secaps (if (list? secaps0) secaps0 (reverse (string->list (substring spaces 0 (- idx nl-span)))))])
                   (if (not ns) secaps (cons ns secaps)))])))
 
+(define xml-child-cons : (->* ((Listof XML:WhiteSpace) (Listof (U XML-Subdatum* XML-Element*)) (Option XML:Space-Filter) Symbol (Option String))
+                                 (Boolean) (Listof (U XML-Subdatum* XML-Element*)))
+  (lambda [secaps nerdlihc xml:filter tag xml:lang [tail? #false]]
+    (cond [(null? secaps) nerdlihc]
+          [(not xml:filter) (if (or (null? nerdlihc) tail?) nerdlihc (cons (xml-whitespaces-consolidate secaps) nerdlihc))]
+          [else (let* ([raw-spaces (xml-whitespaces-fold secaps)]
+                       [well-formed-raw-spaces (xml:space=preserve tag raw-spaces #false xml:lang)]
+                       [has-newline? (xml:newline? raw-spaces)]
+                       [raw (xml:whitespace-datum well-formed-raw-spaces)]
+                       [head? (null? nerdlihc)])
+                  (define default-space : (Option String)
+                    (cond [(and tail? head?) (xml:filter tag xml:lang raw #false 'span has-newline?)]
+                          [(and head?) (xml:filter tag xml:lang raw #false 'head has-newline?)]
+                          [(and tail?) (xml:filter tag xml:lang raw #false 'tail has-newline?)]
+                          [else (xml:filter tag xml:lang raw " " 'body has-newline?)]))
+                  (cond [(not default-space) nerdlihc]
+                        [(or (string=? default-space raw)) (cons well-formed-raw-spaces nerdlihc)]
+                        [else (cons (w3s-remake-token well-formed-raw-spaces xml:whitespace default-space) nerdlihc)]))])))
+
+(define xml-air-elements-trim : (-> (Listof (U XML-Subdatum* XML-Element*))
+                                    (Values (Option XML:WhiteSpace) (Listof (U XML-Subdatum* XML-Element*)) (Option XML:WhiteSpace)))
+  (lambda [air]
+    (cond [(null? air) (values #false air #false)]
+          [else (let*-values ([(?lspace rest0) (values (car air) (cdr air))]
+                              [(head rest) (if (xml:whitespace? ?lspace) (values ?lspace rest0) (values #false air))])
+                  (cond [(null? rest) (values head null #false)]
+                        [else (let*-values ([(body0 ?tspace) (split-at rest (sub1 (length rest)))]
+                                            [(body tail) (if (xml:whitespace? ?tspace) (values body0 ?tspace) (values rest #false))])
+                                (values head body tail))]))])))
+
+(define xml-whitespaces-consolidate : (-> (Pairof XML:WhiteSpace (Listof XML:WhiteSpace)) XML:WhiteSpace)
+  (lambda [secaps]
+    (define-values (head body) (values (car secaps) (cdr secaps)))
+    
+    (if (pair? body)
+        (let ws-consolidate ([rest : (Listof XML:WhiteSpace) body]
+                             [end-token : XML:WhiteSpace head]
+                             [start-token : XML:WhiteSpace head])
+          (cond [(null? rest) (w3s-remake-token [start-token end-token] xml:whitespace " ")]
+                [else (let ([self (car rest)])
+                        (ws-consolidate (cdr rest)
+                                        (if (eq? (w3s-token-source end-token) (w3s-token-source self)) end-token self)
+                                        self))]))
+        (let ([raw (xml:whitespace-datum head)])
+          (cond [(string=? raw " ") head]
+                [else (w3s-remake-token head xml:whitespace " ")])))))
+
+(define xml-whitespaces-fold : (-> (Pairof XML:WhiteSpace (Listof XML:WhiteSpace)) XML:WhiteSpace)
+  (lambda [secaps]
+    (define-values (head body) (values (car secaps) (cdr secaps)))
+    
+    (cond [(null? body) head]
+          [else (let ws-fold ([rest : (Listof XML:WhiteSpace) body]
+                              [spaces : (Listof String) null]
+                              [end-token : XML:WhiteSpace head]
+                              [start-token : XML:WhiteSpace head]
+                              [has-newline? : Boolean (xml:newline? head)])
+                  (if (null? rest)
+                      (w3s-remake-token [start-token end-token]
+                                        (if has-newline? xml:newline xml:whitespace)
+                                        (apply string-append spaces))
+                      (let ([self (car rest)])
+                        (ws-fold (cdr rest)
+                                 (cons (xml:whitespace-datum self) spaces)
+                                 (if (eq? (w3s-token-source end-token) (w3s-token-source self)) end-token self)
+                                 self
+                                 (or has-newline? (xml:newline? self))))))])))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define default-xml:space : (Parameterof Symbol) (make-parameter 'default))
 (define empty-attributes : (Immutable-HashTable Symbol XML-Attribute) (make-immutable-hasheq))
+
+(define xml:space-values : (-> Symbol (Option String) Char (Option Char))
+  (lambda [tag xml:lang char]
+    char))

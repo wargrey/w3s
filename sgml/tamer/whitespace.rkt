@@ -13,20 +13,51 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(define tamer-xml:space : (-> [#:xml:space-filter (Option XML:Space-Filter)] Char * XML-Syntax-Any)
-  (lambda [#:xml:space-filter [filter #false] . src]
+(define tamer-xml:space : (-> Symbol [#:xml:space-filter (Option XML:Space-Filter)] [#:xml:lang String] Char * XML-Syntax-Any)
+  (lambda [#:xml:space-filter [filter #false] #:xml:lang [xml:lang ""] xml:space . src]
+    (define ws (tamer-src->token (format "xml:space-~a" xml:space) filter xml:lang src))
+
+    (cond [(not (xml:whitespace? ws)) ws]
+          [(eq? xml:space 'preserve) (xml:space=preserve '|| ws filter xml:lang)]
+          [else (tamer-xml:space-default ws filter '|| xml:lang)])))
+
+(define tamer-svg:space : (-> Symbol [#:xml:lang String] Char * XML-Syntax-Any)
+  (lambda [#:xml:lang [xml:lang ""] xml:space . src]
+    (define ws (tamer-src->token (format "svg:space-~a" xml:space) svg:space-filter xml:lang src))
+
+    (cond [(not (xml:whitespace? ws)) ws]
+          [(eq? xml:space 'preserve) (xml:space=preserve '|| ws svg:space-filter xml:lang)]
+          [else (tamer-xml:space-default ws svg:space-filter '|| xml:lang)])))
+
+(define tamer-src->token : (-> (U Symbol String) (Option XML:Space-Filter) String (Listof Char) XML-Syntax-Any)
+  (lambda [portname filter xml:lang src]
     (define-values (/dev/xmlin version encoding standalone?)
       (xml-open-input-port (open-input-string (list->string src)) #true))
 
     (define-values (ws -)
-      (xml-consume-token* /dev/xmlin 'tamer-xml:space
+      (xml-consume-token* /dev/xmlin portname
                           (cons xml-consume-token:* 1)))
     
-    (cond [(not (xml:whitespace? ws)) ws]
-          [else (xml-whitespace-preserve-filter ws filter)])))
+    ws))
+
+(define tamer-xml:space-default : (-> XML:WhiteSpace (Option XML:Space-Filter) Symbol String XML-Syntax-Any)
+  (lambda [ws filter tag xml:lang]
+    (assert (car (xml-child-cons (list ws) (list ws) filter tag xml:lang))
+            xml:whitespace?)))
 
 
 (module+ main
-  (tamer-xml:space #\return #\newline
+  (tamer-xml:space 'preserve
+                   #\return #\newline
+                   #\newline
+                   #\return)
+  
+  (tamer-svg:space 'default
+                   #\return #\newline
+                   #\newline
+                   #\return)
+
+  (tamer-svg:space 'preserve
+                   #\return #\newline
                    #\newline
                    #\return))

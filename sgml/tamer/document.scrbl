@@ -10,8 +10,25 @@ and processing instructions, all of which are indicated in the document by expli
 @handbook-scenario{White Space Handling}
 
 @tamer-action[
- (tamer-xml:space #\return #\newline
+ (tamer-xml:space 'preserve
+                  #\return #\newline
                   #\newline
-                  #\return)]
+                  #\return)
+
+ (tamer-svg:space 'default
+                  #\return #\newline
+                  #\newline
+                  #\return)
+
+ (tamer-svg:space 'default
+                  #\tab
+                  #\return #\newline
+                  #\space)
+
+ (tamer-svg:space 'preserve
+                  #\return #\newline
+                  #\newline
+                  #\return
+                  #\tab)]
 
 @handbook-reference[]

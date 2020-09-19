@@ -63,7 +63,8 @@ numerically (&#38;#38;#38;) or with a general entity
 
 <![%svg-xml:space;[
 <!ATTLIST svg:text
-          xml:space  (default|preserve) "preserve">
+          xml:space  (default|preserve) "preserve"
+          xml:lang CDATA #FIXED "svg">
 ]]>
 ]>
 
@@ -71,6 +72,8 @@ numerically (&#38;#38;#38;) or with a general entity
            <testcase>This sample shows a &tricky; method.</testcase>
            &recursive3;
            &example;
+
+           <p> I <b>dislike</b> <i>XML</i>. </p>
 
 <!-- NOTE
      svg has special rules to dealing with non-space whitespaces,
