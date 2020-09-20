@@ -17,7 +17,7 @@
 
 (define-type XML-Processing-Instruction* (MPairof XML:Name (Option XML:String)))
 (define-type XML-Element-Attribute* (Pairof XML:Name XML:String))
-(define-type XML-Subdatum* (U XML:String XML-Processing-Instruction* XML:WhiteSpace XML:Char XML:Reference))
+(define-type XML-Subdatum* (U XML-CDATA-Token XML-Reference-Token XML-Processing-Instruction*))
 (define-type XML-Element* (Rec elem (List XML:Name (Listof XML-Element-Attribute*) (Listof (U elem XML-Subdatum*)))))
 
 (struct xml-section
@@ -204,11 +204,10 @@
              (cond [(not body-only?) (make+exn:xml:eof eof tagname) (values #false null)]
                    [else #| end expanding general entity |# (values (reverse nerdlidc) null)])]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
-                    (cond [(xml:whitespace? self) (extract-subelement rest++ (cons self nerdlidc))]
+                    (cond [(xml-cdata-token? self) (extract-subelement rest++ (cons self nerdlidc))]
                           [(xml:stag? self)
                            (let-values ([(e r) (xml-syntax-extract-element* rest++)])
                              (extract-subelement r (if (not e) nerdlidc (cons e nerdlidc))))]
-                          [(xml:string? self) (extract-subelement rest++ (cons self nerdlidc))]
                           [(xml:oetag? self)
                            ; NOTE: the tokenizer ensures the sequence of EndTag token
                            ;   </ name >
@@ -225,7 +224,7 @@
                                                      [else (let ([bads (take rest++ (- (length rest++) (length >rest) 1))])
                                                              (for ([bad (in-list bads)]) (xml-bad-token-throw tagname bad))
                                                              (values #false (cdr >rest)))]))))])]
-                          [(xml:reference? self) (extract-subelement rest++ (cons self nerdlidc))]
+                          [(xml-reference-token? self) (extract-subelement rest++ (cons self nerdlidc))]
                           [(xml:pi? self)
                            (let-values ([(p r) (xml-syntax-extract-pi* rest++)])
                              (extract-subelement r (if (not p) nerdlidc (cons p nerdlidc))))]
@@ -234,7 +233,6 @@
                            ;   <![CDATA[ text ]]>
                            (cond [(or (null? rest++) (null? (cdr rest++))) (make+exn:xml:eof rest tagname) (extract-subelement null nerdlidc)]
                                  [else (extract-subelement (cddr rest++) (cons (assert (car rest++) xml:string?) nerdlidc))])]
-                          [(xml:char? self) (extract-subelement rest++ (cons self nerdlidc))]
                           [else (xml-bad-token-throw tagname self) (extract-subelement rest++ nerdlidc)]))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

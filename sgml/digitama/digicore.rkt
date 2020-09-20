@@ -61,7 +61,8 @@
        #'(begin (struct token xml-token () #:transparent #:type-name Token)
                 (define-token id : ID token (Type rest ...) #:with id? id-datum) ...
                 (define-type Token-Datum (U Type ...))
-                (define (token->datum [t : Token]) : (Option Token-Datum) (cond [(id? t) (id-datum t)] ... [else #false]))))]))
+                (define (token->datum [t : Token]) : (Option Token-Datum)
+                  (cond [(id? t) (id-datum t)] ... [else #false]))))]))
   
 (define-syntax (define-tokens stx)
   (syntax-case stx []
@@ -118,20 +119,24 @@
    [xml:decl            #:+ XML:Decl            #:-> xml:open]
 
    [xml:&string         #:+ XML:&String         #:-> xml:string]
-   
-   [xml:comment         #:+ XML:Comment         #:-> xml:whitespace]
-   [xml:newline         #:+ XML:Newline         #:-> xml:whitespace]]
+   [xml:newline         #:+ XML:Newline         #:-> xml:whitespace]
+   [xml:comment         #:+ XML:Comment         #:-> xml:whitespace]]
 
   ; WARNING: Carefully defining types to avoid happening to mess up '(list? datum)'
   ; TODO: Typed Racket is buggy if there are more than 11 conditions
+
+  (define-symbolic-tokens xml-cdata-token #:+ XML-CDATA-Token
+    [xml:string         #:+ XML:String          #:as String]
+    [xml:whitespace     #:+ XML:WhiteSpace      #:as String])
+
+  (define-symbolic-tokens xml-reference-token #:+ XML-Reference-Token
+    [xml:char           #:+ XML:Char            #:as Index]
+    [xml:reference      #:+ XML:Reference       #:as Symbol])
+  
   (define-symbolic-tokens xml-symbolic-token #:+ XML-Symbolic-Token
     [xml:delim          #:+ XML:Delim           #:as (U Symbol Char)]
     [xml:name           #:+ XML:Name            #:as Symbol]
-    [xml:char           #:+ XML:Char            #:as Index]
-    [xml:reference      #:+ XML:Reference       #:as Symbol]
     [xml:pereference    #:+ XML:PEReference     #:as Keyword]
-    [xml:string         #:+ XML:String          #:as String]
-    [xml:whitespace     #:+ XML:WhiteSpace      #:as String]
     [xml:bad            #:+ XML:Bad             #:as (Pairof String Symbol)]))
 
 (define-syntax-error exn:xml #:as XML-Syntax-Error #:for XML-Token

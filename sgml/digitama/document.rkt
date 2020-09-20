@@ -107,9 +107,14 @@
           (map (λ [[child : (U XML-Subdatum* XML-Element*)]]
                  (cond [(list? child) (xml-element->datum child)]
                        [(xml:string? child) (xml:string-datum child)]
-                       [(xml:whitespace? child) (xml-white-space (xml:whitespace-datum child))]
-                       [(xml:reference? child) (xml:reference-datum child)]
-                       [(xml:char? child) (xml:char-datum child)]
+                       [(xml-cdata-token? child)
+                        (cond [(xml:newline? child) (xml-new-line (xml:whitespace-datum child))]
+                              [(xml:comment? child) (xml-comment (xml:whitespace-datum child))]
+                              [else (xml-white-space (or (xml-cdata-token->datum child) ""))])]
+                       [(xml-reference-token? child)
+                        (cond [(xml:reference? child) (xml:reference-datum child)]
+                              [(xml:char? child) (xml:char-datum child)]
+                              [else '|&DEADC0DE;|])]
                        [else (xml-pi->datum child)]))
                (caddr e)))))
 

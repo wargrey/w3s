@@ -198,31 +198,39 @@
                                [nerdlihc : (Listof (U XML-Subdatum* XML-Element*)) null]
                                [secaps : (Listof XML:WhiteSpace) null]
                                [rstack : (Listof Symbol) recursion-stack])
-      (if (null? rest)
-          (reverse (xml-child-cons secaps nerdlihc xml:filter tag xml:lang #true))
-          (let-values ([(self rest++) (values (car rest) (cdr rest))])
-            (cond [(list? self)
-                   (let ([?elem (xml-element-normalize self dtype xml:lang xml:space xml:filter depth rstack)])
-                     (cond [(list? ?elem) (normalize-subelement rest++ (cons ?elem (xml-child-cons secaps nerdlihc xml:filter tag xml:lang)) null rstack)]
-                           [else ?elem]))]
-                  [(xml:reference? self)
-                   (let ([selfname (xml:reference-datum self)])
-                     (cond [(memq selfname rstack) (make+exn:xml:loop self tagname)]
-                           [else (let*-values ([(air0) (xml-dtd-included tagname self (xml-type-entities dtype) depth)]
-                                               [(?lspace air-elements ?tspace) (xml-air-elements-trim air0)]
-                                               [(nerdlihc++) (xml-child-cons (if (not ?lspace) secaps (cons ?lspace secaps)) nerdlihc xml:filter tag xml:lang)]
-                                               [(sp.rest++) (if (not ?tspace) rest++ (cons ?tspace rest++))]
-                                               [(?elements) (normalize-subelement air-elements null null (cons selfname rstack))])
-                                   (cond [(list? ?elements) (normalize-subelement sp.rest++ (append (reverse ?elements) nerdlihc++) null rstack)]
-                                         [(null? rstack) (normalize-subelement rest++ nerdlihc secaps rstack)]
-                                         [else ?elements]))]))]
-                  [(xml:char? self)
-                   (let ([content (w3s-remake-token self xml:string (string (integer->char (xml:char-datum self))))])
-                     (normalize-subelement rest++ (cons content (xml-child-cons secaps nerdlihc xml:filter tag xml:lang)) null rstack))]
-                  [(not (xml:whitespace? self)) (normalize-subelement rest++ (cons self (xml-child-cons secaps nerdlihc xml:filter tag xml:lang)) null rstack)]
-                  [(xml:comment? self) (normalize-subelement rest++ nerdlihc secaps rstack)]
-                  [(eq? xml:space 'preserve) (normalize-subelement rest++ (cons (xml:space=preserve tag self xml:filter xml:lang) nerdlihc) secaps rstack)]
-                  [else (normalize-subelement rest++ nerdlihc (cons self secaps) rstack)]))))))
+      (cond [(pair? rest)
+             (let-values ([(self rest++) (values (car rest) (cdr rest))])
+               (cond [(list? self)
+                      (let ([?elem (xml-element-normalize self dtype xml:lang xml:space xml:filter depth rstack)])
+                        (cond [(list? ?elem) (normalize-subelement rest++ (cons ?elem (xml-child-cons secaps nerdlihc xml:filter tag xml:lang)) null rstack)]
+                              [else ?elem]))]
+                     [(xml:reference? self)
+                      (let ([selfname (xml:reference-datum self)])
+                        (cond [(memq selfname rstack) (make+exn:xml:loop self tagname)]
+                              [else (let*-values ([(air0) (xml-dtd-included tagname self (xml-type-entities dtype) depth)]
+                                                  [(?lspace air-elements ?tspace) (xml-air-elements-trim air0)]
+                                                  [(nerdlihc++) (xml-child-cons (if (not ?lspace) secaps (cons ?lspace secaps)) nerdlihc xml:filter tag xml:lang)]
+                                                  [(sp.rest++) (if (not ?tspace) rest++ (cons ?tspace rest++))]
+                                                  [(?fly-children) (normalize-subelement air-elements null null (cons selfname rstack))])
+                                      (cond [(list? ?fly-children) (normalize-subelement sp.rest++ (append (reverse ?fly-children) nerdlihc++) null rstack)]
+                                            [(null? rstack) (normalize-subelement rest++ nerdlihc secaps rstack)]
+                                            [else ?fly-children]))]))]
+                     [(xml:char? self)
+                      (let ([content (w3s-remake-token self xml:string (string (integer->char (xml:char-datum self))))])
+                        (normalize-subelement rest++ (cons content (xml-child-cons secaps nerdlihc xml:filter tag xml:lang)) null rstack))]
+                     [(not (xml:whitespace? self)) (normalize-subelement rest++ (cons self (xml-child-cons secaps nerdlihc xml:filter tag xml:lang)) null rstack)]
+                     [(xml:comment? self) (normalize-subelement rest++ nerdlihc secaps rstack)]
+                     [(eq? xml:space 'preserve) (normalize-subelement rest++ (cons (xml:space=preserve tag self xml:filter xml:lang) nerdlihc) secaps rstack)]
+                     [else (normalize-subelement rest++ nerdlihc (cons self secaps) rstack)]))]
+            [else (let cdata-reverse ([rest : (Listof (U XML-Subdatum* XML-Element*)) (xml-child-cons secaps nerdlihc xml:filter tag xml:lang #true)]
+                                      [children : (Listof (U XML-Subdatum* XML-Element*)) null]
+                                      [cdatas : (Listof XML-CDATA-Token) null]
+                                      [start-token : (Option XML-CDATA-Token) #false]
+                                      [end-token : (Option XML-CDATA-Token) #false])
+                    (cond [(null? rest) (xml-cdata-cons cdatas start-token end-token children)]
+                          [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
+                                  (cond [(xml-cdata-token? self) (cdata-reverse rest++ children (cons self cdatas) self (or end-token self))]
+                                        [else (cdata-reverse rest++ (cons self (xml-cdata-cons cdatas start-token end-token children)) null #false #false)]))]))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; NOTE
@@ -363,6 +371,19 @@
                          [aname (xml:name-datum atoken)])
                     (cond [(not (hash-has-key? apool aname)) (hash-set apool aname a)]
                           [else (make+exn:xml:duplicate atoken etoken) apool])))))))
+
+(define xml-cdata-cons : (-> (Listof XML-CDATA-Token) (Option XML-CDATA-Token) (Option XML-CDATA-Token) (Listof (U XML-Subdatum* XML-Element*))
+                             (Listof (U XML-Subdatum* XML-Element*)))
+  (lambda [cdatas start-token end-token children]
+    (cond [(null? cdatas) children]
+          [(null? (cdr cdatas)) (cons (car cdatas) children)]
+          [(not (and start-token end-token)) #| <==> (null? cdatas) |# children]
+          [else (let ([cdata (apply string-append (filter-map xml-cdata-token->datum cdatas))])
+                  (cons (if (eq? (w3s-token-source start-token) (w3s-token-source end-token))
+                            (w3s-remake-token [start-token end-token] xml:string cdata)
+                            ; TODO: resolve the right position
+                            (w3s-remake-token [start-token end-token] xml:string cdata))
+                        children))])))
 
 (define xml-char-unreference : (->* (XML-Token String) ((Option XML-Token)) (Option Char))
   (lambda [etoken estr [context #false]]
