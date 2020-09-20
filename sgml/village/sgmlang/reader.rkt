@@ -4,8 +4,6 @@
 
 (require racket/path)
 (require racket/port)
-(require racket/pretty)
-(require racket/list)
 
 (require syntax/strip-context)
 
@@ -71,7 +69,8 @@
 
 (define dtd-read-syntax
   (lambda [[src #false] [/dev/dtdin (current-input-port)]]
-    (sgml-read-syntax 'read-xml-type-definition 'sgml/dtd #px"\\.dtd$" ".dtd" src /dev/dtdin)))
+    (sgml-read-syntax 'read-xml-type-definition 'sgml/dtd #px"\\.dtd$" ".dtd" src /dev/dtdin
+                      'xml-dtd-expand)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (xml-info in mod line col pos)

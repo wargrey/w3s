@@ -54,9 +54,24 @@
                             [else (xml-content-normalize rest++ (cons self clear-content))]))])))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define xml-dtd-entity-expand : (-> XML-DTD XML-Type-Entities)
+  (lambda [dtd]
+    (let expand-dtd ([rest : (Listof XML-Type-Declaration*) (xml-dtd-declarations dtd)]
+                     [entities : XML-Type-Entities (make-immutable-hasheq)])
+      (cond [(null? rest) entities]
+            [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
+                    (cond [(xml-entity? self)
+                           ; NOTE: NDATA only concerns validity constraint, and therefore is not handled here.
+                           (if (xml-entity-value self)
+                               (expand-dtd rest++ (xml-entity-cons (xml-dtd-included-as-literal self entities) entities))
+                               (expand-dtd rest++ (xml-entity-cons self entities)))]
+                          [(xml:pereference? self) (expand-dtd (append (xml-dtd-included-as-PE self entities) rest++) entities)]
+                          [(pair? self) (expand-dtd (append (xml-dtd-expand-section (car self) (cdr self) entities) rest++) entities)]
+                          [else (expand-dtd rest++ entities)]))]))))
+
 (define xml-dtd-expand : (-> XML-DTD XML-Type)
-  (lambda [int-dtd]
-    (let expand-dtd ([rest : (Listof XML-Type-Declaration*) (xml-dtd-declarations int-dtd)]
+  (lambda [dtd]
+    (let expand-dtd ([rest : (Listof XML-Type-Declaration*) (xml-dtd-declarations dtd)]
                      [entities : XML-Type-Entities (make-immutable-hasheq)]
                      [notations : XML-Type-Notations (make-immutable-hasheq)]
                      [elements : XML-Type-Elements (make-immutable-hasheq)]
@@ -73,7 +88,19 @@
                           [(xml:pereference? self) (expand-dtd (append (xml-dtd-included-as-PE self entities) rest++) entities notations elements attributes)]
                           [(pair? self) (expand-dtd (append (xml-dtd-expand-section (car self) (cdr self) entities) rest++) entities notations elements attributes)]
                           [(xml-notation? self) (expand-dtd rest++ entities (xml-notation-cons self notations) elements attributes)]
-                          [else (expand-dtd rest++ entities notations elements attributes)]))]))))
+                          [else (or (and (vector? self)
+                                         (let ([DECL (vector-ref self 0)])
+                                           (case (xml:name-datum DECL)
+                                             [(ATTLIST)
+                                              (let ([?attr (xml-dtd-expand-declaration xml-dtd-extract-attributes* DECL (vector-ref self 1) entities)])
+                                                (and (xml-attribute-list? ?attr)
+                                                     (expand-dtd rest++ entities notations elements (xml-attributes-cons ?attr attributes))))]
+                                             [(ELEMENT)
+                                              (let ([?elem (xml-dtd-expand-declaration xml-dtd-extract-element* DECL (vector-ref self 1) entities)])
+                                                (and (xml-element-content? ?elem)
+                                                     (expand-dtd rest++ entities notations (xml-element-cons ?elem elements) attributes)))]
+                                             [else #false])))
+                                    (expand-dtd rest++ entities notations elements attributes))]))]))))
 
 (define xml-dtd-expand-section : (-> (U XML:Name XML:PEReference) (Listof XML-Type-Declaration*) XML-Type-Entities (Listof XML-Type-Declaration*))
   (lambda [condition body entities]
@@ -86,6 +113,22 @@
           [(or (eq? sec-name 'IGNORE) (equal? sec-name "IGNORE")) null]
           [else null])))
 
+(define xml-dtd-expand-declaration : (All (T) (-> (-> XML:Name (Listof XML-Doctype-Body*) T) XML:Name (Listof XML-Doctype-Body*) XML-Type-Entities T))
+  (lambda [extract DECL body entities]
+    (extract DECL
+             (let expand-body ([rest : (Listof XML-Doctype-Body*) body]
+                               [ydob : (Listof XML-Doctype-Body*) null])
+               (cond [(null? rest) (reverse ydob)]
+                     [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
+                             (cond [(not (xml:pereference? self)) (expand-body rest++ (cons self ydob))]
+                                   [else (let ([tv (xml-entity-value-token-ref self (xml:pereference-datum self) entities)])
+                                           (cond [(not tv) (expand-body rest++ ydob)]
+                                                 [else (let* ([source (w3s-token-location-string tv)]
+                                                              [/dev/subin (dtd-open-input-port (xml:string-datum tv) #true source)]
+                                                              [tokens (read-dtd-declaration-tokens* /dev/subin source (xml:name-datum DECL))])
+                                                         (expand-body (append tokens rest++) ydob))]))]))])))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-dtd-included-as-literal : (-> XML-Entity XML-Type-Entities (Option XML-Entity))
   ;;; https://www.w3.org/TR/xml11/#inliteral
   ;;; https://www.w3.org/TR/xml11/#bypass
@@ -108,8 +151,8 @@
     ; the spaces would be inserted when writing the document object into a file.
     
     (cond [(not vtoken) null]
-          [else (let ([pe-body (read-xml-type-definition (xml:string-datum vtoken) (w3s-token-location-string vtoken))])
-                  (xml-dtd-declarations pe-body))])))
+          [else (let-values ([(_ subset) (xml-dtd-read-definition (xml:string-datum vtoken) (w3s-token-location-string vtoken))])
+                  (xml-dtd-definitions->declarations subset #true))])))
 
 (define xml-dtd-included : (-> XML:Name XML:Reference XML-Type-Entities Index (Listof (U XML-Subdatum* XML-Element*)))
   ;;; https://www.w3.org/TR/xml11/#included
@@ -120,8 +163,7 @@
     (cond [(and prentity-value) (list (w3s-remake-token e xml:string prentity-value))]
           [else (let ([tv (xml-entity-value-token-ref e name entities tagname)])
                   (cond [(not tv) null]
-                        [else (let*-values ([(tag-name) (symbol->immutable-string (xml:name-datum tagname))]
-                                            [(source) (w3s-token-location-string tv)]
+                        [else (let*-values ([(source) (w3s-token-location-string tv)]
                                             [(/dev/subin) (dtd-open-input-port (xml:string-datum tv) #true source)]
                                             [(tokens) (read-xml-content-tokens* /dev/subin source depth)]
                                             [(children rest) (xml-syntax-extract-subelement* tagname tokens #true)])

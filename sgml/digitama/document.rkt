@@ -56,7 +56,7 @@
     (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin #true))
     (define source : (U Symbol String) (sgml-port-name /dev/xmlin))
     (define tokens : (Listof XML-Token) (read-xml-tokens* /dev/xmlin source))
-    (define-values (doctype doctype-name definitions grammars) (xml-syntax->content* tokens))
+    (define-values (doctype definitions grammars) (xml-syntax->content* tokens))
     (define-values (maybe-name external) (xml-doctype-values doctype))
     
     (define name : Symbol
@@ -67,7 +67,7 @@
 
     (define doc : XML-Document*
       (xml-document* (xml-doctype source version encoding standalone? name external)
-                     (xml-make-definition source doctype-name definitions)
+                     (xml-make-type-definition source definitions)
                      #false grammars))
 
     (cond [(not normalize?) doc]

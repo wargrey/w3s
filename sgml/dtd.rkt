@@ -2,9 +2,11 @@
 
 (provide (all-defined-out))
 (provide (struct-out XML-DTD) read-xml-type-definition)
-(provide (struct-out XML-Type))
+(provide (struct-out XML-Type) XML-Type-Entities)
+(provide xml-dtd-expand xml-dtd-entity-expand)
 
 (require "digitama/dtd.rkt")
+(require "digitama/normalize.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (module reader racket/base

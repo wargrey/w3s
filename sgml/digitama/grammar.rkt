@@ -27,35 +27,34 @@
   #:type-name XML-Section)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-syntax->content* : (-> (Listof XML-Token) (Values (Option XML-DocType-Metadata) (Option XML:Name) (Listof XML-Definition*) (Listof XML-Content*)))
+(define xml-syntax->content* : (-> (Listof XML-Token) (Values (Option XML-DocType-Metadata) (Listof XML-Definition*) (Listof XML-Content*)))
   (lambda [tokens]
     (let syntax->grammar ([rest : (Listof XML-Token) tokens]
                           [doctype : (Option XML-DocType-Metadata) #false]
-                          [doctype-name : (Option XML:Name) #false]
                           [definitions : (Listof XML-Definition*) null]
                           [srammarg : (Listof XML-Content*) null])
-      (cond [(null? rest) (values doctype doctype-name definitions (reverse srammarg))]
+      (cond [(null? rest) (values doctype definitions (reverse srammarg))]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
-                    (cond [(xml:whitespace? self) (syntax->grammar rest++ doctype doctype-name definitions srammarg)]
+                    (cond [(xml:whitespace? self) (syntax->grammar rest++ doctype definitions srammarg)]
                           [(xml:decl? self)
                            (let-values ([(d r) (xml-syntax-extract-declaration* rest++)])
-                             (cond [(not d) (syntax->grammar r doctype doctype-name definitions srammarg)]
+                             (cond [(not d) (syntax->grammar r doctype definitions srammarg)]
                                    [else (let ([declname (vector-ref d 0)])
                                            (cond [(not (xml:name=:=? declname 'DOCTYPE))
                                                   (make+exn:xml:unimplemented declname)
-                                                  (syntax->grammar r doctype declname definitions srammarg)]
+                                                  (syntax->grammar r doctype definitions srammarg)]
                                                  [(and doctype)
                                                   (make+exn:xml:duplicate declname)
-                                                  (syntax->grammar r doctype declname definitions srammarg)]
+                                                  (syntax->grammar r doctype definitions srammarg)]
                                                  [else (let-values ([(metadata defs) (xml-grammar-parse-doctype* d)])
-                                                         (syntax->grammar r metadata declname defs srammarg))]))]))]
+                                                         (syntax->grammar r metadata defs srammarg))]))]))]
                           [(xml:pi? self)
                            (let-values ([(p r) (xml-syntax-extract-pi* rest++)])
-                             (syntax->grammar r doctype doctype-name definitions (if (not p) srammarg (cons p srammarg))))]
+                             (syntax->grammar r doctype definitions (if (not p) srammarg (cons p srammarg))))]
                           [(xml:stag? self)
                            (let-values ([(e r) (xml-syntax-extract-element* rest++)])
-                             (syntax->grammar r doctype doctype-name definitions (if (not e) srammarg (cons e srammarg))))]
-                          [else (xml-bad-token-throw #false self) (syntax->grammar rest++ doctype doctype-name definitions srammarg)]))]))))
+                             (syntax->grammar r doctype definitions (if (not e) srammarg (cons e srammarg))))]
+                          [else (xml-bad-token-throw #false self) (syntax->grammar rest++ doctype definitions srammarg)]))]))))
 
 (define xml-syntax->definition* : (-> (Listof XML-Token) (Listof XML-Definition*))
   (lambda [tokens]

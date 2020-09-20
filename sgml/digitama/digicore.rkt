@@ -205,6 +205,6 @@
   (lambda [errobj [property #false] [level #false]]
     (w3s-log-syntax-error 'exn:xml:syntax xml-token->string xml-token->datum
                           errobj property (or level
-                                              (cond [(exn:xml:error? errobj) 'error]
-                                                    [(exn:xml:fatal? errobj) 'fatal]
-                                                    [else 'warning])))))
+                                              (cond [(exn:xml:fatal? errobj) 'error]
+                                                    [(exn:xml:error? errobj) 'warning]
+                                                    [else 'debug])))))

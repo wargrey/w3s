@@ -87,6 +87,13 @@
     (read-xml-tokens* /dev/xmlin source
                       (cons xml-consume-token:* doc-depth))))
 
+(define read-dtd-declaration-tokens* : (-> Input-Port (U String Symbol) Symbol (Listof XML-Token))
+  ; for ELEMENT and ATTLIST
+  (lambda [/dev/xmlin source DECLNAME]
+    (filter-not xml:whitespace?
+                (read-xml-tokens* /dev/xmlin source
+                                  (cons xml-consume-token:* DECLNAME)))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-consume-token* : (-> Input-Port (U String Symbol)
                                  (U False XML-Parser-ENV (Pairof XML-Token-Consumer XML-Scope))
