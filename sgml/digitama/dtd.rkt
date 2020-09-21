@@ -30,7 +30,8 @@
    [value : (Option XML:String)]
    [public : (Option XML:String)]
    [system : (Option XML:String)]
-   [ndata : (Option XML:Name)])
+   [ndata : (Option XML:Name)]
+   [pvalues : (Boxof (Option (Listof XML-Token)))])
   #:transparent
   #:type-name XML-Entity)
 
@@ -87,9 +88,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define read-xml-type-definition : (->* (SGML-StdIn) ((U False String Symbol)) XML-DTD)
   (lambda [/dev/rawin [port-name #false]]
-    (define-values (source definitions) (xml-dtd-read-definition /dev/rawin port-name))
+    (define /dev/dtdin : Input-Port (dtd-open-input-port /dev/rawin #true port-name))
+    (define source : (U Symbol String) (sgml-port-name /dev/dtdin))
+    (define tokens : (Listof XML-Token) (read-xml-tokens* /dev/dtdin source))
     
-    (xml-make-type-definition source definitions #true)))
+    (xml-make-type-definition source (xml-syntax->definition* tokens) #true)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-make-type-definition : (->* ((U String Symbol) (Listof XML-Definition*)) (Boolean) XML-DTD)
@@ -137,17 +140,17 @@
             [else (let-values ([(?name ?value rest) (values (car tokens) (cadr tokens) (cddr tokens))])
                     (cond [(not (or (xml:reference? ?name) (xml:pereference? ?name))) (make+exn:xml:malformed tokens ENTITY)]
                           [(xml:string? ?value)
-                           (cond [(null? rest) (xml-entity ?name ?value #false #false #false)]
+                           (cond [(null? rest) (xml-entity ?name ?value #false #false #false (box #false))]
                                  [else (make+exn:xml:malformed rest ENTITY)])]
                           [else (let*-values ([(ext) (xml-grammar-extract-external* (cdr tokens))]
                                               [(?public ?system terms) (values (car ext) (cadr ext) (cddr ext))])
-                                  (cond [(null? terms) (xml-entity ?name #false ?public ?system #false)]
+                                  (cond [(null? terms) (xml-entity ?name #false ?public ?system #false (box #false))]
                                         [(xml:pereference? ?name) (make+exn:xml:malformed terms ENTITY)]
                                         [(or (null? (cdr terms))) (make+exn:xml:malformed terms ENTITY)] 
                                         [else (let-values ([(?ndata ?nname term-rest) (values (car terms) (cadr terms) (cddr terms))])
-                                                (cond [(and (xml:name=:=? ?ndata 'NDATA) (xml:name? ?nname) (null? term-rest))
-                                                       (xml-entity ?name #false ?public ?system ?nname)]
-                                                      [else (make+exn:xml:malformed terms ENTITY)]))]))]))]))))
+                                                (if (and (xml:name=:=? ?ndata 'NDATA) (xml:name? ?nname) (null? term-rest))
+                                                    (xml-entity ?name #false ?public ?system ?nname (box #false))
+                                                    (make+exn:xml:malformed terms ENTITY)))]))]))]))))
 
 (define xml-dtd-extract-notation* : (-> XML:Name (Listof XML-Doctype-Body*) (U XML-Notation XML-Syntax-Error Void))
   (lambda [NOTATION body]
@@ -321,14 +324,6 @@
                           [else (make+exn:xml:malformed ?e attr) (extract-enum rest++ smune enums bar?)]))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-dtd-read-definition : (->* (SGML-StdIn) ((U False String Symbol)) (Values (U Symbol String) (Listof XML-Definition*)))
-  (lambda [/dev/rawin [port-name #false]]
-    (define /dev/dtdin : Input-Port (dtd-open-input-port /dev/rawin #true port-name))
-    (define source : (U Symbol String) (sgml-port-name /dev/dtdin))
-    (define tokens : (Listof XML-Token) (read-xml-tokens* /dev/dtdin source))
-
-    (values source (xml-syntax->definition* tokens))))
-
 (define xml-dtd-filter-tokens : (-> XML-Token (Listof XML-Doctype-Body*) (U (Listof XML-Token) XML-Syntax-Error Void))
   (lambda [DECLNAME body]
     (define-values (%tokens others) (partition xml-token? body))

@@ -1,9 +1,11 @@
 #lang racket/base
 
 (provide xml-lexer)
+(provide (rename-out [xml-lexer dtd-lexer]))
 
 (require sgml/digitama/digicore)
 (require sgml/digitama/tokenizer)
+(require sgml/digitama/tokenizer/port)
 (require sgml/digitama/tokenizer/delimiter)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -29,18 +31,18 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-hlvalues
   (lambda [t type subtype offset mode]
-    (define spos (w3s-token-start t))
-    (define epos (w3s-token-end t))
-    
-    (values "" type subtype spos epos
+    (values "" type subtype
+
+            (w3s-token-start t) (w3s-token-end t)
             
             ; the `backup distance` is nothing but an alternative to the `bad token`
             0
 
-            ; NOTE: DrRacket may do tokenizing at any starting position,
-            ;         in which case the prev position must be dropped.  
-            (cons (xml-parser-env-consume mode)
-                  (xml-parser-env-scope mode)))))
+            ; NOTE: Any mode would dramatically slow down the progress, and in proportion to the size of source.
+            ; NOTE: DrRacket may do tokenizing at any starting position, thus, prev position must be dropped.
+            (let ([scope (xml-parser-env-scope mode)])
+              (cond [(eq? scope xml-default-scope) #false]
+                    [else (cons (xml-parser-env-consume mode) scope)])))))
 
 (define xml-open-type ;: (-> XML:Open Symbol)
   (lambda [t]

@@ -120,13 +120,12 @@
                                [ydob : (Listof XML-Doctype-Body*) null])
                (cond [(null? rest) (reverse ydob)]
                      [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
-                             (cond [(not (xml:pereference? self)) (expand-body rest++ (cons self ydob))]
-                                   [else (let ([tv (xml-entity-value-token-ref self (xml:pereference-datum self) entities)])
-                                           (cond [(not tv) (expand-body rest++ ydob)]
-                                                 [else (let* ([source (w3s-token-location-string tv)]
-                                                              [/dev/subin (dtd-open-input-port (xml:string-datum tv) #true source)]
-                                                              [tokens (read-dtd-declaration-tokens* /dev/subin source (xml:name-datum DECL))])
-                                                         (expand-body (append tokens rest++) ydob))]))]))])))))
+                             (if (xml:pereference? self)
+                                  ; TODO: DECL might affect the parser in some rare cases
+                                 (let* ([pevalue->tokens (make-entity-value->tokens (xml:name-datum DECL) read-dtd-declaration-tokens*)]
+                                        [?tokens (xml-entity-value-tokens-ref self (xml:pereference-datum self) entities pevalue->tokens)])
+                                   (expand-body (if (not ?tokens) rest++ (append ?tokens rest++)) ydob))
+                                 (expand-body rest++ (cons self ydob))))])))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-dtd-included-as-literal : (-> XML-Entity XML-Type-Entities (Option XML-Entity))
@@ -144,14 +143,11 @@
 (define xml-dtd-included-as-PE : (-> XML:PEReference XML-Type-Entities (Listof XML-Type-Declaration*))
   ;;; https://www.w3.org/TR/xml11/#as-PE
   (lambda [pe entities]
-    (define vtoken : (Option XML:String) (xml-entity-value-token-ref pe (xml:pereference-datum pe) entities))
+    (define pentity->tokens : (-> XML:String (Listof XML-Token)) (make-entity-value->tokens #false read-xml-tokens*))
+    (define ?tokens : (Option (Listof XML-Token)) (xml-entity-value-tokens-ref pe (xml:pereference-datum pe) entities pentity->tokens))
 
-    ;;; NOTE
-    ; the `plain-value` is not surrounded by spaces since the source has already been tokenized, and
-    ; the spaces would be inserted when writing the document object into a file.
-    
-    (cond [(not vtoken) null]
-          [else (let-values ([(_ subset) (xml-dtd-read-definition (xml:string-datum vtoken) (w3s-token-location-string vtoken))])
+    (cond [(not ?tokens) null]
+          [else (let ([subset (xml-syntax->definition* ?tokens)])
                   (xml-dtd-definitions->declarations subset #true))])))
 
 (define xml-dtd-included : (-> XML:Name XML:Reference XML-Type-Entities Index (Listof (U XML-Subdatum* XML-Element*)))
@@ -161,12 +157,10 @@
     (define prentity-value : (Option String) (xml-prentity-value-ref name))
 
     (cond [(and prentity-value) (list (w3s-remake-token e xml:string prentity-value))]
-          [else (let ([tv (xml-entity-value-token-ref e name entities tagname)])
-                  (cond [(not tv) null]
-                        [else (let*-values ([(source) (w3s-token-location-string tv)]
-                                            [(/dev/subin) (dtd-open-input-port (xml:string-datum tv) #true source)]
-                                            [(tokens) (read-xml-content-tokens* /dev/subin source depth)]
-                                            [(children rest) (xml-syntax-extract-subelement* tagname tokens #true)])
+          [else (let* ([gvalue->tokens (make-entity-value->tokens depth read-xml-content-tokens*)]
+                       [?tokens (xml-entity-value-tokens-ref e name entities gvalue->tokens tagname)])
+                  (cond [(not ?tokens) null]
+                        [else (let-values ([(children rest) (xml-syntax-extract-subelement* tagname ?tokens #true)])
                                 (cond [(and children (null? rest)) children]
                                       [else (make+exn:xml:malformed e tagname) null]))]))])))
 
@@ -446,6 +440,21 @@
                           [(not (xml-entity-ndata e)) (make+exn:xml:external ntoken context) #false]
                           [else (make+exn:xml:foreign ntoken context) #false]))]))))
 
+(define xml-entity-value-tokens-ref : (->* (XML-Token (U Symbol Keyword) XML-Type-Entities (-> XML:String (Listof XML-Token)))
+                                           ((Option XML-Token)) (Option (Listof XML-Token)))
+  (lambda [ntoken name entities value->tokens [context #false]]
+    (let ([e (hash-ref entities name (λ [] #false))])
+      (cond [(not e) (make+exn:xml:undeclared ntoken context) #false]
+            [else (let ([?vtoken (xml-entity-value e)])
+                    (cond [(xml:string? ?vtoken)
+                           (let ([?tokens (unbox (xml-entity-pvalues e))])
+                             (cond [(list? ?tokens) ?tokens]
+                                   [else (let ([pvalues (value->tokens ?vtoken)])
+                                           (set-box! (xml-entity-pvalues e) pvalues)
+                                           pvalues)]))]
+                          [(not (xml-entity-ndata e)) (make+exn:xml:external ntoken context) #false]
+                          [else (make+exn:xml:foreign ntoken context) #false]))]))))
+
 (define xml-prentity-value-ref : (-> Symbol (Option String))
   ;;; https://www.w3.org/TR/xml11/#sec-predefined-ent
   (lambda [name]
@@ -587,3 +596,11 @@
 (define xml:space-values : (-> Symbol (Option String) Char (Option Char))
   (lambda [tag xml:lang char]
     char))
+
+(define make-entity-value->tokens : (All (T) (-> T (-> Input-Port (U String Symbol) T (Listof XML-Token)) (-> XML:String (Listof XML-Token))))
+  (lambda [scope read-tokens]
+    (λ [[tv : XML:String]]
+      (define source : String (w3s-token-location-string tv))
+      (define /dev/subin : Input-Port (dtd-open-input-port (xml:string-datum tv) #true source))
+      
+      (read-tokens /dev/subin source scope))))

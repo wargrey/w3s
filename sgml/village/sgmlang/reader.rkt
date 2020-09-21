@@ -79,7 +79,7 @@
       [(drracket:default-filters) '(["XML Sources" "*.xml"])]
       [(drracket:default-extension) "xml"]
       [(drracket:indentation) (dynamic-require 'sgml/village/sgmlang/indentation 'xml-indentation)]
-      [(color-lexer) (dynamic-require 'sgml/village/sgmlang/highlight 'xml-lexer)]
+      [(color-lexer) (dynamic-require 'sgml/village/sgmlang/lexer 'xml-lexer)]
       [else default])))
 
 (define (dtd-info in mod line col pos)
@@ -88,5 +88,5 @@
       [(drracket:default-filters) '(["DTD Sources" "*.dtd"])]
       [(drracket:default-extension) "dtd"]
       [(drracket:indentation) (dynamic-require 'sgml/village/sgmlang/indentation 'xml-indentation)]
-      [(color-lexer) (dynamic-require 'sgml/village/sgmlang/highlight 'xml-lexer)]
+      [(color-lexer) (dynamic-require 'sgml/village/sgmlang/lexer 'dtd-lexer)]
       [else default])))

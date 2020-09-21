@@ -59,5 +59,5 @@
       [(drracket:default-filters) '(["CSS Sources" "*.css"])]
       [(drracket:default-extension) "css"]
       [(drracket:indentation) (dynamic-require 'css/village/hashlang/indentation 'css-indentation)]
-      [(color-lexer) (dynamic-require 'css/village/hashlang/highlight 'css-lexer)]
+      [(color-lexer) (dynamic-require 'css/village/hashlang/lexer 'css-lexer)]
       [else default])))
