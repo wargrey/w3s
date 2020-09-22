@@ -26,14 +26,30 @@
                (Pairof (U XML:Name XML:PEReference) (Listof defs)))))
 
 (struct xml-entity
-  ([name : (U XML:Reference XML:PEReference)]
-   [value : (Option XML:String)]
-   [public : (Option XML:String)]
-   [system : (Option XML:String)]
-   [ndata : (Option XML:Name)]
-   [pvalues : (Boxof (Option (Listof XML-Token)))])
+  ([name : (U XML:Reference XML:PEReference)])
   #:transparent
   #:type-name XML-Entity)
+
+(struct xml-internal-entity xml-entity
+  ([value : XML:String])
+  #:transparent
+  #:type-name XML-Internal-Entity)
+
+(struct xml-token-entity xml-internal-entity
+  ([body : (Option (Listof XML-Token))])
+  #:mutable
+  #:type-name XML-Token-Entity)
+
+(struct xml-external-entity xml-entity
+  ([public : (Option XML:String)]
+   [system : (Option XML:String)])
+  #:transparent
+  #:type-name XML-External-Entity)
+
+(struct xml-unparsed-entity xml-external-entity
+  ([ndata : XML:Name])
+  #:transparent
+  #:type-name XML-Unparsed-Entity)
 
 (struct xml-notation
   ([name : XML:Name]
@@ -142,16 +158,16 @@
             [else (let-values ([(?name ?value rest) (values (car tokens) (cadr tokens) (cddr tokens))])
                     (cond [(not (or (xml:reference? ?name) (xml:pereference? ?name))) (make+exn:xml:malformed tokens ENTITY)]
                           [(xml:string? ?value)
-                           (cond [(null? rest) (xml-entity ?name ?value #false #false #false (box #false))]
+                           (cond [(null? rest) (xml-token-entity ?name ?value #false)]
                                  [else (make+exn:xml:malformed rest ENTITY)])]
                           [else (let*-values ([(ext) (xml-grammar-extract-external* (cdr tokens))]
                                               [(?public ?system terms) (values (car ext) (cadr ext) (cddr ext))])
-                                  (cond [(null? terms) (xml-entity ?name #false ?public ?system #false (box #false))]
+                                  (cond [(null? terms) (xml-external-entity ?name ?public ?system)]
                                         [(xml:pereference? ?name) (make+exn:xml:malformed terms ENTITY)]
                                         [(or (null? (cdr terms))) (make+exn:xml:malformed terms ENTITY)] 
                                         [else (let-values ([(?ndata ?nname term-rest) (values (car terms) (cadr terms) (cddr terms))])
                                                 (if (and (xml:name=:=? ?ndata 'NDATA) (xml:name? ?nname) (null? term-rest))
-                                                    (xml-entity ?name #false ?public ?system ?nname (box #false))
+                                                    (xml-unparsed-entity ?name ?public ?system ?nname)
                                                     (make+exn:xml:malformed terms ENTITY)))]))]))]))))
 
 (define xml-dtd-extract-notation* : (-> XML:Name (Listof XML-Doctype-Body*) (U XML-Notation XML-Syntax-Error Void))

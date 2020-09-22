@@ -4,7 +4,7 @@
 
 (require typed/racket/unsafe)
 
-(require racket/symbol)
+(require css/digitama/syntax/w3s)
 
 (require "grammar.rkt")
 (require "dtd.rkt")
@@ -39,9 +39,9 @@
                                    default-replace)))))])]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-normalize : (-> XML-DTD (Listof XML-Content*) String Symbol (Option XML:Space-Filter) (Values XML-Type (Listof XML-Content*)))
-  (lambda [int-dtd content xml:lang xml:space xml:space-filter]
-    (define dtype : XML-Type (xml-dtd-expand int-dtd))
+(define xml-normalize : (-> XML-DTD (Option XML-DTD) (Listof XML-Content*) String Symbol (Option XML:Space-Filter) (Values XML-Type (Listof XML-Content*)))
+  (lambda [int-dtd ?ext-dtd content xml:lang xml:space xml:space-filter]
+    (define dtype : XML-Type (xml-dtd-expand int-dtd ?ext-dtd))
     
     (parameterize ([default-xml:space xml:space])
       (let xml-content-normalize ([rest : (Listof XML-Content*) content]
@@ -54,53 +54,65 @@
                             [else (xml-content-normalize rest++ (cons self clear-content))]))])))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-dtd-entity-expand : (-> XML-DTD XML-Type-Entities)
-  (lambda [dtd]
-    (let expand-dtd ([rest : (Listof XML-Type-Declaration*) (xml-dtd-declarations dtd)]
-                     [entities : XML-Type-Entities (make-immutable-hasheq)])
-      (cond [(null? rest) entities]
+(define xml-dtd-entity-expand : (->* (XML-DTD) ((Option XML-Type-Entities)) XML-Type-Entities)
+  (lambda [dtd [int-entities #false]]
+    (define-values (entities _)
+      (xml-dtd-entity-expand/partition dtd int-entities))
+
+    entities))
+
+(define xml-dtd-expand : (->* (XML-DTD) ((Option XML-DTD)) XML-Type)
+  (lambda [dtd [?ext-dtd #false]]
+    ; WARNING
+    ;  Declarations in the intsubset may refer to external (parameter) entities
+    ;  whose values could depend on previously defined entities inside the intsubset
+
+    (define-values (int-entities other-declarations) (xml-dtd-entity-expand/partition dtd #false))
+    (define ext-entities : (Option XML-Type-Entities) (and ?ext-dtd (xml-dtd-entity-expand ?ext-dtd int-entities)))
+    
+    (xml-dtd-type-declaration-expand int-entities ext-entities other-declarations)))
+
+(define xml-dtd-entity-expand/partition : (->* (XML-DTD) ((Option XML-Type-Entities)) (Values XML-Type-Entities (Listof XML-Type-Declaration*)))
+  (lambda [dtd [int-entities #false]]
+    (let partition-dtd ([rest : (Listof XML-Type-Declaration*) (xml-dtd-declarations dtd)]
+                        [snoitaralced : (Listof XML-Type-Declaration*) null]
+                        [entities : XML-Type-Entities empty-entities])
+      (cond [(null? rest) (values entities (reverse snoitaralced))]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml-entity? self)
                            ; NOTE: NDATA only concerns validity constraint, and therefore is not handled here.
-                           (if (xml-entity-value self)
-                               (expand-dtd rest++ (xml-entity-cons (xml-dtd-included-as-literal self entities) entities))
-                               (expand-dtd rest++ (xml-entity-cons self entities)))]
-                          [(xml:pereference? self) (expand-dtd (append (xml-dtd-included-as-PE self entities) rest++) entities)]
-                          [(pair? self) (expand-dtd (append (xml-dtd-expand-section (car self) (cdr self) entities) rest++) entities)]
-                          [else (expand-dtd rest++ entities)]))]))))
+                           (if (xml-internal-entity? self)
+                               (partition-dtd rest++ snoitaralced (xml-entity-cons (xml-dtd-included-as-literal self entities) entities))
+                               (partition-dtd rest++ snoitaralced (xml-entity-cons self entities)))]
+                          [(xml:pereference? self) (partition-dtd (append (xml-dtd-included-as-PE self entities int-entities) rest++) snoitaralced entities)]
+                          [(pair? self) (partition-dtd (append (xml-dtd-expand-section (car self) (cdr self) entities) rest++) snoitaralced entities)]
+                          [else (partition-dtd rest++ (cons self snoitaralced) entities)]))]))))
 
-(define xml-dtd-expand : (-> XML-DTD XML-Type)
-  (lambda [dtd]
-    (let expand-dtd ([rest : (Listof XML-Type-Declaration*) (xml-dtd-declarations dtd)]
-                     [entities : XML-Type-Entities (make-immutable-hasheq)]
-                     [notations : XML-Type-Notations (make-immutable-hasheq)]
-                     [elements : XML-Type-Elements (make-immutable-hasheq)]
-                     [attributes : XML-Type-Attributes (make-immutable-hasheq)])
-      (cond [(null? rest) (xml-type entities notations elements attributes)]
+(define xml-dtd-type-declaration-expand : (-> XML-Type-Entities (Option XML-Type-Entities) (Listof XML-Type-Declaration*) XML-Type)
+  (lambda [int-entities ext-entities declarations]
+    (let expand-dtd ([rest : (Listof XML-Type-Declaration*) declarations]
+                     [notations : XML-Type-Notations empty-notations]
+                     [elements : XML-Type-Elements empty-elements]
+                     [attributes : XML-Type-Attributes empty-element-attributes])
+      (cond [(null? rest) (xml-type int-entities notations elements attributes)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
-                    (cond [(xml-entity? self)
-                           ; NOTE: NDATA only concerns validity constraint, and therefore is not handled here. 
-                           (if (xml-entity-value self)
-                               (expand-dtd rest++ (xml-entity-cons (xml-dtd-included-as-literal self entities) entities) notations elements attributes)
-                               (expand-dtd rest++ (xml-entity-cons self entities) notations elements attributes))]
-                          [(xml-element-content? self) (expand-dtd rest++ entities notations (xml-element-cons self elements) attributes)]
-                          [(xml-attribute-list? self) (expand-dtd rest++ entities notations elements (xml-attributes-cons self attributes))]
-                          [(xml:pereference? self) (expand-dtd (append (xml-dtd-included-as-PE self entities) rest++) entities notations elements attributes)]
-                          [(pair? self) (expand-dtd (append (xml-dtd-expand-section (car self) (cdr self) entities) rest++) entities notations elements attributes)]
-                          [(xml-notation? self) (expand-dtd rest++ entities (xml-notation-cons self notations) elements attributes)]
+                    (cond [(xml-element-content? self) (expand-dtd rest++ notations (xml-element-cons self elements) attributes)]
+                          [(xml-attribute-list? self) (expand-dtd rest++ notations elements (xml-attributes-cons self attributes))]
+                          [(xml-notation? self) (expand-dtd rest++ (xml-notation-cons self notations) elements attributes)]
                           [else (or (and (vector? self)
-                                         (let ([DECL (vector-ref self 0)])
+                                         (let ([DECL (vector-ref self 0)]
+                                               [body (vector-ref self 1)])
                                            (case (xml:name-datum DECL)
                                              [(ATTLIST)
-                                              (let ([?attr (xml-dtd-expand-declaration xml-dtd-extract-attributes* DECL (vector-ref self 1) entities)])
+                                              (let ([?attr (xml-dtd-expand-raw-declaration xml-dtd-extract-attributes* DECL body int-entities ext-entities)])
                                                 (and (xml-attribute-list? ?attr)
-                                                     (expand-dtd rest++ entities notations elements (xml-attributes-cons ?attr attributes))))]
+                                                     (expand-dtd rest++ notations elements (xml-attributes-cons ?attr attributes))))]
                                              [(ELEMENT)
-                                              (let ([?elem (xml-dtd-expand-declaration xml-dtd-extract-element* DECL (vector-ref self 1) entities)])
+                                              (let ([?elem (xml-dtd-expand-raw-declaration xml-dtd-extract-element* DECL body int-entities ext-entities)])
                                                 (and (xml-element-content? ?elem)
-                                                     (expand-dtd rest++ entities notations (xml-element-cons ?elem elements) attributes)))]
+                                                     (expand-dtd rest++ notations (xml-element-cons ?elem elements) attributes)))]
                                              [else #false])))
-                                    (expand-dtd rest++ entities notations elements attributes))]))]))))
+                                    (expand-dtd rest++ notations elements attributes))]))]))))
 
 (define xml-dtd-expand-section : (-> (U XML:Name XML:PEReference) (Listof XML-Type-Declaration*) XML-Type-Entities (Listof XML-Type-Declaration*))
   (lambda [condition body entities]
@@ -113,8 +125,9 @@
           [(or (eq? sec-name 'IGNORE) (equal? sec-name "IGNORE")) null]
           [else null])))
 
-(define xml-dtd-expand-declaration : (All (T) (-> (-> XML:Name (Listof XML-Doctype-Body*) T) XML:Name (Listof XML-Doctype-Body*) XML-Type-Entities T))
-  (lambda [extract DECL body entities]
+(define xml-dtd-expand-raw-declaration : (All (T) (-> (-> XML:Name (Listof XML-Doctype-Body*) T) XML:Name (Listof XML-Doctype-Body*)
+                                                      XML-Type-Entities (Option XML-Type-Entities) T))
+  (lambda [extract DECL body int-entities ext-entities]
     (extract DECL
              (let expand-body ([rest : (Listof XML-Doctype-Body*) body]
                                [ydob : (Listof XML-Doctype-Body*) null])
@@ -123,28 +136,30 @@
                              (if (xml:pereference? self)
                                   ; TODO: DECL might affect the parser in some rare cases
                                  (let* ([pevalue->tokens (make-entity-value->tokens (xml:name-datum DECL) read-dtd-declaration-tokens*)]
-                                        [?tokens (xml-entity-value-tokens-ref self (xml:pereference-datum self) entities pevalue->tokens)])
+                                        [?tokens (xml-entity-value-tokens-ref self (xml:pereference-datum self) int-entities ext-entities pevalue->tokens)])
                                    (expand-body (if (not ?tokens) rest++ (append ?tokens rest++)) ydob))
                                  (expand-body rest++ (cons self ydob))))])))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-dtd-included-as-literal : (-> XML-Entity XML-Type-Entities (Option XML-Entity))
+(define xml-dtd-included-as-literal : (-> XML-Internal-Entity XML-Type-Entities (Option XML-Entity))
   ;;; https://www.w3.org/TR/xml/#inliteral
   ;;; https://www.w3.org/TR/xml/#bypass
   (lambda [e entities]
-    (define ?value (xml-entity-value e))
+    (define ?value (xml-internal-entity-value e))
     
     (cond [(not (xml:&string? ?value)) e]
           [else (let ([?new-value (xml-dtd-entity-replace (xml-entity-name e) ?value entities)])
                   (and ?new-value
-                       (struct-copy xml-entity e
-                                    [value ?new-value])))])))
+                       (xml-token-entity (xml-entity-name e)
+                                         ?new-value #false)))])))
 
-(define xml-dtd-included-as-PE : (-> XML:PEReference XML-Type-Entities (Listof XML-Type-Declaration*))
+(define xml-dtd-included-as-PE : (-> XML:PEReference XML-Type-Entities (Option XML-Type-Entities) (Listof XML-Type-Declaration*))
   ;;; https://www.w3.org/TR/xml/#as-PE
-  (lambda [pe entities]
+  (lambda [pe entities ?int-entities]
     (define pentity->tokens : (-> XML:String (Listof XML-Token)) (make-entity-value->tokens #false read-xml-tokens*))
-    (define ?tokens : (Option (Listof XML-Token)) (xml-entity-value-tokens-ref pe (xml:pereference-datum pe) entities pentity->tokens))
+    (define ?tokens : (Option (Listof XML-Token))
+      (cond [(not ?int-entities) (xml-entity-value-tokens-ref pe (xml:pereference-datum pe) entities #false pentity->tokens)]
+            [else (xml-entity-value-tokens-ref pe (xml:pereference-datum pe) ?int-entities entities pentity->tokens)]))
 
     (cond [(not ?tokens) null]
           [else (let ([subset (xml-syntax->definition* ?tokens)])
@@ -158,7 +173,7 @@
 
     (cond [(and prentity-value) (list (w3s-remake-token e xml:string prentity-value))]
           [else (let* ([gvalue->tokens (make-entity-value->tokens depth read-xml-content-tokens*)]
-                       [?tokens (xml-entity-value-tokens-ref e name entities gvalue->tokens tagname)])
+                       [?tokens (xml-entity-value-tokens-ref e name entities #false gvalue->tokens tagname)])
                   (cond [(not ?tokens) null]
                         [else (let-values ([(children rest) (xml-syntax-extract-subelement* tagname ?tokens #true)])
                                 (cond [(and children (null? rest)) children]
@@ -185,6 +200,7 @@
                             (attribute-filter-map rest++ (cons ?attr setubirtta) (cons attr-name names)
                                                   (if (eq? attr-name 'xml:lang) (xml:lang-ref tagname ?attr) lang)
                                                   (if (eq? attr-name 'xml:space) (xml:space-ref tagname ?attr space) space)))]))
+            
             (for/fold ([setubirtta : (Listof (Pairof XML:Name XML:String)) setubirtta]
                        [this:lang : (Option String) lang]
                        [this:space : Symbol space])
@@ -305,15 +321,16 @@
                                               (cond [(not replacement) (dtd-entity-normalize false-idx #false null gexists?)]
                                                     [else (write-string replacement /dev/evout)
                                                           (dtd-entity-normalize idx++ #false null (or ge? gexists?))]))]
-                                             [(eq? (unsafe-string-ref estr 0) #\#)
-                                              (let ([replacement (xml-char-unreference etoken estr ename)])
-                                                (cond [(not replacement) (dtd-entity-normalize false-idx #false null gexists?)]
-                                                      [else (write-char replacement /dev/evout)
-                                                            (dtd-entity-normalize idx++ #false null gexists?)]))]
-                                             [else (write-char #\& /dev/evout)
-                                                   (write-string estr /dev/evout)
-                                                   (write-char #\; /dev/evout)
-                                                   (dtd-entity-normalize idx++ #false null #true)]))])))]
+                                           [(eq? (unsafe-string-ref estr 0) #\#)
+                                            (let ([replacement (xml-char-unreference etoken estr ename)])
+                                              (cond [(not replacement) (dtd-entity-normalize false-idx #false null gexists?)]
+                                                    [else (write-char replacement /dev/evout)
+                                                          (dtd-entity-normalize idx++ #false null gexists?)]))]
+                                           [else ; GEs are allowed to be declared later unless they are referenced in the default values of <!ATTLIST>
+                                            (write-char #\& /dev/evout)
+                                            (write-string estr /dev/evout)
+                                            (write-char #\; /dev/evout)
+                                            (dtd-entity-normalize idx++ #false null #true)]))])))]
                 [(= idx size)
                  (let ([new-value : String (bytes->string/utf-8 (get-output-bytes /dev/evout #true) #\uFFFD)])
                    (cond [(string=? new-value src) etoken]
@@ -348,11 +365,12 @@
                                                 [else (attr-value-normalize idx++ #false null (cons replacement eulav))]))
                                         (let ([ename (string->unreadable-symbol estr)])
                                           (cond [(memv ename rstack) (make+exn:xml:loop vtoken attname) (attr-value-normalize false-idx #false null eulav)]
-                                                [else (let ([etoken (xml-entity-value-token-ref vtoken ename entities attname)])
-                                                        (cond [(not etoken) (attr-value-normalize false-idx #false null eulav)]
-                                                              [else (let ([raction (xml-attr-entity-replace attname etoken entities (cons ename rstack) eulav)])
-                                                                      (cond [(list? raction) (attr-value-normalize idx++ #false null raction)]
-                                                                            [else (attr-value-normalize false-idx #false null eulav)]))]))]))))])]
+                                                [else (let ([?etoken (xml-entity-value-token-ref vtoken ename entities attname)])
+                                                        (if (not ?etoken)
+                                                            (attr-value-normalize false-idx #false null eulav)
+                                                            (let ([raction (xml-attr-entity-replace attname ?etoken entities (cons ename rstack) eulav)])
+                                                              (cond [(list? raction) (attr-value-normalize idx++ #false null raction)]
+                                                                    [else (attr-value-normalize false-idx #false null eulav)]))))]))))])]
 
                      ; NOTE: the EOL handling and attribute normalization conincide here.
                      [(eq? leader 'xD) (attr-value-normalize (if (eq? ch #\newline) idx++ idx) #false srahc (cons #\space eulav))]
@@ -366,9 +384,16 @@
             [(= idx size)
              (cond [(null? rstack) (w3s-remake-token vtoken xml:string (list->string (reverse eulav)))]
                    [else eulav])]
+            
             [else #false]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define xml-entity-select : (-> (U Symbol Keyword) XML-Type-Entities (Option XML-Type-Entities) XML-Type-Entities)
+  (lambda [entity entities ?int-entities]
+    (cond [(not ?int-entities) entities]
+          [(hash-has-key? ?int-entities entity) ?int-entities]
+          [else entities])))
+  
 (define xml-entity-cons : (-> (Option XML-Entity) XML-Type-Entities XML-Type-Entities)
   (lambda [e entities]
     (cond [(not e) entities]
@@ -428,27 +453,28 @@
 
 (define xml-entity-value-token-ref : (->* (XML-Token (U Symbol Keyword) XML-Type-Entities) ((Option XML-Token)) (Option XML:String))
   (lambda [ntoken name entities [context #false]]
-    (let ([e (hash-ref entities name (λ [] #false))])
-      (cond [(not e) (make+exn:xml:undeclared ntoken context) #false]
-            [else (let ([?vtoken (xml-entity-value e)])
-                    (cond [(xml:string? ?vtoken) ?vtoken]
-                          [(not (xml-entity-ndata e)) (make+exn:xml:external ntoken context) #false]
-                          [else (make+exn:xml:foreign ntoken context) #false]))]))))
+    (define e : (Option XML-Entity) (hash-ref entities name (λ [] #false)))
+    
+    (cond [(xml-internal-entity? e) (xml-internal-entity-value e)]
+          [(xml-unparsed-entity? e) (make+exn:xml:foreign ntoken context) #false]
+          [(xml-external-entity? e) (make+exn:xml:external ntoken context) #false]
+          [else (make+exn:xml:undeclared ntoken context) #false])))
 
-(define xml-entity-value-tokens-ref : (->* (XML-Token (U Symbol Keyword) XML-Type-Entities (-> XML:String (Listof XML-Token)))
+(define xml-entity-value-tokens-ref : (->* ((U XML:Reference XML:PEReference)
+                                            (U Symbol Keyword) XML-Type-Entities (Option XML-Type-Entities)
+                                            (-> XML:String (Listof XML-Token)))
                                            ((Option XML-Token)) (Option (Listof XML-Token)))
-  (lambda [ntoken name entities value->tokens [context #false]]
-    (let ([e (hash-ref entities name (λ [] #false))])
-      (cond [(not e) (make+exn:xml:undeclared ntoken context) #false]
-            [else (let ([?vtoken (xml-entity-value e)])
-                    (cond [(xml:string? ?vtoken)
-                           (let ([?tokens (unbox (xml-entity-pvalues e))])
-                             (cond [(list? ?tokens) ?tokens]
-                                   [else (let ([pvalues (value->tokens ?vtoken)])
-                                           (set-box! (xml-entity-pvalues e) pvalues)
-                                           pvalues)]))]
-                          [(not (xml-entity-ndata e)) (make+exn:xml:external ntoken context) #false]
-                          [else (make+exn:xml:foreign ntoken context) #false]))]))))
+  (lambda [ntoken name entities ?back-entities value->tokens [context #false]]
+    (define e : (Option XML-Entity) (hash-ref entities name (λ [] (and ?back-entities (hash-ref ?back-entities name (λ [] #false))))))
+    
+    (cond [(xml-token-entity? e)
+           (let ([?tokens (xml-token-entity-body e)])
+             (cond [(list? ?tokens) ?tokens]
+                   [else (let ([ts (value->tokens (xml-internal-entity-value e))])
+                           (set-xml-token-entity-body! e ts) ts)]))]
+          [(xml-unparsed-entity? e) (make+exn:xml:foreign ntoken context) #false]
+          [(xml-external-entity? e) (make+exn:xml:external ntoken context) #false]
+          [else (make+exn:xml:undeclared ntoken context) #false])))
 
 (define xml-prentity-value-ref : (-> Symbol (Option String))
   ;;; https://www.w3.org/TR/xml/#sec-predefined-ent
@@ -462,10 +488,11 @@
 
 (define xml-entity-value-ref : (->* (XML-Token (U Symbol Keyword) XML-Type-Entities) ((Option XML-Token)) (Values (Option String) Boolean))
   (lambda [ntoken name entities [context #false]]
-    (let ([?xstr (xml-entity-value-token-ref ntoken name entities context)])
-      (cond [(not ?xstr) (values #false #false)]
-            [(xml:&string? ?xstr) (values (xml:string-datum ?xstr) #true)]
-            [else (values (xml:string-datum ?xstr) #false)]))))
+    (define ?xstr : (Option XML:String) (xml-entity-value-token-ref ntoken name entities context))
+    
+    (cond [(not ?xstr) (values #false #false)]
+          [(xml:&string? ?xstr) (values (xml:string-datum ?xstr) #true)]
+          [else (values (xml:string-datum ?xstr) #false)])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml:lang-ref : (case-> [String -> (Option String)]
@@ -501,8 +528,6 @@
                               [idx+1 (+ idx 1)])
                           (cond [(not xD?)
                                  (cond [(eq? ch #\return) (preserve-filter idx+1 #true secaps)]
-                                       #;[(eq? ch #\u2028) (whitespace-filter idx+1 #false (xml-whitespace-cons spaces idx #\newline ch space-filter 0 secaps))]
-                                       #;[(eq? ch #\u0085) (whitespace-filter idx+1 #false (xml-whitespace-cons spaces idx #\newline ch space-filter 0 secaps))]
                                        [else (preserve-filter idx+1 #false (xml:space-cons spaces idx ch ch space-filter 0 secaps tag xml:lang))])]
                                 [(or (eq? ch #\newline) #;(eq? ch #\u0085))
                                  (preserve-filter idx+1 #false (xml:space-cons spaces idx #\newline #\return space-filter 1 secaps tag xml:lang))]
@@ -586,6 +611,11 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define default-xml:space : (Parameterof Symbol) (make-parameter 'default))
+
+(define empty-entities : XML-Type-Entities (make-immutable-hasheq))
+(define empty-notations : XML-Type-Notations (make-immutable-hasheq))
+(define empty-elements : XML-Type-Elements (make-immutable-hasheq))
+(define empty-element-attributes : XML-Type-Attributes (make-immutable-hasheq))
 (define empty-attributes : (Immutable-HashTable Symbol XML-Attribute) (make-immutable-hasheq))
 
 (define xml:space-values : (-> Symbol (Option String) Char (Option Char))

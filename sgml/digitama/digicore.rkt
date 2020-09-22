@@ -160,7 +160,6 @@
   [exn:xml:wfc           #:-> exn:xml:fatal]
   [exn:xml:unique        #:-> exn:xml:wfc]
   [exn:xml:external      #:-> exn:xml:wfc]
-  [exn:xml:foreign       #:-> exn:xml:wfc]
   [exn:xml:char          #:-> exn:xml:wfc]
   [exn:xml:loop          #:-> exn:xml:wfc]
   [exn:xml:misplaced     #:-> exn:xml:wfc]
@@ -168,6 +167,8 @@
   [exn:xml:mismatch      #:-> exn:xml:wfc]
   [exn:xml:malformed     #:-> exn:xml:wfc]
 
+  [exn:xml:foreign       #:-> exn:xml:external]
+  
   [exn:xml:missing-name  #:-> exn:xml:malformed]
   [exn:xml:missing-value #:-> exn:xml:malformed]
   

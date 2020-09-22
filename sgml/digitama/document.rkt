@@ -17,6 +17,9 @@
 (require "tokenizer.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define-type (XML-External-Entityof type) (U False type (-> (Option String) (Option String) (Option type))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (struct xml-document
   ([doctype : XML-DocType]
    [internal-dtd : XML-Plain-DTD]
@@ -27,6 +30,7 @@
 (struct xml-document*
   ([doctype : XML-DocType]
    [internal-dtd : XML-DTD]
+   [external-dtd : (Option XML-DTD)]
    [type : (Option XML-Type)]
    [elements : (Listof XML-Content*)])
   #:transparent
@@ -50,9 +54,11 @@
                   dtd grammars)))
 
 (define read-xml-document* : (->* (SGML-StdIn)
-                                  (#:normalize? Boolean #:xml:lang String #:xml:space Symbol #:xml:space-filter (Option XML:Space-Filter))
+                                  ((XML-External-Entityof XML-DTD)
+                                   #:normalize? Boolean #:xml:lang String #:xml:space Symbol #:xml:space-filter (Option XML:Space-Filter))
                                   XML-Document*)
-  (lambda [/dev/rawin #:normalize? [normalize? #false] #:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false]]
+  (lambda [#:normalize? [normalize? #false] #:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false]
+           /dev/rawin [ext-dtd #false]]
     (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin #true))
     (define source : (U Symbol String) (sgml-port-name /dev/xmlin))
     (define tokens : (Listof XML-Token) (read-xml-tokens* /dev/xmlin source))
@@ -65,9 +71,16 @@
                     (cond [(pair? maybe-first-element) (xml:name-datum (car maybe-first-element))]
                           [else '||]))]))
 
+    (define ?external-dtd : (Option XML-DTD)
+      (cond [(xml-dtd? ext-dtd) ext-dtd]
+            [(not ext-dtd) #false]
+            [(not external) (ext-dtd #false #false)]
+            [(string? external) (ext-dtd external #false)]
+            [else (ext-dtd (car external) (cdr external))]))
+
     (define doc : XML-Document*
       (xml-document* (xml-doctype source version encoding standalone? name external)
-                     (xml-make-type-definition source definitions)
+                     (xml-make-type-definition source definitions) (xml-load-external-dtd ext-dtd external)
                      #false grammars))
 
     (cond [(not normalize?) doc]
@@ -75,10 +88,22 @@
                                          #:xml:space xml:space #:xml:space-filter xml:space-filter
                                          doc)])))
 
-(define xml-document*-normalize : (-> XML-Document* [#:xml:lang String] [#:xml:space Symbol] [#:xml:space-filter (Option XML:Space-Filter)] XML-Document*)
-  (lambda [doc #:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false]]
-    (let-values ([(type contents) (xml-normalize (xml-document*-internal-dtd doc) (xml-document*-elements doc) xml:lang xml:space xml:space-filter)])
-      (xml-document* (xml-document*-doctype doc) (xml-document*-internal-dtd doc) type contents))))
+(define xml-document*-normalize : (->* (XML-Document*)
+                                       ((XML-External-Entityof XML-DTD)
+                                        #:xml:lang String #:xml:space Symbol #:xml:space-filter (Option XML:Space-Filter))
+                                       XML-Document*)
+  (lambda [#:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false] doc [alter-ext-dtd #false]]
+    (define-values (type contents)
+      (xml-normalize (xml-document*-internal-dtd doc)
+                     (or (xml-load-external-dtd alter-ext-dtd
+                                                (xml-doctype-external (xml-document*-doctype doc)))
+                         (xml-document*-external-dtd doc))
+                     (xml-document*-elements doc)
+                     xml:lang xml:space xml:space-filter))
+    
+    (xml-document* (xml-document*-doctype doc)
+                   (xml-document*-internal-dtd doc) (xml-document*-external-dtd doc)
+                   type contents)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define read-xml-document*->document : (-> XML-Document* XML-Document)
@@ -121,3 +146,11 @@
 (define xml-pair->datum : (-> (Pairof XML:Name XML:String) (Pairof Symbol String))
   (lambda [p]
     (cons (xml:name-datum (car p)) (xml:string-datum (cdr p)))))
+
+(define xml-load-external-dtd : (-> (XML-External-Entityof XML-DTD) XML-External-ID (Option XML-DTD))
+  (lambda [ext-dtd external]
+    (cond [(xml-dtd? ext-dtd) ext-dtd]
+          [(not ext-dtd) #false]
+          [(not external) (ext-dtd #false #false)]
+          [(string? external) (ext-dtd external #false)]
+          [else (ext-dtd (car external) (cdr external))])))
