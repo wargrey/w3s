@@ -140,7 +140,7 @@
     [xml:bad            #:+ XML:Bad             #:as (Pairof String Symbol)]))
 
 (define-syntax-error exn:xml #:as XML-Syntax-Error #:for XML-Token
-  ;;; https://www.w3.org/TR/xml11/#sec-terminology
+  ;;; https://www.w3.org/TR/xml/#sec-terminology
   #:with [xml-make-syntax-error xml-log-syntax-error]
   [exn:xml:error         #:-> exn:xml]
   [exn:xml:fatal         #:-> exn:xml]

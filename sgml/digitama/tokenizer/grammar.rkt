@@ -69,7 +69,7 @@
                           [else (extract-declaration rest++ name bodies)]))]))))
 
 (define xml-syntax-extract-pi : (-> (Listof XML-Datum) (Values (Option XML-Processing-Instruction) (Listof XML-Datum)))
-  ;;; https://www.w3.org/TR/xml11/#sec-pi
+  ;;; https://www.w3.org/TR/xml/#sec-pi
   (lambda [tokens]
     (let extract-pi ([rest : (Listof XML-Datum) tokens]
                      [target : (Option Symbol) #false]

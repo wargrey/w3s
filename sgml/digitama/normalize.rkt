@@ -129,8 +129,8 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-dtd-included-as-literal : (-> XML-Entity XML-Type-Entities (Option XML-Entity))
-  ;;; https://www.w3.org/TR/xml11/#inliteral
-  ;;; https://www.w3.org/TR/xml11/#bypass
+  ;;; https://www.w3.org/TR/xml/#inliteral
+  ;;; https://www.w3.org/TR/xml/#bypass
   (lambda [e entities]
     (define ?value (xml-entity-value e))
     
@@ -141,17 +141,17 @@
                                     [value ?new-value])))])))
 
 (define xml-dtd-included-as-PE : (-> XML:PEReference XML-Type-Entities (Listof XML-Type-Declaration*))
-  ;;; https://www.w3.org/TR/xml11/#as-PE
+  ;;; https://www.w3.org/TR/xml/#as-PE
   (lambda [pe entities]
     (define pentity->tokens : (-> XML:String (Listof XML-Token)) (make-entity-value->tokens #false read-xml-tokens*))
     (define ?tokens : (Option (Listof XML-Token)) (xml-entity-value-tokens-ref pe (xml:pereference-datum pe) entities pentity->tokens))
 
     (cond [(not ?tokens) null]
           [else (let ([subset (xml-syntax->definition* ?tokens)])
-                  (xml-dtd-definitions->declarations subset #true))])))
+                  (xml-dtd-definitions->declarations subset))])))
 
 (define xml-dtd-included : (-> XML:Name XML:Reference XML-Type-Entities Index (Listof (U XML-Subdatum* XML-Element*)))
-  ;;; https://www.w3.org/TR/xml11/#included
+  ;;; https://www.w3.org/TR/xml/#included
   (lambda [tagname e entities depth]
     (define name : Symbol (xml:reference-datum e))
     (define prentity-value : (Option String) (xml-prentity-value-ref name))
@@ -323,8 +323,8 @@
                 [else (not (get-output-bytes /dev/evout #true))])))))
 
 (define xml-attr-entity-replace : (->* (XML:Name XML:String XML-Type-Entities) ((Listof Symbol) (Listof Char)) (U XML:String (Listof Char) False))
-  ;;; https://www.w3.org/TR/xml11/#sec-line-ends
-  ;;; https://www.w3.org/TR/xml11/#AVNormalize
+  ;;; https://www.w3.org/TR/xml/#sec-line-ends
+  ;;; https://www.w3.org/TR/xml/#AVNormalize
   (lambda [attname vtoken entities [rstack : (Listof Symbol) null] [prev-eulav : (Listof Char) null]]
     (define src : String (xml:string-datum vtoken))
     (define size : Index (string-length src))
@@ -355,14 +355,9 @@
                                                                             [else (attr-value-normalize false-idx #false null eulav)]))]))]))))])]
 
                      ; NOTE: the EOL handling and attribute normalization conincide here.
-                     [(eq? leader 'xD)
-                      (if (or (eq? ch #\newline) (eq? ch #\u0085))
-                          (attr-value-normalize idx++ #false srahc (cons #\space eulav))
-                          (attr-value-normalize idx #false srahc (cons #\space eulav)))]
+                     [(eq? leader 'xD) (attr-value-normalize (if (eq? ch #\newline) idx++ idx) #false srahc (cons #\space eulav))]
                      [(eq? ch #\&) (attr-value-normalize idx++ '& srahc eulav)]
                      [(eq? ch #\return) (attr-value-normalize idx++ 'xD srahc eulav)]
-                     #;[(eq? ch #\u0085) (attr-value-normalize idx++ leader srahc (cons #\space eulav))]
-                     #;[(eq? ch #\u2028) (attr-value-normalize idx++ leader srahc (cons #\space eulav))]
                      [(eq? ch #\newline) (attr-value-normalize idx++ leader srahc (cons #\space eulav))]
                      ; End EOL
                      
@@ -380,7 +375,7 @@
           [else (let* ([ntoken (xml-entity-name e)]
                        [name (if (xml:reference? ntoken) (xml:reference-datum ntoken) (xml:pereference-datum ntoken))])
                   (cond [(not (hash-has-key? entities name)) (hash-set entities name e)]
-                        [else (make+exn:xml:duplicate ntoken) entities]))])))
+                        [else (make+exn:xml:multiple ntoken) entities]))])))
 
 (define xml-notation-cons : (-> XML-Notation XML-Type-Notations XML-Type-Notations)
   (lambda [n notations]
@@ -456,7 +451,7 @@
                           [else (make+exn:xml:foreign ntoken context) #false]))]))))
 
 (define xml-prentity-value-ref : (-> Symbol (Option String))
-  ;;; https://www.w3.org/TR/xml11/#sec-predefined-ent
+  ;;; https://www.w3.org/TR/xml/#sec-predefined-ent
   (lambda [name]
     (cond [(eq? name &lt) "\x3c"]
           [(eq? name &gt) "\x3e"]

@@ -142,7 +142,7 @@
                           [else (xml-bad-token-throw #false self) (extract-section rest++ seidob)]))]))))
 
 (define xml-syntax-extract-pi* : (-> (Listof XML-Token) (Values (Option XML-Processing-Instruction*) (Listof XML-Token)))
-  ;;; https://www.w3.org/TR/xml11/#sec-pi
+  ;;; https://www.w3.org/TR/xml/#sec-pi
   (lambda [tokens]
     ; NOTE: the tokenizer ensures the sequence of PI tokens
     ;  either <? name body ?> or <? error ?> 
@@ -157,9 +157,9 @@
                           [else (xml-bad-token-throw #false self) (extract-pi rest++ target body)]))]))))
 
 (define xml-syntax-extract-element* : (-> (Listof XML-Token) (Values (Option XML-Element*) (Listof XML-Token)))
-  ;;; https://www.w3.org/TR/xml11/#NT-STag
-  ;;; https://www.w3.org/TR/xml11/#NT-ETag
-  ;;; https://www.w3.org/TR/xml11/#NT-content
+  ;;; https://www.w3.org/TR/xml/#NT-STag
+  ;;; https://www.w3.org/TR/xml/#NT-ETag
+  ;;; https://www.w3.org/TR/xml/#NT-content
   (lambda [tokens]
     (cond [(null? tokens) (make+exn:xml:eof eof) (values #false null)]
           [else (let-values ([(?name rest++) (values (car tokens) (cdr tokens))])
@@ -175,7 +175,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-syntax-extract-element-attributes* : (-> (Option XML:Name) (Listof XML-Token) (Values (Listof XML-Element-Attribute*) Boolean (Listof XML-Token)))
-  ;;; https://www.w3.org/TR/xml11/#NT-Attribute
+  ;;; https://www.w3.org/TR/xml/#NT-Attribute
   (lambda [tagname tokens]
     ; NOTE: the tokenizer ensures the sequence of StartTag token
     ;   < name (attrname=value)* /?>
@@ -195,7 +195,7 @@
                                         [else (extract-element-attributes rest++ setubirtta)]))]))]))))
 
 (define xml-syntax-extract-subelement* : (-> (Option XML:Name) (Listof XML-Token) Boolean (Values (Option (Listof (U XML-Element* XML-Subdatum*))) (Listof XML-Token)))
-  ;;; https://www.w3.org/TR/xml11/#NT-content
+  ;;; https://www.w3.org/TR/xml/#NT-content
   (lambda [tagname tokens body-only?]
     (let extract-subelement ([rest : (Listof XML-Token) tokens]
                              [nerdlidc : (Listof (U XML-Element* XML-Subdatum*)) null])

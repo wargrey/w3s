@@ -22,9 +22,9 @@
 (define-type SGML-StdIn (U Input-Port Path-String Bytes))
 
 (define xml-open-input-port : (->* (SGML-StdIn) (Boolean) (Values Input-Port (Option Nonnegative-Flonum) (Option String) Boolean))
-  ;;; https://www.w3.org/TR/xml11/#sec-prolog-dtd
-  ;;; https://www.w3.org/TR/xml11/#NT-EncodingDecl
-  ;;; https://www.w3.org/TR/xml11/#sec-TextDecl
+  ;;; https://www.w3.org/TR/xml/#sec-prolog-dtd
+  ;;; https://www.w3.org/TR/xml/#NT-EncodingDecl
+  ;;; https://www.w3.org/TR/xml/#sec-TextDecl
   (lambda [/dev/stdin [enable-line-counting? #false]]
     (define /dev/rawin : Input-Port
       (cond [(port? /dev/stdin) /dev/stdin]
@@ -78,7 +78,7 @@
     (cond [(not (regexp-try-match #px"^\\s*<[?][Xx][Mm][Ll]\\s+" /dev/xmlin)) (values 1.0 "UTF-8" #true)]
           [else (let read-property ([version : (Option Number) #false]
                                     [encoding : (Option String) #false]
-                                    [standalone? : Boolean #false #| https://www.w3.org/TR/xml11/#sec-rmd |#])
+                                    [standalone? : Boolean #false #| https://www.w3.org/TR/xml/#sec-rmd |#])
                   (define name=value (regexp-try-match #px"^([-a-zA-Z0-9]+)\\s*=\\s*[\"']([^\"'>]+)[\"']\\s*" /dev/xmlin))
                   (define name.value (and name=value (filter bytes? (cdr name=value))))
                   (if (not name.value)

@@ -1,7 +1,7 @@
 #lang typed/racket/base
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; https://www.w3.org/TR/xml11/                                                                ;;;
+;;; https://www.w3.org/TR/xml/                                                                  ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (provide (all-defined-out) SGML-StdIn XML-DTD XML-External-ID XML:Space-Filter XML-Space-Position)

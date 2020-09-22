@@ -1,6 +1,6 @@
 #lang typed/racket/base
 
-;;; https://www.w3.org/TR/xml11/#charsets
+;;; https://www.w3.org/TR/xml/#charsets
 
 (provide (all-defined-out))
 
@@ -26,9 +26,7 @@
 (define xml-newline-char? : (-> Char Boolean)
   (lambda [ch]
     (or (eq? ch #\newline)
-        (eq? ch #\return)
-        #;(eq? ch #\u0085)
-        #;(eq? ch #\u2028))))
+        (eq? ch #\return))))
 
 (define xml-name-start-char? : (-> Char Boolean)
   (lambda [ch]

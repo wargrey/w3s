@@ -1,4 +1,4 @@
-# SGML Dialect: An XML Processor Written in Typed Racket
+# SGML Dialect: An XML/DTD Processor Written in Typed Racket
 
 wargrey
 

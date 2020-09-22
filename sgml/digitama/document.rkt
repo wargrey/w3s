@@ -1,6 +1,6 @@
 #lang typed/racket/base
 
-;;; https://www.w3.org/TR/xml11/#sec-documents
+;;; https://www.w3.org/TR/xml/#sec-documents
 
 (provide (all-defined-out))
 

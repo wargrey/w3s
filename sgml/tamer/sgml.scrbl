@@ -29,6 +29,9 @@ Meanwhile, @the-name will:
 @include-section{document.scrbl}
 
 @handbook-appendix[#:index-section? #true
- (url-bib-entry "XML11" "Extensible Markup Language (XML) 1.1 (Second Edition)" "https://www.w3.org/TR/xml11"
+ (url-bib-entry "XML10" "Extensible Markup Language (XML) 1.0 (Fifth Edition)" "https://www.w3.org/TR/xml"
                 #:author "W3C"
-                #:date 2006)]
+                #:date 2008)
+ (book-bib-entry "EXML" "Effective XML" (authors "Elliotte Rusty Harold") "Addison-Wesley Professional"
+                 #:date 2003
+                 #:url "http://www.ibiblio.org/xml/books/effectivexml/chapters/03.html")]
