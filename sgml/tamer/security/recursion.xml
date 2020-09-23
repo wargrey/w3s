@@ -1,0 +1,13 @@
+#lang sgml/xml
+
+<?xml version="1.0"?>
+
+<!DOCTYPE recursion [
+  <!ENTITY recursive1 "&recursive3;">
+  <!ENTITY recursive2 "&recursive1;">
+  <!ENTITY recursive3 "<recursive>this is a bad &recursive2; exmaple</recursive>">
+]>
+
+<recursion ratt="&recursive2;">
+  &recursive3;
+</recursion>

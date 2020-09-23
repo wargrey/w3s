@@ -54,29 +54,35 @@
                             [else (xml-content-normalize rest++ (cons self clear-content))]))])))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-dtd-entity-expand : (->* (XML-DTD) ((Option XML-Type-Entities)) XML-Type-Entities)
-  (lambda [dtd [int-entities #false]]
+(define xml-dtd-entity-expand : (->* (XML-DTD) ((Option XML-Type-Entities) Boolean) XML-Type-Entities)
+  (lambda [dtd [int-entities #false] [merge? #true]]
     (define-values (entities _)
-      (xml-dtd-entity-expand/partition dtd int-entities))
+      (xml-dtd-entity-expand/partition dtd int-entities merge?))
 
     entities))
 
 (define xml-dtd-expand : (->* (XML-DTD) ((Option XML-DTD)) XML-Type)
   (lambda [dtd [?ext-dtd #false]]
-    ; WARNING
+    ;;; NOTE
     ;  Declarations in the intsubset may refer to external (parameter) entities
-    ;  whose values could depend on previously defined entities inside the intsubset
+    ;  whose values could depend on previously defined entities within the intsubset
 
-    (define-values (int-entities other-declarations) (xml-dtd-entity-expand/partition dtd #false))
-    (define ext-entities : (Option XML-Type-Entities) (and ?ext-dtd (xml-dtd-entity-expand ?ext-dtd int-entities)))
+    (define-values (int-entities iothers) (xml-dtd-entity-expand/partition dtd #false))
+    (define-values (entities eothers)
+      (cond [(not ?ext-dtd) (values int-entities null)]
+            [else (xml-dtd-entity-expand/partition ?ext-dtd int-entities #true)]))
     
-    (xml-dtd-type-declaration-expand int-entities ext-entities other-declarations)))
+    (xml-dtd-type-declaration-expand entities #false (append iothers eothers))))
 
-(define xml-dtd-entity-expand/partition : (->* (XML-DTD) ((Option XML-Type-Entities)) (Values XML-Type-Entities (Listof XML-Type-Declaration*)))
-  (lambda [dtd [int-entities #false]]
+(define xml-dtd-entity-expand/partition : (->* (XML-DTD) ((Option XML-Type-Entities) Boolean) (Values XML-Type-Entities (Listof XML-Type-Declaration*)))
+  (lambda [dtd [internal-entities #false] [merge? #true]]
+    (define-values (initial-entities int-entities)
+      (cond [(not merge?) (values empty-entities internal-entities)]
+            [else (values (or internal-entities empty-entities) #false)]))
+
     (let partition-dtd ([rest : (Listof XML-Type-Declaration*) (xml-dtd-declarations dtd)]
                         [snoitaralced : (Listof XML-Type-Declaration*) null]
-                        [entities : XML-Type-Entities empty-entities])
+                        [entities : XML-Type-Entities initial-entities])
       (cond [(null? rest) (values entities (reverse snoitaralced))]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml-entity? self)

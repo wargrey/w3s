@@ -82,8 +82,7 @@
 
 (struct xml-dtd
   ([location : (U String Symbol)]
-   [declarations : (Listof XML-Type-Declaration*)]
-   [type : (Option XML-Type)])
+   [declarations : (Listof XML-Type-Declaration*)])
   #:transparent
   #:type-name XML-DTD)
 
@@ -113,7 +112,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-make-type-definition : (-> (U String Symbol) (Listof XML-Definition*) XML-DTD)
   (lambda [source subset]
-    (xml-dtd source (xml-dtd-definitions->declarations subset) #false)))
+    (xml-dtd source (xml-dtd-definitions->declarations subset))))
 
 (define xml-dtd-definitions->declarations : (-> (Listof XML-Definition*) (Listof XML-Type-Declaration*))
   (lambda [subset]

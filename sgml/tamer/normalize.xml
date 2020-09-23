@@ -11,10 +11,6 @@
 <!ENTITY a "&#xA;">
 <!ENTITY da "&#xD;&#xA;">
 
-<!ENTITY recursive1 "&recursive3;">
-<!ENTITY recursive2 "&recursive1;">
-<!ENTITY recursive3 "<recursive>this is a bad &recursive2; exmaple</recursive>">
-
 <!NOTATION public PUBLIC "public.dtd">
 <!NOTATION system SYSTEM "system.dtd">
 <!NOTATION pubsys PUBLIC "public.dtd" "system.dtd">
@@ -68,9 +64,8 @@ numerically (&#38;#38;#38;) or with a general entity
 ]]>
 ]>
 
-<normalize id="&#xd;&#xd;A&#xa;&#xa;B&#xd;&#xa;" literacy="&book;" pe="%expansion;" recur="&recursive2;" pe="dup" ext="&open-hatch;" ndata="&hatch-pic;">
+<normalize id="&#xd;&#xd;A&#xa;&#xa;B&#xd;&#xa;" literacy="&book;" pe="%expansion;" pe="dup" ext="&open-hatch;" ndata="&hatch-pic;">
            <testcase>This sample shows an &tricky; method.</testcase>
-           &recursive3;
            &example;
 
            <p> I <b>dislike</b> <i>XML</i>. </p>

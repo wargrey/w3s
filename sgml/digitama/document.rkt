@@ -4,6 +4,8 @@
 
 (provide (all-defined-out))
 
+(require racket/path)
+
 (require "dtd.rkt")
 (require "doctype.rkt")
 (require "grammar.rkt")
@@ -17,7 +19,7 @@
 (require "tokenizer.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-type (XML-External-Entityof type) (U False type (-> (Option String) (Option String) (Option type))))
+(define-type (XML-External-Entityof type) (U False type (-> Path (Option String) (Option String) (Option type))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (struct xml-document
@@ -71,16 +73,11 @@
                     (cond [(pair? maybe-first-element) (xml:name-datum (car maybe-first-element))]
                           [else '||]))]))
 
-    (define ?external-dtd : (Option XML-DTD)
-      (cond [(xml-dtd? ext-dtd) ext-dtd]
-            [(not ext-dtd) #false]
-            [(not external) (ext-dtd #false #false)]
-            [(string? external) (ext-dtd external #false)]
-            [else (ext-dtd (car external) (cdr external))]))
+    (define ?external-dtd : (Option XML-DTD) (xml-load-external-dtd source ext-dtd external))
 
     (define doc : XML-Document*
       (xml-document* (xml-doctype source version encoding standalone? name external)
-                     (xml-make-type-definition source definitions) (xml-load-external-dtd ext-dtd external)
+                     (xml-make-type-definition source definitions) ?external-dtd
                      #false grammars))
 
     (cond [(not normalize?) doc]
@@ -95,8 +92,10 @@
   (lambda [#:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false] doc [alter-ext-dtd #false]]
     (define-values (type contents)
       (xml-normalize (xml-document*-internal-dtd doc)
-                     (or (xml-load-external-dtd alter-ext-dtd
-                                                (xml-doctype-external (xml-document*-doctype doc)))
+                     (or (let ([doctype (xml-document*-doctype doc)])
+                           (xml-load-external-dtd (xml-doctype-location doctype)
+                                                  alter-ext-dtd
+                                                  (xml-doctype-external doctype)))
                          (xml-document*-external-dtd doc))
                      (xml-document*-elements doc)
                      xml:lang xml:space xml:space-filter))
@@ -147,10 +146,15 @@
   (lambda [p]
     (cons (xml:name-datum (car p)) (xml:string-datum (cdr p)))))
 
-(define xml-load-external-dtd : (-> (XML-External-Entityof XML-DTD) XML-External-ID (Option XML-DTD))
-  (lambda [ext-dtd external]
+(define xml-load-external-dtd : (-> (U String Symbol) (XML-External-Entityof XML-DTD) XML-External-ID (Option XML-DTD))
+  (lambda [source ext-dtd external]
+    (define rootdir : Path
+      (or (and (string? source)
+               (path-only source))
+          (current-directory)))
+    
     (cond [(xml-dtd? ext-dtd) ext-dtd]
           [(not ext-dtd) #false]
-          [(not external) (ext-dtd #false #false)]
-          [(string? external) (ext-dtd external #false)]
-          [else (ext-dtd (car external) (cdr external))])))
+          [(not external) (ext-dtd rootdir #false #false)]
+          [(string? external) (ext-dtd rootdir external #false)]
+          [else (ext-dtd rootdir (car external) (cdr external))])))
