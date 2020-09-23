@@ -148,6 +148,7 @@
   [exn:xml:reserved      #:-> exn:xml]
   [exn:xml:multiple      #:-> exn:xml]
   [exn:xml:unimplemented #:-> exn:xml]
+  [exn:xml:defense       #:-> exn:xml]
   
   [exn:xml:vc            #:-> exn:xml:error]
   [exn:xml:token         #:-> exn:xml:vc]
@@ -208,4 +209,5 @@
                           errobj property (or level
                                               (cond [(exn:xml:fatal? errobj) 'error]
                                                     [(exn:xml:error? errobj) 'warning]
+                                                    [(exn:xml:defense? errobj) 'fatal]
                                                     [else 'debug])))))

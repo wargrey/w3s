@@ -7,7 +7,7 @@
 (provide (all-defined-out) SGML-StdIn XML-DTD XML-External-ID XML:Space-Filter XML-Space-Position)
 (provide (struct-out XML-Document) read-xml-document)
 (provide (struct-out XML-Document*) read-xml-document* xml-document*-normalize)
-(provide svg:space-filter)
+(provide svg:space-filter default-dtd-entity-expansion-upsize)
 
 (require "digitama/dtd.rkt")
 (require "digitama/doctype.rkt")

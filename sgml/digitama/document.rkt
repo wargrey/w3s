@@ -57,9 +57,11 @@
 
 (define read-xml-document* : (->* (SGML-StdIn)
                                   ((XML-External-Entityof XML-DTD)
+                                   #:entity-expansion-upsize (Option Index)
                                    #:normalize? Boolean #:xml:lang String #:xml:space Symbol #:xml:space-filter (Option XML:Space-Filter))
                                   XML-Document*)
   (lambda [#:normalize? [normalize? #false] #:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false]
+           #:entity-expansion-upsize [entity-expansion-upsize (default-dtd-entity-expansion-upsize)]
            /dev/rawin [ext-dtd #false]]
     (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin #true))
     (define source : (U Symbol String) (sgml-port-name /dev/xmlin))
@@ -81,15 +83,18 @@
                      #false grammars))
 
     (cond [(not normalize?) doc]
-          [else (xml-document*-normalize #:xml:lang xml:lang
-                                         #:xml:space xml:space #:xml:space-filter xml:space-filter
+          [else (xml-document*-normalize #:entity-expansion-upsize entity-expansion-upsize
+                                         #:xml:lang xml:lang #:xml:space xml:space #:xml:space-filter xml:space-filter
                                          doc)])))
 
 (define xml-document*-normalize : (->* (XML-Document*)
                                        ((XML-External-Entityof XML-DTD)
+                                        #:entity-expansion-upsize (Option Index)
                                         #:xml:lang String #:xml:space Symbol #:xml:space-filter (Option XML:Space-Filter))
                                        XML-Document*)
-  (lambda [#:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false] doc [alter-ext-dtd #false]]
+  (lambda [#:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false]
+           #:entity-expansion-upsize [entity-expansion-upsize (default-dtd-entity-expansion-upsize)]
+           doc [alter-ext-dtd #false]]
     (define-values (type contents)
       (xml-normalize (xml-document*-internal-dtd doc)
                      (or (let ([doctype (xml-document*-doctype doc)])
@@ -98,7 +103,8 @@
                                                   (xml-doctype-external doctype)))
                          (xml-document*-external-dtd doc))
                      (xml-document*-elements doc)
-                     xml:lang xml:space xml:space-filter))
+                     xml:lang xml:space xml:space-filter
+                     entity-expansion-upsize))
     
     (xml-document* (xml-document*-doctype doc)
                    (xml-document*-internal-dtd doc) (xml-document*-external-dtd doc)
