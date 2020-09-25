@@ -86,12 +86,6 @@
   (lambda [/dev/xmlin source [doc-depth 0]]
     (read-xml-tokens* /dev/xmlin source
                       (cons xml-consume-token:* doc-depth))))
-
-(define read-xml-content-tokens*/no-entity : (->* (Input-Port (U String Symbol)) (Index) (Listof XML-Token))
-  (lambda [/dev/xmlin source [doc-depth 0]]
-    (parameterize ([xml-entity-reference-bypass #true])
-      (read-xml-tokens* /dev/xmlin source
-                        (cons xml-consume-token:* doc-depth)))))
   
 (define read-dtd-declaration-tokens* : (-> Input-Port (U String Symbol) Symbol (Listof XML-Token))
   ; for ELEMENT and ATTLIST

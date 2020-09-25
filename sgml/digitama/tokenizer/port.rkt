@@ -16,6 +16,7 @@
 ;;; Performance Hint:
 ;; 0. See schema/digitama/exchange/csv/reader/port.rkt
 ;; 1. Checking empty file before reading makes it oscillate(500ms for 2.1MB xslx), weird
+;; 2. for long strings, `cons`ing each char should be avoided 
 
 (define-type XML-Error (Pairof (Listof Char) Symbol))
 (define-type XML-Datum (U Char Symbol String Index Keyword (Boxof String) XML-White-Space XML-Error))
@@ -30,8 +31,6 @@
 (define xml-collapsed-whitespace : XML-White-Space (xml-white-space ""))
 (define xml-initial-scope : XML-Scope 'initial)
 (define xml-default-scope : XML-Scope 'dtd)
-
-(define xml-entity-reference-bypass : (Parameterof Boolean) (make-parameter #false)) ; for escaping expanded '&'
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define read-xml-tokens : (-> Input-Port (Listof XML-Datum))
@@ -58,7 +57,7 @@
     (if (index? scope)
         (cond [(char-whitespace? ch) (values (xml-consume-whitespace /dev/xmlin ch) xml-consume-token:* scope)]
               [(eq? ch #\<) (xml-consume-open-token /dev/xmlin xml-consume-token:* scope)]
-              [(and (eq? ch #\&) (not (xml-entity-reference-bypass))) (values (xml-consume-reference-token /dev/xmlin ch) xml-consume-token:* scope)]
+              [(eq? ch #\&) (values (xml-consume-reference-token /dev/xmlin ch) xml-consume-token:* scope)]
               [(or (eq? ch #\?) (eq? ch #\])) (xml-consume-close-token /dev/xmlin ch xml-consume-token:* scope)] ; for PIs and CDATAs
               [else (values (xml-consume-contentchars /dev/xmlin ch) xml-consume-token:* scope)])
         (cond [(char-whitespace? ch) (xml-skip-whitespace /dev/xmlin) (values xml-collapsed-whitespace xml-consume-token:* scope)]
