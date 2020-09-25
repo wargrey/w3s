@@ -147,7 +147,6 @@
   [exn:xml:eof           #:-> exn:xml]
   [exn:xml:reserved      #:-> exn:xml]
   [exn:xml:multiple      #:-> exn:xml]
-  [exn:xml:unimplemented #:-> exn:xml]
   [exn:xml:defense       #:-> exn:xml]
   
   [exn:xml:vc            #:-> exn:xml:error]
@@ -172,6 +171,7 @@
   
   [exn:xml:missing-name  #:-> exn:xml:malformed]
   [exn:xml:missing-value #:-> exn:xml:malformed]
+  [exn:xml:unrecognized  #:-> exn:xml:malformed]
   
   [exn:xml:space         #:-> exn:xml:char])
 

@@ -19,4 +19,7 @@
   <!ENTITY lol9 "&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;">
 ]>
 
-<lolz bomb="&lol9;">&lol9;</lolz>
+<lolz bomb="&lol9;">
+      &lol7;
+      &lol9;
+</lolz>

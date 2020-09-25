@@ -31,6 +31,8 @@
 (define xml-initial-scope : XML-Scope 'initial)
 (define xml-default-scope : XML-Scope 'dtd)
 
+(define xml-entity-reference-bypass : (Parameterof Boolean) (make-parameter #false)) ; for escaping expanded '&'
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define read-xml-tokens : (-> Input-Port (Listof XML-Datum))
   (lambda [/dev/xmlin]
@@ -55,25 +57,24 @@
     ;;; Do not skip whitespace here, or the lexer will not find the right place to start an open parenthesis.
     (if (index? scope)
         (cond [(char-whitespace? ch) (values (xml-consume-whitespace /dev/xmlin ch) xml-consume-token:* scope)]
+              [(eq? ch #\<) (xml-consume-open-token /dev/xmlin xml-consume-token:* scope)]
+              [(and (eq? ch #\&) (not (xml-entity-reference-bypass))) (values (xml-consume-reference-token /dev/xmlin ch) xml-consume-token:* scope)]
+              [(or (eq? ch #\?) (eq? ch #\])) (xml-consume-close-token /dev/xmlin ch xml-consume-token:* scope)] ; for PIs and CDATAs
+              [else (values (xml-consume-contentchars /dev/xmlin ch) xml-consume-token:* scope)])
+        (cond [(char-whitespace? ch) (xml-skip-whitespace /dev/xmlin) (values xml-collapsed-whitespace xml-consume-token:* scope)]
+              [(or (xml-name-char? ch) (eq? ch #\#))
+               (let ([kw (xml-consume-nmtoken /dev/xmlin ch)])
+                 (case kw
+                   [(PUBLIC SYSTEM) (values kw xml-consume-token:* kw)]
+                   [else (values kw xml-consume-token:* scope)]))]
               [else (case ch
                       [(#\<) (xml-consume-open-token /dev/xmlin xml-consume-token:* scope)]
+                      [(#\>) (values ch xml-consume-token:* scope)]
+                      [(#\= #\( #\) #\[) (values ch xml-consume-token:* scope)]
+                      [(#\' #\") (xml-consume-token:literals /dev/xmlin ch scope)]
+                      [(#\? #\/ #\]) (xml-consume-close-token /dev/xmlin ch xml-consume-token:* scope)]
                       [(#\& #\%) (values (xml-consume-reference-token /dev/xmlin ch) xml-consume-token:* scope)]
-                      [(#\? #\]) (xml-consume-close-token /dev/xmlin ch xml-consume-token:* scope)] ; for PI and CDATA
-                      [else (values (xml-consume-contentchars /dev/xmlin ch) xml-consume-token:* scope)])])
-        (cond [(char-whitespace? ch) (xml-skip-whitespace /dev/xmlin) (values xml-collapsed-whitespace xml-consume-token:* scope)]
-              [else (if (or (xml-name-char? ch) (eq? ch #\#))
-                        (let ([kw (xml-consume-nmtoken /dev/xmlin ch)])
-                          (case kw
-                            [(PUBLIC SYSTEM) (values kw xml-consume-token:* kw)]
-                            [else (values kw xml-consume-token:* scope)]))
-                        (case ch
-                          [(#\<) (xml-consume-open-token /dev/xmlin xml-consume-token:* scope)]
-                          [(#\>) (values ch xml-consume-token:* scope)]
-                          [(#\= #\( #\) #\[) (values ch xml-consume-token:* scope)]
-                          [(#\' #\") (xml-consume-token:literals /dev/xmlin ch scope)]
-                          [(#\? #\/ #\]) (xml-consume-close-token /dev/xmlin ch xml-consume-token:* scope)]
-                          [(#\& #\%) (values (xml-consume-reference-token /dev/xmlin ch) xml-consume-token:* scope)]
-                          [else (values ch xml-consume-token:* scope)]))]))))
+                      [else (values ch xml-consume-token:* scope)])]))))
 
 (define xml-consume-token:start-condition : XML-Token-Consumer
   ;;; https://www.w3.org/TR/xml/#sec-condition-sect

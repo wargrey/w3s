@@ -139,7 +139,7 @@
                                  [(NOTATION)
                                   (let ([e (xml-dtd-extract-notation* DECL (vector-ref self 1))])
                                     (filter-definition rest++ (if (xml-notation? e) (cons e snoitaralced) snoitaralced)))]
-                                 [else (make+exn:xml:unimplemented DECL) (filter-definition rest++ snoitaralced)]))]
+                                 [else (make+exn:xml:unrecognized DECL) (filter-definition rest++ snoitaralced)]))]
                             [(xml-section? self)
                              (filter-definition rest++ (cons ((inst cons (U XML:Name XML:PEReference) (Listof XML-Type-Declaration*))
                                                               (xml-section-condition self) (filter-definition (xml-section-body self) null))

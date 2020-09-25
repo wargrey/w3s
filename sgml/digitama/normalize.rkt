@@ -51,8 +51,8 @@
         (cond [(null? rest) (values dtype (reverse clear-content))]
               [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                       (cond [(list? self)
-                             (let ([?elem (xml-element-normalize self dtype (xml:lang-ref xml:lang) xml:space xml:space-filter 0 upsize)])
-                               (xml-content-normalize rest++ (if (exn:xml:loop? ?elem) clear-content (cons ?elem clear-content))))]
+                             (let ([elem (xml-element-normalize self dtype (xml:lang-ref xml:lang) xml:space xml:space-filter 0 upsize)])
+                               (xml-content-normalize rest++ (cons elem clear-content)))]
                             [else (xml-content-normalize rest++ (cons self clear-content))]))])))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -77,7 +77,7 @@
       (cond [(not ?ext-dtd) (values int-entities null)]
             [else (xml-dtd-entity-expand/partition ?ext-dtd int-entities #true #false)]))
     
-    (xml-dtd-type-declaration-expand entities #false (append iothers eothers))))
+    (xml-dtd-type-declaration-expand entities (append iothers eothers) expansion-upsize)))
 
 (define xml-dtd-entity-expand/partition : (-> XML-DTD (Option XML-Type-Entities) Boolean (Option Index) (Values XML-Type-Entities (Listof XML-Type-Declaration*)))
   (lambda [dtd internal-entities merge? upsize]
@@ -93,23 +93,23 @@
                     (cond [(xml-entity? self)
                            ; NOTE: NDATA only concerns validity constraint, and therefore is not handled here.
                            (if (xml-internal-entity? self)
-                               (partition-dtd rest++ snoitaralced (xml-entity-cons (xml-dtd-included-as-literal self entities upsize) entities))
+                               (partition-dtd rest++ snoitaralced (xml-entity-cons (xml-dtd-included-in-literal self entities int-entities upsize) entities))
                                (partition-dtd rest++ snoitaralced (xml-entity-cons self entities)))]
                           [(xml:pereference? self)
-                           (let ([subset (xml-dtd-included-as-PE self entities int-entities)])
+                           (let ([subset (xml-dtd-included-as-PE self entities int-entities upsize)])
                              (cond [(null? subset) (partition-dtd rest++ snoitaralced entities)]
                                    [else (let-values ([(entities++ snoitaralced++) (partition-dtd subset null entities)])
                                            (partition-dtd rest++ (append (reverse snoitaralced++) snoitaralced) entities++))]))]
-                          [(pair? self) (partition-dtd (append (xml-dtd-expand-section (car self) (cdr self) entities) rest++) snoitaralced entities)]
+                          [(pair? self) (partition-dtd (append (xml-dtd-expand-section (car self) (cdr self) entities int-entities) rest++) snoitaralced entities)]
                           [else (partition-dtd rest++ (cons self snoitaralced) entities)]))]))))
 
-(define xml-dtd-type-declaration-expand : (-> XML-Type-Entities (Option XML-Type-Entities) (Listof XML-Type-Declaration*) XML-Type)
-  (lambda [int-entities ext-entities declarations]
+(define xml-dtd-type-declaration-expand : (-> XML-Type-Entities (Listof XML-Type-Declaration*) (Option Index) XML-Type)
+  (lambda [entities declarations upsize]
     (let expand-dtd ([rest : (Listof XML-Type-Declaration*) declarations]
                      [notations : XML-Type-Notations empty-notations]
                      [elements : XML-Type-Elements empty-elements]
                      [attributes : XML-Type-Attributes empty-element-attributes])
-      (cond [(null? rest) (xml-type int-entities notations elements attributes)]
+      (cond [(null? rest) (xml-type entities notations elements attributes)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml-element-content? self) (expand-dtd rest++ notations (xml-element-cons self elements) attributes)]
                           [(xml-attribute-list? self) (expand-dtd rest++ notations elements (xml-attributes-cons self attributes))]
@@ -119,21 +119,22 @@
                                                [body (vector-ref self 1)])
                                            (case (xml:name-datum DECL)
                                              [(ATTLIST)
-                                              (let ([?attr (xml-dtd-expand-raw-declaration xml-dtd-extract-attributes* DECL body int-entities ext-entities)])
+                                              (let ([?attr (xml-dtd-expand-raw-declaration xml-dtd-extract-attributes* DECL body entities upsize)])
                                                 (and (xml-attribute-list? ?attr)
                                                      (expand-dtd rest++ notations elements (xml-attributes-cons ?attr attributes))))]
                                              [(ELEMENT)
-                                              (let ([?elem (xml-dtd-expand-raw-declaration xml-dtd-extract-element* DECL body int-entities ext-entities)])
+                                              (let ([?elem (xml-dtd-expand-raw-declaration xml-dtd-extract-element* DECL body entities upsize)])
                                                 (and (xml-element-content? ?elem)
                                                      (expand-dtd rest++ notations (xml-element-cons ?elem elements) attributes)))]
                                              [else #false])))
                                     (expand-dtd rest++ notations elements attributes))]))]))))
 
-(define xml-dtd-expand-section : (-> (U XML:Name XML:PEReference) (Listof XML-Type-Declaration*) XML-Type-Entities (Listof XML-Type-Declaration*))
-  (lambda [condition body entities]
+(define xml-dtd-expand-section : (-> (U XML:Name XML:PEReference) (Listof XML-Type-Declaration*) XML-Type-Entities (Option XML-Type-Entities)
+                                     (Listof XML-Type-Declaration*))
+  (lambda [condition body entities int-entities]
     (define sec-name : (U False Symbol String)
       (cond [(xml:name? condition) (xml:name-datum condition)]
-            [else (let-values ([(?value ge?) (xml-entity-value-ref condition (xml:pereference-datum condition) entities)])
+            [else (let-values ([(?value ge?) (xml-entity-value-ref condition (xml:pereference-datum condition) entities int-entities)])
                     (cond [(not (xml:&string? ?value)) ?value]
                           [else (xml-dtd-entity-replace condition ?value entities)]))]))
 
@@ -141,65 +142,63 @@
           [(or (eq? sec-name 'IGNORE) (equal? sec-name "IGNORE")) null]
           [else null])))
 
-(define xml-dtd-expand-raw-declaration : (All (T) (-> (-> XML:Name (Listof XML-Doctype-Body*) T) XML:Name (Listof XML-Doctype-Body*)
-                                                      XML-Type-Entities (Option XML-Type-Entities) T))
-  (lambda [extract DECL body int-entities ext-entities]
+(define xml-dtd-expand-raw-declaration : (All (T) (-> (-> XML:Name (Listof XML-Doctype-Body*) T) XML:Name (Listof XML-Doctype-Body*) XML-Type-Entities (Option Index) T))
+  (lambda [extract DECL body entities upsize]
     (extract DECL
              (let expand-body ([rest : (Listof XML-Doctype-Body*) body]
                                [ydob : (Listof XML-Doctype-Body*) null])
                (cond [(null? rest) (reverse ydob)]
                      [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                              (if (xml:pereference? self)
-                                  ; TODO: DECL might affect the parser in some rare cases
-                                 (let* ([pevalue->tokens (make-entity-value->tokens (xml:name-datum DECL) read-dtd-declaration-tokens*)]
-                                        [?tokens (xml-entity-value-tokens-ref self (xml:pereference-datum self) int-entities ext-entities pevalue->tokens)])
+                                  ; TODO: if might DECL affect the parser in some rare cases
+                                 (let* ([pename (xml:pereference-datum self)]
+                                        [pevalue->tokens (make-entity-value->tokens (xml:name-datum DECL) read-dtd-declaration-tokens*)]
+                                        [?tokens (xml-entity-value-tokens-ref self pename entities #false xml-dtd-entity-replace upsize pevalue->tokens)])
                                    (expand-body (if (not ?tokens) rest++ (append ?tokens rest++)) ydob))
                                  (expand-body rest++ (cons self ydob))))])))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-dtd-included-as-literal : (-> XML-Internal-Entity XML-Type-Entities (Option Index) (Option XML-Entity))
+(define xml-dtd-included-in-literal : (-> XML-Internal-Entity XML-Type-Entities (Option XML-Type-Entities) (Option Index) (Option XML-Entity))
   ;;; https://www.w3.org/TR/xml/#inliteral
   ;;; https://www.w3.org/TR/xml/#bypass
-  (lambda [e entities upsize]
+  (lambda [e entities ?int-entities upsize]
     (define ?value (xml-internal-entity-value e))
     
     (cond [(not (xml:&string? ?value)) e]
-          [else (let ([?new-value (xml-dtd-entity-replace (xml-entity-name e) ?value entities upsize)])
+          [else (let ([?new-value (xml-dtd-entity-replace (xml-entity-name e) ?value entities ?int-entities upsize)])
                   (and ?new-value
                        (xml-token-entity (xml-entity-name e)
                                          ?new-value #false)))])))
 
-(define xml-dtd-included-as-PE : (-> XML:PEReference XML-Type-Entities (Option XML-Type-Entities) (Listof XML-Type-Declaration*))
+(define xml-dtd-included-as-PE : (-> XML:PEReference XML-Type-Entities (Option XML-Type-Entities) (Option Index) (Listof XML-Type-Declaration*))
   ;;; https://www.w3.org/TR/xml/#as-PE
-  (lambda [pe entities ?int-entities]
-    (define pentity->tokens : (-> XML:String (Listof XML-Token)) (make-entity-value->tokens #false read-xml-tokens*))
+  (lambda [pe entities ?int-entities upsize]
     (define ?tokens : (Option (Listof XML-Token))
-      (cond [(not ?int-entities) (xml-entity-value-tokens-ref pe (xml:pereference-datum pe) entities #false pentity->tokens)]
-            [else (xml-entity-value-tokens-ref pe (xml:pereference-datum pe) ?int-entities entities pentity->tokens)]))
+      (xml-entity-value-tokens-ref pe (xml:pereference-datum pe)
+                                   entities ?int-entities xml-dtd-entity-replace upsize
+                                   (make-entity-value->tokens #false read-xml-tokens*)))
 
-    (cond [(not ?tokens) null]
+    (cond [(or (not ?tokens) (null? ?tokens)) null]
           [else (let ([subset (xml-syntax->definition* ?tokens)])
                   (xml-dtd-definitions->declarations subset))])))
 
-(define xml-dtd-included : (-> XML:Name XML:Reference XML-Type-Entities Index (Listof (U XML-Subdatum* XML-Element*)))
+(define xml-dtd-included : (-> XML:Name XML:Reference XML-Type-Entities (Option Index) Index (Listof (U XML-Subdatum* XML-Element*)))
   ;;; https://www.w3.org/TR/xml/#included
-  (lambda [tagname e entities depth]
-    (define name : Symbol (xml:reference-datum e))
-    (define prentity-value : (Option String) (xml-prentity-value-ref name))
+  (lambda [tagname e entities upsize depth]
+    (define ?tokens : (Option (Listof XML-Token))
+      (xml-entity-value-tokens-ref e (xml:reference-datum e)
+                                   entities #false xml-attr-entity-replace upsize
+                                   (make-entity-value->tokens depth read-xml-content-tokens*/no-entity)
+                                   tagname))
 
-    (cond [(and prentity-value) (list (w3s-remake-token e xml:string prentity-value))]
-          [else (let* ([gvalue->tokens (make-entity-value->tokens depth read-xml-content-tokens*)]
-                       [?tokens (xml-entity-value-tokens-ref e name entities #false gvalue->tokens tagname)])
-                  (cond [(not ?tokens) null]
-                        [else (let-values ([(children rest) (xml-syntax-extract-subelement* tagname ?tokens #true)])
-                                (cond [(and children (null? rest)) children]
-                                      [else (make+exn:xml:malformed e tagname) null]))]))])))
+    (cond [(or (not ?tokens) (null? ?tokens)) null]
+          [else (let-values ([(children rest) (xml-syntax-extract-subelement* tagname ?tokens #true)])
+                  (cond [(and children (null? rest)) children]
+                        [else (make+exn:xml:malformed e tagname) null]))])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-element-normalize : (->* (XML-Element* XML-Type (Option String) Symbol (Option XML:Space-Filter) Index (Option Index))
-                                     ((Listof Symbol))
-                                     (U XML-Element* exn:xml:loop))
-  (lambda [e dtype xml:lang xml:space xml:filter depth upsize [recursion-stack null]]
+(define xml-element-normalize : (-> XML-Element* XML-Type (Option String) Symbol (Option XML:Space-Filter) Index (Option Index) XML-Element*)
+  (lambda [e dtype xml:lang xml:space xml:filter depth upsize]
     (define entities : XML-Type-Entities (xml-type-entities dtype))
     (define tagname : XML:Name (car e))
     
@@ -231,10 +230,10 @@
                                       (if (eq? key 'xml:lang) (xml:lang-ref attname ?attr) this:lang)
                                       (if (eq? key 'xml:space) (xml:space-ref attname ?attr space) this:space)))]))))))
 
-    (define ?children : (U (Listof (U XML-Subdatum* XML-Element*)) exn:xml:loop)
+    (define ?children : (Listof (U XML-Subdatum* XML-Element*))
       (xml-subelement-normalize tagname (caddr e) dtype
                                 xml:this:lang xml:this:space xml:filter
-                                (assert (+ depth 1) index?) upsize recursion-stack))
+                                (assert (+ depth 1) index?) upsize))
     
     (cond [(list? ?children) (list tagname (reverse setubirtta) ?children)]
           [else ?children])))
@@ -248,7 +247,7 @@
            [value (cdr name=value)])
        (cond [(memq (xml:name-datum name) attrnames) (make+exn:xml:unique name tagname) #false]
              [(not (xml:&string? value)) name=value]
-             [else (let ([?value (xml-attr-entity-replace name value entities upsize)])
+             [else (let ([?value (xml-attr-entity-replace name value entities #false upsize)])
                      (and (xml:string? ?value)
                           (cons name ?value)))]))]
     [(attr entities attrnames upsize)
@@ -256,43 +255,41 @@
            [value (xml-attribute-default attr)])
        (cond [(or (memq (xml:name-datum name) attrnames) (xml:name? value)) #false]
              [(not (xml:&string? value)) (cons name value)]
-             [else (let ([?value (xml-attr-entity-replace name value entities upsize)])
+             [else (let ([?value (xml-attr-entity-replace name value entities #false upsize)])
                      (and (xml:string? ?value)
                           (cons name ?value)))]))]))
 
 (define xml-subelement-normalize : (-> XML:Name (Listof (U XML-Subdatum* XML-Element*)) XML-Type (Option String) Symbol (Option XML:Space-Filter)
-                                       Index (Option Index) (Listof Symbol) (U (Listof (U XML-Subdatum* XML-Element*)) exn:xml:loop))
-  (lambda [tagname children dtype xml:lang xml:space xml:filter depth upsize recursion-stack]
+                                       Index (Option Index) (Listof (U XML-Subdatum* XML-Element*)))
+  (lambda [tagname children dtype xml:lang xml:space xml:filter depth upsize]
     (define tag : Symbol (xml:name-datum tagname))
     
     (let normalize-subelement ([rest : (Listof (U XML-Subdatum* XML-Element*)) children]
                                [nerdlihc : (Listof (U XML-Subdatum* XML-Element*)) null]
-                               [secaps : (Listof XML:WhiteSpace) null]
-                               [rstack : (Listof Symbol) recursion-stack])
+                               [secaps : (Listof XML:WhiteSpace) null])
       (if (pair? rest)
           (let-values ([(self rest++) (values (car rest) (cdr rest))])
             (cond [(list? self)
-                   (let ([?elem (xml-element-normalize self dtype xml:lang xml:space xml:filter depth upsize rstack)])
-                     (cond [(list? ?elem) (normalize-subelement rest++ (cons ?elem (xml-child-cons secaps nerdlihc xml:filter tag xml:lang)) null rstack)]
+                   (let ([?elem (xml-element-normalize self dtype xml:lang xml:space xml:filter depth upsize)])
+                     (cond [(list? ?elem) (normalize-subelement rest++ (cons ?elem (xml-child-cons secaps nerdlihc xml:filter tag xml:lang)) null)]
                            [else ?elem]))]
+
                   [(xml:reference? self)
-                   (let ([selfname (xml:reference-datum self)])
-                     (cond [(memq selfname rstack) (make+exn:xml:loop self tagname)]
-                           [else (let*-values ([(air0) (xml-dtd-included tagname self (xml-type-entities dtype) depth)]
-                                               [(?lspace air-elements ?tspace) (xml-air-elements-trim air0)]
-                                               [(nerdlihc++) (xml-child-cons (if (not ?lspace) secaps (cons ?lspace secaps)) nerdlihc xml:filter tag xml:lang)]
-                                               [(sp.rest++) (if (not ?tspace) rest++ (cons ?tspace rest++))]
-                                               [(?fly-children) (normalize-subelement air-elements null null (cons selfname rstack))])
-                                   (cond [(list? ?fly-children) (normalize-subelement sp.rest++ (append (reverse ?fly-children) nerdlihc++) null rstack)]
-                                         [(null? rstack) (normalize-subelement rest++ nerdlihc secaps rstack)]
-                                         [else ?fly-children]))]))]
+                   (let*-values ([(air0) (xml-dtd-included tagname self (xml-type-entities dtype) upsize depth)]
+                                 [(?lspace air-elements ?tspace) (xml-air-elements-trim air0)]
+                                 [(nerdlihc++) (xml-child-cons (if (not ?lspace) secaps (cons ?lspace secaps)) nerdlihc xml:filter tag xml:lang)]
+                                 [(sp.rest++) (if (not ?tspace) rest++ (cons ?tspace rest++))])
+                     (normalize-subelement sp.rest++ (append (reverse (normalize-subelement air-elements null null)) nerdlihc++) null))]
+
                   [(xml:char? self)
                    (let ([content (w3s-remake-token self xml:string (string (integer->char (xml:char-datum self))))])
-                     (normalize-subelement rest++ (cons content (xml-child-cons secaps nerdlihc xml:filter tag xml:lang)) null rstack))]
-                  [(not (xml:whitespace? self)) (normalize-subelement rest++ (cons self (xml-child-cons secaps nerdlihc xml:filter tag xml:lang)) null rstack)]
-                  [(xml:comment? self) (normalize-subelement rest++ nerdlihc secaps rstack)]
-                  [(eq? xml:space 'preserve) (normalize-subelement rest++ (cons (xml:space=preserve tag self xml:filter xml:lang) nerdlihc) secaps rstack)]
-                  [else (normalize-subelement rest++ nerdlihc (cons self secaps) rstack)]))
+                     (normalize-subelement rest++ (cons content (xml-child-cons secaps nerdlihc xml:filter tag xml:lang)) null))]
+
+                  [(not (xml:whitespace? self)) (normalize-subelement rest++ (cons self (xml-child-cons secaps nerdlihc xml:filter tag xml:lang)) null)]
+                  [(xml:comment? self) (normalize-subelement rest++ nerdlihc secaps)]
+                  [(eq? xml:space 'preserve) (normalize-subelement rest++ (cons (xml:space=preserve tag self xml:filter xml:lang) nerdlihc) secaps)]
+                  [else (normalize-subelement rest++ nerdlihc (cons self secaps))]))
+
           (let cdata-reverse ([rest : (Listof (U XML-Subdatum* XML-Element*)) (xml-child-cons secaps nerdlihc xml:filter tag xml:lang #true)]
                               [children : (Listof (U XML-Subdatum* XML-Element*)) null]
                               [cdatas : (Listof XML-CDATA-Token) null]
@@ -311,18 +308,18 @@
 ;;
 ;; Besides, Char references are expanded immediately in all contexts.
 
-(define xml-dtd-entity-replace : (-> XML-Token XML:&String XML-Type-Entities (Option Index) (Option XML:String))
+(define xml-dtd-entity-replace : (-> XML-Token XML:String XML-Type-Entities (Option XML-Type-Entities) (Option Index) (Option XML:String))
   (let ([/dev/evout (open-output-string '/dev/evout)])
-    (lambda [ename etoken entities upsize]
+    (lambda [ename etoken entities int-entities upsize]
       (define src : String (xml:string-datum etoken))
       (define size : Index (string-length src))
       (define false-idx : Nonnegative-Fixnum (+ size 1))
       
-      (let dtd-entity-normalize ([idx : Nonnegative-Fixnum 0]
-                                 [leader : (Option Char) #false]
-                                 [srahc : (Listof Char) null]
-                                 [gexists? : Boolean #false]
-                                 [expanded : Nonnegative-Fixnum 0])
+      (let dtd-normalize ([idx : Nonnegative-Fixnum 0]
+                          [leader : (Option Char) #false]
+                          [srahc : (Listof Char) null]
+                          [gexists? : Boolean #false]
+                          [expanded : Nonnegative-Fixnum 0])
           (cond [(< idx size)
                  (let ([ch (unsafe-string-ref src idx)])
                    (define idx++ : Nonnegative-Fixnum (+ idx 1))
@@ -331,32 +328,32 @@
                      (make+exn:xml:char etoken ename 'debug))
                    
                    (if (not leader)
-                       (cond [(or (eq? ch #\%) (eq? ch #\&)) (dtd-entity-normalize idx++ ch srahc gexists? expanded)]
-                             [(eq? expanded upsize) (make+exn:xml:defense etoken ename) (dtd-entity-normalize false-idx #false null gexists? expanded)]
-                             [else (write-char ch /dev/evout) (dtd-entity-normalize idx++ leader srahc gexists? (unsafe-fx+ expanded 1))])
-                       (cond [(not (eq? ch #\;)) (dtd-entity-normalize idx++ leader (cons ch srahc) gexists? expanded)]
-                             [(null? srahc) (make+exn:xml:malformed etoken ename) (dtd-entity-normalize false-idx leader srahc gexists? expanded)]
+                       (cond [(or (eq? ch #\%) (eq? ch #\&)) (dtd-normalize idx++ ch srahc gexists? expanded)]
+                             [(eq? expanded upsize) (make+exn:xml:defense etoken ename) (dtd-normalize false-idx #false null gexists? expanded)]
+                             [else (write-char ch /dev/evout) (dtd-normalize idx++ leader srahc gexists? (unsafe-fx+ expanded 1))])
+                       (cond [(not (eq? ch #\;)) (dtd-normalize idx++ leader (cons ch srahc) gexists? expanded)]
+                             [(null? srahc) (make+exn:xml:malformed etoken ename) (dtd-normalize false-idx leader srahc gexists? expanded)]
                              [else (let ([estr (list->string (reverse srahc))])
                                      (cond [(eq? leader #\%)
-                                            (let-values ([(replacement ge?) (xml-entity-value-ref etoken (string->keyword estr) entities ename)])
+                                            (let-values ([(replacement ge?) (xml-entity-value-ref etoken (string->keyword estr) entities int-entities ename)])
                                               (if (not replacement)
-                                                  (dtd-entity-normalize false-idx leader srahc gexists? expanded)
+                                                  (dtd-normalize false-idx leader srahc gexists? expanded)
                                                   (let* ([self-size (string-length replacement)]
                                                          [expanded++ (unsafe-fx+ self-size expanded)])
                                                     (if (or (not upsize) (<= expanded++ upsize))
                                                         (and (write-string replacement /dev/evout 0 self-size)
-                                                             (dtd-entity-normalize idx++ #false null (or ge? gexists?) expanded++))
+                                                             (dtd-normalize idx++ #false null (or ge? gexists?) expanded++))
                                                         (and (make+exn:xml:defense etoken ename)
-                                                             (dtd-entity-normalize false-idx leader srahc gexists? expanded))))))]
+                                                             (dtd-normalize false-idx leader srahc gexists? expanded))))))]
                                            [(eq? (unsafe-string-ref estr 0) #\#)
                                             (let ([replacement (xml-char-unreference etoken estr ename)])
                                               (if (not replacement)
-                                                  (dtd-entity-normalize false-idx #false null gexists? expanded)
+                                                  (dtd-normalize false-idx #false null gexists? expanded)
                                                   (if (eq? expanded upsize)
                                                       (and (make+exn:xml:defense etoken ename)
-                                                           (dtd-entity-normalize false-idx #false null gexists? expanded))
+                                                           (dtd-normalize false-idx #false null gexists? expanded))
                                                       (and (write-char replacement /dev/evout)
-                                                           (dtd-entity-normalize idx++ #false null gexists? (unsafe-fx+ expanded 1))))))]
+                                                           (dtd-normalize idx++ #false null gexists? (unsafe-fx+ expanded 1))))))]
                                            [else ; GEs are allowed to be declared later unless they are referenced in the default values of <!ATTLIST>
                                             (let* ([self-size (string-length estr)]
                                                    [expanded++ (unsafe-fx+ (+ self-size 2) expanded)])
@@ -364,9 +361,9 @@
                                                   (and (write-char #\& /dev/evout)
                                                        (write-string estr /dev/evout)
                                                        (write-char #\; /dev/evout)
-                                                       (dtd-entity-normalize idx++ #false null #true expanded++))
+                                                       (dtd-normalize idx++ #false null #true expanded++))
                                                   (and (make+exn:xml:defense etoken ename)
-                                                       (dtd-entity-normalize false-idx leader srahc gexists? expanded))))]))])))]
+                                                       (dtd-normalize false-idx leader srahc gexists? expanded))))]))])))]
                 [(= idx size)
                  (let ([new-value : String (bytes->string/utf-8 (get-output-bytes /dev/evout #true) #\uFFFD)])
                    (cond [(string=? new-value src) etoken]
@@ -375,54 +372,58 @@
                 
                 [else (not (get-output-bytes /dev/evout #true))])))))
 
-(define xml-attr-entity-replace : (->* (XML:Name XML:String XML-Type-Entities (Option Index))
+(define xml-attr-entity-replace : (->* (XML-Token XML:String XML-Type-Entities (Option XML-Type-Entities) (Option Index))
                                        (Nonnegative-Fixnum (Listof Symbol) (Listof Char))
                                        (U XML:String (Listof Char) False))
   ;;; https://www.w3.org/TR/xml/#sec-line-ends
   ;;; https://www.w3.org/TR/xml/#AVNormalize
-  (lambda [aname vtoken entities upsize [expanded 0] [rstack : (Listof Symbol) null] [prev-eulav : (Listof Char) null]]
+  (lambda [aname vtoken entities int-entities upsize [expanded 0] [rstack : (Listof Symbol) null] [prev-eulav : (Listof Char) null]]
     (define src : String (xml:string-datum vtoken))
     (define size : Index (string-length src))
     (define false-idx : Nonnegative-Fixnum (+ size 1))
     
-    (let attr-value-normalize ([idx : Nonnegative-Fixnum 0]
-                               [leader : (Option Symbol) #false]
-                               [srahc : (Listof Char) null]
-                               [eulav : (Listof Char) prev-eulav]
-                               [expanded : Nonnegative-Fixnum expanded])
+    (let attv-normalize ([idx : Nonnegative-Fixnum 0]
+                         [leader : (Option Symbol) #false]
+                         [srahc : (Listof Char) null]
+                         [eulav : (Listof Char) prev-eulav]
+                         [expanded : Nonnegative-Fixnum expanded])
       (cond [(< idx size)
              (let ([ch (unsafe-string-ref src idx)])
                (define idx++ : Nonnegative-Fixnum (+ idx 1))
                
                (cond [(eq? leader '&)
-                      (cond [(not (eq? ch #\;)) (attr-value-normalize idx++ leader (cons ch srahc) eulav expanded)]
-                            [(null? srahc) (make+exn:xml:malformed vtoken aname) (attr-value-normalize false-idx leader srahc eulav expanded)]
-                            [else (let ([estr (list->string (reverse srahc))])
-                                    (if (eq? (unsafe-string-ref estr 0) #\#)
-                                        (let ([replacement (xml-char-unreference vtoken estr aname)])
-                                          (cond [(not replacement) (attr-value-normalize false-idx #false null eulav expanded)]
-                                                [(eq? expanded upsize) (make+exn:xml:defense vtoken aname) (attr-value-normalize false-idx #false null eulav expanded)]
-                                                [else (attr-value-normalize idx++ #false null (cons replacement eulav) (unsafe-fx+ expanded 1))]))
-                                        (let ([ename (string->unreadable-symbol estr)])
-                                          (cond [(memv ename rstack) (make+exn:xml:loop vtoken aname) (attr-value-normalize false-idx #false null eulav expanded)]
-                                                [else (let ([?etoken (xml-entity-value-token-ref vtoken ename entities aname)])
-                                                        (if (not ?etoken)
-                                                            (attr-value-normalize false-idx #false null eulav expanded)
-                                                            (let* ([rstack++ (cons ename rstack)]
-                                                                   [raction (xml-attr-entity-replace aname ?etoken entities upsize expanded rstack++ eulav)])
-                                                              (cond [(not (list? raction)) (attr-value-normalize false-idx #false null eulav expanded)]
-                                                                    [else (attr-value-normalize idx++ #false null raction (length raction))]))))]))))])]
+                      (cond [(not (eq? ch #\;)) (attv-normalize idx++ leader (cons ch srahc) eulav expanded)]
+                            [(null? srahc) (make+exn:xml:malformed vtoken aname) (attv-normalize false-idx leader srahc eulav expanded)]
+                            [else (let* ([estr (list->string (reverse srahc))]
+                                         [ename (string->unreadable-symbol estr)]
+                                         [?prev (xml-prentity-value-ref ename)])
+                                    (cond [(char? ?prev)
+                                           (cond [(eq? expanded upsize) (make+exn:xml:defense vtoken aname) (attv-normalize false-idx #false null eulav expanded)]
+                                                 [else (attv-normalize idx++ #false null (cons ?prev eulav) (unsafe-fx+ expanded 1))])]
+                                          [(eq? (unsafe-string-ref estr 0) #\#)
+                                           (let ([replacement (xml-char-unreference vtoken estr aname)])
+                                             (cond [(not replacement) (attv-normalize false-idx #false null eulav expanded)]
+                                                   [(eq? expanded upsize) (make+exn:xml:defense vtoken aname) (attv-normalize false-idx #false null eulav expanded)]
+                                                   [else (attv-normalize idx++ #false null (cons replacement eulav) (unsafe-fx+ expanded 1))]))]
+                                          [(memv ename rstack) (make+exn:xml:loop vtoken aname) (attv-normalize false-idx #false null eulav expanded)]
+                                          [else (let ([?etoken (xml-entity-value-token-ref vtoken ename entities int-entities aname)])
+                                                  (if (not ?etoken)
+                                                      (attv-normalize false-idx #false null eulav expanded)
+                                                      (let* ([stack++ (cons ename rstack)]
+                                                             [raction (xml-attr-entity-replace aname ?etoken entities int-entities upsize expanded stack++ eulav)])
+                                                        (cond [(not (list? raction)) (attv-normalize false-idx #false null eulav expanded)]
+                                                              [else (attv-normalize idx++ #false null raction (length raction))]))))]))])]
 
-                     [(eq? expanded upsize) (make+exn:xml:defense vtoken aname) (attr-value-normalize false-idx #false null eulav expanded)]
+                     [(eq? expanded upsize) (make+exn:xml:defense vtoken aname) (attv-normalize false-idx #false null eulav expanded)]
 
                      ; NOTE: the EOL handling and attribute normalization conincide here.
-                     [(eq? leader 'xD) (attr-value-normalize (if (eq? ch #\newline) idx++ idx) #false srahc (cons #\space eulav) (unsafe-fx+ expanded 1))]
-                     [(eq? ch #\&) (attr-value-normalize idx++ '& srahc eulav expanded)]
-                     [(eq? ch #\return) (attr-value-normalize idx++ 'xD srahc eulav expanded)]
-                     [(eq? ch #\newline) (attr-value-normalize idx++ leader srahc (cons #\space eulav) (unsafe-fx+ expanded 1))]
+                     [(eq? leader 'xD) (attv-normalize (if (eq? ch #\newline) idx++ idx) #false srahc (cons #\space eulav) (unsafe-fx+ expanded 1))]
+                     [(eq? ch #\&) (attv-normalize idx++ '& srahc eulav expanded)]
+                     [(eq? ch #\return) (attv-normalize idx++ 'xD srahc eulav expanded)]
+                     [(eq? ch #\newline) (attv-normalize idx++ leader srahc (cons #\space eulav) (unsafe-fx+ expanded 1))]
                      ; End EOL
                      
-                     [else (attr-value-normalize idx++ leader srahc (cons ch eulav) (unsafe-fx+ expanded 1))]))]
+                     [else (attv-normalize idx++ leader srahc (cons ch eulav) (unsafe-fx+ expanded 1))]))]
             
             [(= idx size)
              (cond [(null? rstack) (w3s-remake-token vtoken xml:string (list->string (reverse eulav)))]
@@ -494,44 +495,53 @@
     (cond [(index? ?codepoint) (integer->char ?codepoint)]
           [else (make+exn:xml:char etoken context) #false])))
 
-(define xml-entity-value-token-ref : (->* (XML-Token (U Symbol Keyword) XML-Type-Entities) ((Option XML-Token)) (Option XML:String))
-  (lambda [ntoken name entities [context #false]]
-    (define e : (Option XML-Entity) (hash-ref entities name (λ [] #false)))
+(define xml-entity-value-token-ref : (->* (XML-Token (U Symbol Keyword) XML-Type-Entities (Option XML-Type-Entities)) ((Option XML-Token)) (Option XML:String))
+  (lambda [ntoken name entities ?int-entities [context #false]]
+    (define e : (Option XML-Entity)
+      (cond [(not ?int-entities) (hash-ref entities name (λ [] #false))]
+            [else (hash-ref ?int-entities name (λ [] (hash-ref entities name (λ [] #false))))]))
     
     (cond [(xml-internal-entity? e) (xml-internal-entity-value e)]
           [(xml-unparsed-entity? e) (make+exn:xml:foreign ntoken context) #false]
           [(xml-external-entity? e) (make+exn:xml:external ntoken context) #false]
           [else (make+exn:xml:undeclared ntoken context) #false])))
 
-(define xml-entity-value-tokens-ref : (->* ((U XML:Reference XML:PEReference) (U Symbol Keyword) XML-Type-Entities (Option XML-Type-Entities)
-                                                                              (-> XML:String (Listof XML-Token)))
+(define xml-entity-value-tokens-ref : (->* ((U XML:Reference XML:PEReference)
+                                            (U Symbol Keyword) XML-Type-Entities (Option XML-Type-Entities)
+                                            (-> XML-Token XML:String XML-Type-Entities (Option XML-Type-Entities) (Option Index) Any) (Option Index)
+                                            (-> XML:String (Listof XML-Token)))
                                            ((Option XML-Token))
                                            (Option (Listof XML-Token)))
-  (lambda [ntoken name entities ?back-entities value->tokens [context #false]]
-    (define e : (Option XML-Entity) (hash-ref entities name (λ [] (and ?back-entities (hash-ref ?back-entities name (λ [] #false))))))
+  (lambda [ntoken name entities ?int-entities replace upsize value->tokens [context #false]]
+    (define e : (Option XML-Entity)
+      (cond [(not ?int-entities) (hash-ref entities name (λ [] #false))]
+            [else (hash-ref ?int-entities name (λ [] (hash-ref entities name (λ [] #false))))]))
     
     (cond [(xml-token-entity? e)
            (let ([?tokens (xml-token-entity-body e)])
              (cond [(list? ?tokens) ?tokens]
-                   [else (let ([ts (value->tokens (xml-internal-entity-value e))])
+                   [else (let* ([ntoken (xml-entity-name e)]
+                                [vtoken (xml-internal-entity-value e)]
+                                [vflattened (if (xml:&string? vtoken) (replace ntoken vtoken entities ?int-entities upsize) vtoken)]
+                                [ts (if (xml:string? vflattened) (value->tokens vflattened) null)])
                            (set-xml-token-entity-body! e ts) ts)]))]
           [(xml-unparsed-entity? e) (make+exn:xml:foreign ntoken context) #false]
           [(xml-external-entity? e) (make+exn:xml:external ntoken context) #false]
           [else (make+exn:xml:undeclared ntoken context) #false])))
 
-(define xml-prentity-value-ref : (-> Symbol (Option String))
+(define xml-prentity-value-ref : (-> Symbol (Option Char))
   ;;; https://www.w3.org/TR/xml/#sec-predefined-ent
   (lambda [name]
-    (cond [(eq? name &lt) "\x3c"]
-          [(eq? name &gt) "\x3e"]
-          [(eq? name &amp) "\x26"]
-          [(eq? name &apos) "\x27"]
-          [(eq? name &quot) "\x22"]
+    (cond [(eq? name &lt) #\u3c]
+          [(eq? name &gt) #\u3e]
+          [(eq? name &amp) #\u26]
+          [(eq? name &apos) #\u27]
+          [(eq? name &quot) #\u22]
           [else #false])))
 
-(define xml-entity-value-ref : (->* (XML-Token (U Symbol Keyword) XML-Type-Entities) ((Option XML-Token)) (Values (Option String) Boolean))
-  (lambda [ntoken name entities [context #false]]
-    (define ?xstr : (Option XML:String) (xml-entity-value-token-ref ntoken name entities context))
+(define xml-entity-value-ref : (->* (XML-Token (U Symbol Keyword) XML-Type-Entities (Option XML-Type-Entities)) ((Option XML-Token)) (Values (Option String) Boolean))
+  (lambda [ntoken name entities int-entities [context #false]]
+    (define ?xstr : (Option XML:String) (xml-entity-value-token-ref ntoken name entities int-entities context))
     
     (cond [(not ?xstr) (values #false #false)]
           [(xml:&string? ?xstr) (values (xml:string-datum ?xstr) #true)]

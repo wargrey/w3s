@@ -41,7 +41,7 @@
                              (cond [(not d) (syntax->grammar r doctype definitions srammarg)]
                                    [else (let ([declname (vector-ref d 0)])
                                            (cond [(not (xml:name=:=? declname 'DOCTYPE))
-                                                  (make+exn:xml:unimplemented declname)
+                                                  (make+exn:xml:unrecognized declname)
                                                   (syntax->grammar r doctype definitions srammarg)]
                                                  [(and doctype)
                                                   (make+exn:xml:duplicate declname)
@@ -253,7 +253,7 @@
                    [(eq? errno !name) (make+exn:xml:missing-name bad declname)]
                    [(eq? errno !value) (make+exn:xml:missing-value bad declname)]
                    [(eq? errno !comment) (make+exn:xml:wfc bad declname)]))]
-          [else (make+exn:xml:unimplemented bad declname)])))
+          [else (make+exn:xml:unrecognized bad declname)])))
 
 (define xml-grammar-parse-doctype* : (-> XML-Declaration* (Values (Option XML-DocType-Metadata) (Listof XML-Definition*)))
   (lambda [doctype]
