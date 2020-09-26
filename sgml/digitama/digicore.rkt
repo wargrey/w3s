@@ -144,10 +144,13 @@
   #:with [xml-make-syntax-error xml-log-syntax-error]
   [exn:xml:error         #:-> exn:xml]
   [exn:xml:fatal         #:-> exn:xml]
+  [exn:xml:defense       #:-> exn:xml]
   [exn:xml:eof           #:-> exn:xml]
   [exn:xml:reserved      #:-> exn:xml]
   [exn:xml:multiple      #:-> exn:xml]
-  [exn:xml:defense       #:-> exn:xml]
+
+  [exn:xml:bomb          #:-> exn:xml:defense]
+  [exn:xml:timeout       #:-> exn:xml:defense]
   
   [exn:xml:vc            #:-> exn:xml:error]
   [exn:xml:token         #:-> exn:xml:vc]

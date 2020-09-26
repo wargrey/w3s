@@ -3,19 +3,24 @@
 (provide (all-defined-out))
 (provide (struct-out XML-DTD) read-xml-type-definition)
 (provide (struct-out XML-Type) XML-Type-Entities)
-(provide xml-dtd-expand default-dtd-entity-expansion-upsize)
+(provide Open-XML-XXE-Input-Port xml-dtd-expand)
+(provide default-xml-ipe-topsize default-xml-xxe-topsize default-xml-xxe-timeout)
 
 (require "digitama/dtd.rkt")
 (require "digitama/normalize.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-dtd-entity-expand : (->* (XML-DTD)
-                                     ((Option XML-Type-Entities) Boolean #:entity-expansion-upsize (Option Index))
+                                     (#:open-xxe-input-port (Option Open-XML-XXE-Input-Port)
+                                      #:ipe-topsize (Option Index) #:xxe-topsize (Option Index) #:xxe-timeout (Option Real)
+                                      (Option XML-Type-Entities) Boolean)
                                      XML-Type-Entities)
-  (lambda [dtd [int-entities #false] [merge? #true] #:entity-expansion-upsize [expansion-upsize (default-dtd-entity-expansion-upsize)]]
+  (lambda [#:open-xxe-input-port [open-port #false]
+           #:ipe-topsize [ipe-topsize (default-xml-ipe-topsize)] #:xxe-topsize [xxe-topsize (default-xml-xxe-topsize)] #:xxe-timeout [timeout (default-xml-xxe-timeout)]
+           dtd [int-entities #false] [merge? #true]]
     (define-values (entities _)
-      (xml-dtd-entity-expand/partition dtd int-entities merge?
-                                       expansion-upsize))
+      (xml-dtd-entity-expand/partition dtd int-entities merge? ipe-topsize
+                                       (and open-port (vector open-port xxe-topsize timeout))))
 
     entities))
 
