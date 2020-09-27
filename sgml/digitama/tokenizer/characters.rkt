@@ -16,12 +16,15 @@
           [(char<=? #\A hexch) (- (char->integer hexch) #x37)]
           [else (- (char->integer hexch) #x30)])))
 
-(define natural->char-entity : (-> Fixnum Index)
+(define natural->char-entity : (-> Fixnum (Option Index))
   (lambda [n]
-    (cond [(and (<= #x1 n) (<= n #xD7FF)) n]
-          [(and (<= #xE000 n) (<= n #xFFFD)) n]
-          [(and (<= #x10000 n) (<= n #x10FFFF)) n]
-          [else #xFFFD])))
+    (and (or (= n #x9)
+             (= n #xA)
+             (= n #xD)
+             (and (<= #x20 n) (<= n #xD7FF))
+             (and (<= #xE000 n) (<= n #xFFFD))
+             (and (<= #x10000 n) (<= n #x10FFFF)))
+         n)))
 
 (define xml-newline-char? : (-> Char Boolean)
   (lambda [ch]

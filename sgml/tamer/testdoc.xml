@@ -72,7 +72,7 @@
 
 <Человек язык="мова">Borys</Человек>
 
-<li>Some cyrillic chars: &#1080;&#1081;</li>
+<li>Some cyrillic chars: &#1080;&#1081; </li>
 <li>This a an sizzors symbol: &#9988;</li>
 <li>OK, entered via entity: &ok;</li>
 <a att="Cirle with 1: &#10112;" ok="&ok;"/>

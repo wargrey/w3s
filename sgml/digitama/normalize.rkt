@@ -16,8 +16,10 @@
 (require "prentity.rkt")
 (require "stdin.rkt")
 
+(require "tokenizer/characters.rkt")
+
 (unsafe-require/typed
- racket/unsafe/ops
+ racket/unsafe/ops ; only works for Latin-1 Strings
  [unsafe-string-ref (-> String Index Char)])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -328,68 +330,69 @@
 ;; Besides, Char references are expanded immediately in all contexts.
 
 (define xml-dtd-entity-replace : (-> XML-Token XML:String XML-Type-Entities (Option XML-Type-Entities) (Option Index) XML-XXE-Config (Option XML:String))
-  (let ([/dev/evout (open-output-string '/dev/evout)])
-    (lambda [ename etoken entities int-entities topsize xxec]
-      (define src : String (xml:string-datum etoken))
-      (define size : Index (string-length src))
-      (define false-idx : Nonnegative-Fixnum (+ size 1))
-      
-      (let dtd-normalize ([idx : Nonnegative-Fixnum 0]
-                          [leader : (Option Char) #false]
-                          [srahc : (Listof Char) null]
-                          [gexists? : Boolean #false]
-                          [expanded : Nonnegative-Fixnum 0])
-          (cond [(< idx size)
-                 (let ([ch (unsafe-string-ref src idx)])
-                   (define idx++ : Nonnegative-Fixnum (+ idx 1))
-
-                   (when (eq? ch #\<)
-                     (make+exn:xml:char etoken ename 'debug))
-                   
-                   (if (not leader)
-                       (cond [(or (eq? ch #\%) (eq? ch #\&)) (dtd-normalize idx++ ch srahc gexists? expanded)]
-                             [(eq? expanded topsize) (make+exn:xml:bomb etoken ename) (dtd-normalize false-idx #false null gexists? expanded)]
-                             [else (write-char ch /dev/evout) (dtd-normalize idx++ leader srahc gexists? (unsafe-fx+ expanded 1))])
-                       (cond [(not (eq? ch #\;)) (dtd-normalize idx++ leader (cons ch srahc) gexists? expanded)]
-                             [(null? srahc) (make+exn:xml:malformed etoken ename) (dtd-normalize false-idx leader srahc gexists? expanded)]
-                             [else (let ([estr (list->string (reverse srahc))])
-                                     (cond [(eq? leader #\%)
-                                            (let-values ([(replacement ge?) (xml-entity-value-ref etoken (string->keyword estr) entities int-entities xxec ename)])
-                                              (if (not replacement)
-                                                  (dtd-normalize false-idx leader srahc gexists? expanded)
-                                                  (let* ([self-size (string-length replacement)]
-                                                         [expanded++ (unsafe-fx+ self-size expanded)])
-                                                    (if (or (not topsize) (<= expanded++ topsize))
-                                                        (and (write-string replacement /dev/evout 0 self-size)
-                                                             (dtd-normalize idx++ #false null (or ge? gexists?) expanded++))
-                                                        (and (make+exn:xml:bomb etoken ename)
-                                                             (dtd-normalize false-idx leader srahc gexists? expanded))))))]
-                                           [(eq? (unsafe-string-ref estr 0) #\#)
-                                            (let ([replacement (xml-char-unreference etoken estr ename)])
-                                              (if (not replacement)
-                                                  (dtd-normalize false-idx #false null gexists? expanded)
-                                                  (if (eq? expanded topsize)
-                                                      (and (make+exn:xml:bomb etoken ename)
-                                                           (dtd-normalize false-idx #false null gexists? expanded))
-                                                      (and (write-char replacement /dev/evout)
-                                                           (dtd-normalize idx++ #false null gexists? (unsafe-fx+ expanded 1))))))]
-                                           [else ; GEs are allowed to be declared later unless they are referenced in the default values of <!ATTLIST>
-                                            (let* ([self-size (string-length estr)]
-                                                   [expanded++ (unsafe-fx+ (+ self-size 2) expanded)])
-                                              (if (or (not topsize) (<= expanded++ topsize))
-                                                  (and (write-char #\& /dev/evout)
-                                                       (write-string estr /dev/evout)
-                                                       (write-char #\; /dev/evout)
-                                                       (dtd-normalize idx++ #false null #true expanded++))
+  (lambda [ename etoken entities int-entities topsize xxec]
+    (define /dev/evout : Output-Port (open-output-string '/dev/evout))
+    (define src : String (xml:string-datum etoken))
+    (define size : Index (string-length src))
+    (define false-idx : Nonnegative-Fixnum (+ size 1))
+    (define safe? : Boolean (eq? (string-utf-8-length src) size))
+    
+    (let dtd-normalize ([idx : Nonnegative-Fixnum 0]
+                        [leader : (Option Char) #false]
+                        [srahc : (Listof Char) null]
+                        [gexists? : Boolean #false]
+                        [expanded : Nonnegative-Fixnum 0])
+      (cond [(< idx size)
+             (let ([ch (unsafe-string-ref src idx)])
+               (define idx++ : Nonnegative-Fixnum (+ idx 1))
+               
+               (when (eq? ch #\<)
+                 (make+exn:xml:char etoken ename 'debug))
+               
+               (if (not leader)
+                   (cond [(or (eq? ch #\%) (eq? ch #\&)) (dtd-normalize idx++ ch srahc gexists? expanded)]
+                         [(eq? expanded topsize) (make+exn:xml:bomb etoken ename) (dtd-normalize false-idx #false null gexists? expanded)]
+                         [else (write-char ch /dev/evout) (dtd-normalize idx++ leader srahc gexists? (unsafe-fx+ expanded 1))])
+                   (cond [(not (eq? ch #\;)) (dtd-normalize idx++ leader (cons ch srahc) gexists? expanded)]
+                         [(null? srahc) (make+exn:xml:malformed etoken ename) (dtd-normalize false-idx leader srahc gexists? expanded)]
+                         [else (let ([estr (list->string (reverse srahc))])
+                                 (cond [(eq? leader #\%)
+                                        (let-values ([(replacement ge?) (xml-entity-value-ref etoken (string->keyword estr) entities int-entities xxec ename)])
+                                          (if (not replacement)
+                                              (dtd-normalize false-idx leader srahc gexists? expanded)
+                                              (let* ([self-size (string-length replacement)]
+                                                     [expanded++ (unsafe-fx+ self-size expanded)])
+                                                (if (or (not topsize) (<= expanded++ topsize))
+                                                    (and (write-string replacement /dev/evout 0 self-size)
+                                                         (dtd-normalize idx++ #false null (or ge? gexists?) expanded++))
+                                                    (and (make+exn:xml:bomb etoken ename)
+                                                         (dtd-normalize false-idx leader srahc gexists? expanded))))))]
+                                       [(eq? (unsafe-string-ref estr 0) #\#)
+                                        (let ([replacement (xml-char-unreference etoken estr ename)])
+                                          (if (not replacement)
+                                              (dtd-normalize false-idx #false null gexists? expanded)
+                                              (if (eq? expanded topsize)
                                                   (and (make+exn:xml:bomb etoken ename)
-                                                       (dtd-normalize false-idx leader srahc gexists? expanded))))]))])))]
-                [(and (= idx size) (not leader))
-                 (let ([new-value (bytes->string/utf-8 (get-output-bytes /dev/evout #true) #\uFFFD)])
-                   (if (not gexists?)
-                       (w3s-remake-token etoken xml:string new-value)
-                       (w3s-remake-token etoken xml:&string new-value)))]
-                
-                [else (not (get-output-bytes /dev/evout #true))])))))
+                                                       (dtd-normalize false-idx #false null gexists? expanded))
+                                                  (and (write-char replacement /dev/evout)
+                                                       (dtd-normalize idx++ #false null gexists? (unsafe-fx+ expanded 1))))))]
+                                       [else ; GEs are allowed to be declared later unless they are referenced in the default values of <!ATTLIST>
+                                        (let* ([self-size (string-length estr)]
+                                               [expanded++ (unsafe-fx+ (+ self-size 2) expanded)])
+                                          (if (or (not topsize) (<= expanded++ topsize))
+                                              (and (write-char #\& /dev/evout)
+                                                   (write-string estr /dev/evout)
+                                                   (write-char #\; /dev/evout)
+                                                   (dtd-normalize idx++ #false null #true expanded++))
+                                              (and (make+exn:xml:bomb etoken ename)
+                                                   (dtd-normalize false-idx leader srahc gexists? expanded))))]))])))]
+            [(and (= idx size) (not leader))
+             (let ([new-value (get-output-string /dev/evout)])
+               (if (not gexists?)
+                   (w3s-remake-token etoken xml:string new-value)
+                   (w3s-remake-token etoken xml:&string new-value)))]
+            
+            [else #false]))))
 
 (define xml-attr-entity-replace : (->* (XML-Token XML:String XML-Type-Entities (Option XML-Type-Entities) (Option Index) XML-XXE-Config)
                                        (Nonnegative-Fixnum (Listof Symbol) Output-Port)
@@ -406,7 +409,7 @@
                          [srahc : (Listof Char) null]
                          [expanded : Nonnegative-Fixnum expanded])
       (cond [(< idx size)
-             (let ([ch (unsafe-string-ref src idx)])
+             (let ([ch (string-ref src idx)])
                (define idx++ : Nonnegative-Fixnum (+ idx 1))
                
                (cond [(eq? leader '&)
@@ -418,7 +421,7 @@
                                     (cond [(char? ?prev)
                                            (cond [(eq? expanded topsize) (make+exn:xml:bomb vtoken aname) (attv-normalize false-idx #false null expanded)]
                                                  [else (write-char ?prev /dev/avout) (attv-normalize idx++ #false null (unsafe-fx+ expanded 1))])]
-                                          [(eq? (unsafe-string-ref estr 0) #\#)
+                                          [(eq? (string-ref estr 0) #\#)
                                            (let ([replacement (xml-char-unreference vtoken estr aname)])
                                              (cond [(not replacement) (attv-normalize false-idx #false null expanded)]
                                                    [(eq? expanded topsize) (make+exn:xml:bomb vtoken aname) (attv-normalize false-idx #false null expanded)]
@@ -443,11 +446,10 @@
                      [else (write-char ch /dev/avout) (attv-normalize idx++ leader srahc (unsafe-fx+ expanded 1))]))]
             
             [(and (= idx size) (not (eq? leader '&)))
-             (when (eq? leader 'xD) #| already counted on |#
-               (write-char #\space /dev/avout))
-             (cond [(pair? rstack) expanded]
-                   [else (w3s-remake-token vtoken xml:string
-                                           (bytes->string/utf-8 (get-output-bytes /dev/avout #true) #\uFFFD))])]
+             (when (eq? leader 'xD) #| already counted on |# (write-char #\space /dev/avout))
+             (if (null? rstack)
+                 (w3s-remake-token vtoken xml:string (get-output-string /dev/avout))
+                 expanded)]
             
             [else #false]))))
 
@@ -464,7 +466,7 @@
                             [srahc : (Listof Char) null]
                             [expanded : Nonnegative-Fixnum expanded])
       (cond [(< idx size)
-             (let ([ch (unsafe-string-ref src idx)])
+             (let ([ch (string-ref src idx)])
                (define idx++ : Nonnegative-Fixnum (+ idx 1))
                
                (cond [(eq? leader '&)
@@ -478,7 +480,7 @@
                                            (cond [(eq? expanded topsize) (make+exn:xml:bomb vtoken aname) (content-normalize false-idx #false null expanded)]
                                                  [(eq? ?prev #\&) (write-string "&#38;" /dev/cvout) (content-normalize idx++ #false null expanded+1)]
                                                  [else (write-char ?prev /dev/cvout) (content-normalize idx++ #false null expanded+1)])]
-                                          [(eq? (unsafe-string-ref estr 0) #\#)
+                                          [(eq? (string-ref estr 0) #\#)
                                            (let ([replacement (xml-char-unreference vtoken estr aname)])
                                              (cond [(not replacement) (content-normalize false-idx #false null expanded)]
                                                    [(eq? expanded topsize) (make+exn:xml:bomb vtoken aname) (content-normalize false-idx #false null expanded)]
@@ -487,8 +489,8 @@
                                           [(memv ename rstack) (make+exn:xml:loop vtoken aname) (content-normalize false-idx #false null expanded)]
                                           [else (let ([?etoken (xml-entity-value-token-ref vtoken ename entities int-entities xxec aname)])
                                                   (cond [(not ?etoken) (content-normalize false-idx #false null expanded)]
-                                                        [else (let ([expanded++ (xml-attr-entity-replace aname ?etoken entities int-entities topsize xxec
-                                                                                                         expanded (cons ename rstack) /dev/cvout)])
+                                                        [else (let ([expanded++ (xml-cdata-entity-replace aname ?etoken entities int-entities topsize xxec
+                                                                                                          expanded (cons ename rstack) /dev/cvout)])
                                                                 (cond [(index? expanded++) (content-normalize idx++ #false null expanded++)]
                                                                       [else (content-normalize false-idx #false null expanded)]))]))]))])]
 
@@ -497,9 +499,9 @@
                      [else (write-char ch /dev/cvout) (content-normalize idx++ leader srahc (unsafe-fx+ expanded 1))]))]
             
             [(and (= idx size) (not leader))
-             (cond [(pair? rstack) expanded]
-                   [else (w3s-remake-token vtoken xml:string
-                                           (bytes->string/utf-8 (get-output-bytes /dev/cvout #true) #\uFFFD))])]
+             (if (null? rstack)
+                 (w3s-remake-token vtoken xml:string (get-output-string /dev/cvout))
+                 expanded)]
             
             [else #false]))))
 
@@ -564,8 +566,11 @@
           (string->number (substring estr 2) 16)
           (string->number (substring estr 1) 10)))
 
-    (cond [(index? ?codepoint) (integer->char ?codepoint)]
-          [else (make+exn:xml:char etoken context) #false])))
+    (or (and (fixnum? ?codepoint)
+             (let ([?cp (natural->char-entity ?codepoint)])
+               (and ?cp (integer->char ?cp))))
+        (and (make+exn:xml:char etoken context)
+             #false))))
 
 (define xml-entity-value-token-ref : (->* (XML-Token (U Symbol Keyword) XML-Type-Entities (Option XML-Type-Entities) XML-XXE-Config)
                                           ((Option XML-Token))
