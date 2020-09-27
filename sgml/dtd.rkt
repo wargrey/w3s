@@ -3,7 +3,7 @@
 (provide (all-defined-out))
 (provide (struct-out XML-DTD) read-xml-type-definition)
 (provide (struct-out XML-Type) XML-Type-Entities)
-(provide Open-XML-XXE-Input-Port xml-dtd-expand)
+(provide Open-Input-XML-XXE xml-dtd-expand)
 (provide default-xml-ipe-topsize default-xml-xxe-topsize default-xml-xxe-timeout)
 
 (require "digitama/dtd.rkt")
@@ -11,7 +11,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-dtd-entity-expand : (->* (XML-DTD)
-                                     (#:open-xxe-input-port (Option Open-XML-XXE-Input-Port)
+                                     (#:open-xxe-input-port (Option Open-Input-XML-XXE)
                                       #:ipe-topsize (Option Index) #:xxe-topsize (Option Index) #:xxe-timeout (Option Real)
                                       (Option XML-Type-Entities) Boolean)
                                      XML-Type-Entities)

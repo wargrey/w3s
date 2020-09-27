@@ -5,10 +5,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (provide (all-defined-out))
-(provide SGML-StdIn XML-DTD XML:Space-Filter XML-Space-Position Open-XML-XXE-Input-Port)
+(provide SGML-StdIn XML-DTD XML:Space-Filter XML-Space-Position Open-Input-XML-XXE)
 (provide (struct-out XML-Document) read-xml-document)
 (provide (struct-out XML-Document*) read-xml-document* xml-document*-normalize)
-(provide svg:space-filter default-xml-ipe-topsize default-xml-xxe-topsize default-xml-xxe-timeout)
+(provide svg:space-filter xml-load-relative-system-dtd)
+(provide default-xml-ipe-topsize default-xml-xxe-topsize default-xml-xxe-timeout)
 
 (require "digitama/dtd.rkt")
 (require "digitama/doctype.rkt")

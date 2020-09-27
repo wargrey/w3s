@@ -29,7 +29,7 @@
   (case-> [Symbol (Option String) Char -> (Option Char)]
           [Symbol (Option String) String (Option String) XML-Space-Position Boolean -> (Option String)]))
 
-(define-type Open-XML-XXE-Input-Port
+(define-type Open-Input-XML-XXE
   (-> Path (Option String) (Option String)
       (U False Input-Port)))
 
@@ -52,7 +52,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-normalize : (-> XML-DTD (Option XML-DTD) (Listof XML-Content*) String Symbol (Option XML:Space-Filter)
-                            (Option Index) (Option Open-XML-XXE-Input-Port) (Option Index) (Option Real)
+                            (Option Index) (Option Open-Input-XML-XXE) (Option Index) (Option Real)
                             (Values XML-Type (Listof XML-Content*)))
   (lambda [int-dtd ?ext-dtd content xml:lang xml:space xml:space-filter ipe-topsize open-port xxe-topsize timeout]
     (define xxec : XML-XXE-Config (and open-port (vector open-port xxe-topsize timeout)))
@@ -73,12 +73,12 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-dtd-expand : (->* (XML-DTD)
-                              (#:open-xxe-input-port (Option Open-XML-XXE-Input-Port)
+                              (#:open-xxe-input-port (Option Open-Input-XML-XXE)
                                #:ipe-topsize (Option Index) #:xxe-topsize (Option Index) #:xxe-timeout (Option Real)
                                (Option XML-DTD))
                               XML-Type)
-  (lambda [#:open-xxe-input-port [open-port #false]
-           #:ipe-topsize [ipe-topsize (default-xml-ipe-topsize)] #:xxe-topsize [xxe-topsize (default-xml-xxe-topsize)] #:xxe-timeout [timeout (default-xml-xxe-timeout)]
+  (lambda [#:open-xxe-input-port [open-port #false] #:ipe-topsize [ipe-topsize (default-xml-ipe-topsize)]
+           #:xxe-topsize [xxe-topsize (default-xml-xxe-topsize)] #:xxe-timeout [timeout (default-xml-xxe-timeout)]
            dtd [?ext-dtd #false]]
     ;;; NOTE
     ;  Declarations in the intsubset may refer to external (parameter) entities
@@ -120,7 +120,7 @@
                                    [else (let-values ([(entities++ snoitaralced++) (partition-dtd subset null entities)])
                                            (partition-dtd rest++ (append (reverse snoitaralced++) snoitaralced) entities++))]))]
                           [(pair? self)
-                           (partition-dtd (append (xml-dtd-expand-section (car self) (cdr self) entities int-entities topsize xxec) rest++)
+                           (partition-dtd (append (xml-dtd-expand-section (car self) (cdr self) entities int-entities topsize) rest++)
                                           snoitaralced entities)]
                           [else (partition-dtd rest++ (cons self snoitaralced) entities)]))]))))
 
@@ -150,12 +150,12 @@
                                              [else #false])))
                                     (expand-dtd rest++ notations elements attributes))]))]))))
 
-(define xml-dtd-expand-section : (-> (U XML:Name XML:PEReference) (Listof XML-Type-Declaration*) XML-Type-Entities (Option XML-Type-Entities)
-                                     (Option Index) XML-XXE-Config (Listof XML-Type-Declaration*))
-  (lambda [condition body entities int-entities topsize xxec]
+(define xml-dtd-expand-section : (-> (U XML:Name XML:PEReference) (Listof XML-Type-Declaration*) XML-Type-Entities (Option XML-Type-Entities) (Option Index)
+                                     (Listof XML-Type-Declaration*))
+  (lambda [condition body entities int-entities topsize]
     (define sec-name : (U False Symbol String)
       (cond [(xml:name? condition) (xml:name-datum condition)]
-            [else (let-values ([(?value ge?) (xml-entity-value-ref condition (xml:pereference-datum condition) entities int-entities xxec)])
+            [else (let-values ([(?value ge?) (xml-entity-value-ref condition (xml:pereference-datum condition) entities int-entities)])
                     (cond [(not (xml-entity-value-normalize? ?value topsize)) ?value]
                           [else (xml-dtd-entity-replace condition ?value entities int-entities topsize)]))]))
 
@@ -173,10 +173,10 @@
                      [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                              (if (xml:pereference? self)
                                   ; TODO: if might DECL affect the parser in some rare cases
-                                 (let* ([pename (xml:pereference-datum self)]
-                                        [pevalue->tokens (make-entity-value->tokens (xml:name-datum DECL) read-dtd-declaration-tokens*)]
-                                        [?tokens (xml-entity-value-tokens-ref self pename entities #false xml-dtd-entity-replace topsize pevalue->tokens xxec)])
-                                   (expand-body (if (not ?tokens) rest++ (append ?tokens rest++)) ydob))
+                                 (let ([?tokens (xml-entity-value-tokens-ref self (xml:pereference-datum self) entities #false xml-dtd-entity-replace topsize
+                                                                             (xml-make-entity->tokens (xml:name-datum DECL) read-dtd-declaration-tokens*)
+                                                                             xxec xml-dtd-reader)])
+                                   (expand-body (if (pair? ?tokens) (append ?tokens rest++) rest++) ydob))
                                  (expand-body rest++ (cons self ydob))))])))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -195,29 +195,30 @@
 (define xml-dtd-included-as-PE : (-> XML:PEReference XML-Type-Entities (Option XML-Type-Entities) (Option Index) XML-XXE-Config (Listof XML-Type-Declaration*))
   ;;; https://www.w3.org/TR/xml/#as-PE
   (lambda [pe entities ?int-entities topsize xxec]
-    (define ?tokens : (Option (Listof XML-Token))
+    (define ?tokens : (U (Listof XML-Token) XML-Syntax-Error)
       (xml-entity-value-tokens-ref pe (xml:pereference-datum pe)
                                    entities ?int-entities xml-dtd-entity-replace topsize
-                                   (make-entity-value->tokens #false read-xml-tokens*)
-                                   xxec))
+                                   (xml-make-entity->tokens #false read-xml-tokens*)
+                                   xxec xml-dtd-reader))
 
-    (cond [(or (not ?tokens) (null? ?tokens)) null]
-          [else (let ([subset (xml-syntax->definition* ?tokens)])
-                  (xml-dtd-definitions->declarations subset))])))
+    (if (pair? ?tokens)
+        (xml-dtd-definitions->declarations (xml-syntax->definition* ?tokens))
+        null)))
 
 (define xml-dtd-included : (-> XML:Name XML:Reference XML-Type-Entities (Option Index) XML-XXE-Config Index (Listof (U XML-Subdatum* XML-Element*)))
   ;;; https://www.w3.org/TR/xml/#included
   (lambda [tagname e entities topsize xxec depth]
-    (define ?tokens : (Option (Listof XML-Token))
+    (define ?tokens : (U (Listof XML-Token) XML-Syntax-Error)
       (xml-entity-value-tokens-ref e (xml:reference-datum e)
                                    entities #false xml-cdata-entity-replace topsize
-                                   (make-entity-value->tokens depth read-xml-content-tokens*)
-                                   xxec tagname))
+                                   (xml-make-entity->tokens depth read-xml-content-tokens*)
+                                   xxec (xml-make-cdata-reader e) tagname))
 
-    (cond [(or (not ?tokens) (null? ?tokens)) null]
-          [else (let-values ([(children rest) (xml-syntax-extract-subelement* tagname ?tokens #true)])
-                  (cond [(and children (null? rest)) children]
-                        [else (make+exn:xml:malformed e tagname) null]))])))
+    (if (pair? ?tokens)
+        (let-values ([(children rest) (xml-syntax-extract-subelement* tagname ?tokens #true)])
+          (cond [(and children (null? rest)) children]
+                [else (make+exn:xml:malformed e tagname) null]))
+        null)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-element-normalize : (-> XML-Element* XML-Type (Option String) Symbol (Option XML:Space-Filter) Index (Option Index) XML-XXE-Config XML-Element*)
@@ -323,9 +324,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; NOTE
-;; The use context of Parameter Entity and General Entity has no overlaps.
-;; The PEs are used in DTD where GEs should be bypassed, and are expanded immediately, and therefore no recursions;
-;; The GEs are used in element attributes or content where PE should not be recognized;
+;; The use contexts of Parameter Entity and General Entity have no overlaps.
+;; PEs are used in DTD where GEs should be bypassed, and are expanded immediately, and therefore no recursions;
+;; GEs are used in element attributes or content where PE should not be recognized;
 ;;
 ;; Besides, Char references are expanded immediately in all contexts.
 
@@ -357,7 +358,7 @@
                          [(null? srahc) (make+exn:xml:malformed etoken ename) (dtd-normalize false-idx leader srahc gexists? expanded)]
                          [else (let ([estr (list->string (reverse srahc))])
                                  (cond [(eq? leader #\%)
-                                        (let-values ([(replacement ge?) (xml-entity-value-ref etoken (string->keyword estr) entities int-entities xxec ename)])
+                                        (let-values ([(replacement ge?) (xml-entity-value-ref etoken (string->keyword estr) entities int-entities ename)])
                                           (if (not replacement)
                                               (dtd-normalize false-idx leader srahc gexists? expanded)
                                               (let* ([self-size (string-length replacement)]
@@ -399,6 +400,7 @@
                                        (U XML:String Nonnegative-Fixnum False))
   ;;; https://www.w3.org/TR/xml/#sec-line-ends
   ;;; https://www.w3.org/TR/xml/#AVNormalize
+  ;;; https://www.w3.org/TR/xml/#NoExternalRefs
   (lambda [aname vtoken entities int-entities topsize xxec [expanded 0] [rstack null] [/dev/avout (open-output-string '/dev/avout)]]
     (define src : String (xml:string-datum vtoken))
     (define size : Index (string-length src))
@@ -427,9 +429,9 @@
                                                    [(eq? expanded topsize) (make+exn:xml:bomb vtoken aname) (attv-normalize false-idx #false null expanded)]
                                                    [else (write-char replacement /dev/avout) (attv-normalize idx++ #false null (unsafe-fx+ expanded 1))]))]
                                           [(memv ename rstack) (make+exn:xml:loop vtoken aname) (attv-normalize false-idx #false null expanded)]
-                                          [else (let ([?etoken (xml-entity-value-token-ref vtoken ename entities int-entities xxec aname)])
-                                                  (cond [(not ?etoken) (attv-normalize false-idx #false null expanded)]
-                                                        [else (let ([expanded++ (xml-attr-entity-replace aname ?etoken entities int-entities topsize xxec
+                                          [else (let ([?etoken (xml-entity-value-token-ref vtoken ename entities int-entities aname)])
+                                                  (cond [(exn:xml? ?etoken) (attv-normalize false-idx #false null expanded)]
+                                                        [else (let ([expanded++ (xml-attr-entity-replace aname ?etoken entities int-entities topsize #false
                                                                                                          expanded (cons ename rstack) /dev/avout)])
                                                                 (cond [(index? expanded++) (attv-normalize idx++ #false null expanded++)]
                                                                       [else (attv-normalize false-idx #false null expanded)]))]))]))])]
@@ -487,8 +489,8 @@
                                                    [(eq? replacement #\&) (write-string "&#38;" /dev/cvout) (content-normalize idx++ #false null expanded+1)]
                                                    [else (write-char replacement /dev/cvout) (content-normalize idx++ #false null expanded+1)]))]
                                           [(memv ename rstack) (make+exn:xml:loop vtoken aname) (content-normalize false-idx #false null expanded)]
-                                          [else (let ([?etoken (xml-entity-value-token-ref vtoken ename entities int-entities xxec aname)])
-                                                  (cond [(not ?etoken) (content-normalize false-idx #false null expanded)]
+                                          [else (let ([?etoken (xml-entity-value-token-ref vtoken ename entities int-entities aname)])
+                                                  (cond [(exn:xml? ?etoken) (content-normalize false-idx #false null expanded)]
                                                         [else (let ([expanded++ (xml-cdata-entity-replace aname ?etoken entities int-entities topsize xxec
                                                                                                           expanded (cons ename rstack) /dev/cvout)])
                                                                 (cond [(index? expanded++) (content-normalize idx++ #false null expanded++)]
@@ -572,27 +574,47 @@
         (and (make+exn:xml:char etoken context)
              #false))))
 
-(define xml-entity-value-token-ref : (->* (XML-Token (U Symbol Keyword) XML-Type-Entities (Option XML-Type-Entities) XML-XXE-Config)
+(define xml-prentity-value-ref : (-> Symbol (Option Char))
+  ;;; https://www.w3.org/TR/xml/#sec-predefined-ent
+  (lambda [name]
+    (cond [(eq? name &lt) #\u3c]
+          [(eq? name &gt) #\u3e]
+          [(eq? name &amp) #\u26]
+          [(eq? name &apos) #\u27]
+          [(eq? name &quot) #\u22]
+          [else #false])))
+
+(define xml-entity-value-token-ref : (->* (XML-Token (U Symbol Keyword) XML-Type-Entities (Option XML-Type-Entities))
                                           ((Option XML-Token))
-                                          (Option XML:String))
-  (lambda [ntoken name entities ?int-entities xxec [context #false]]
+                                          (U XML:String XML-Syntax-Error))
+  (lambda [ntoken name entities ?int-entities [context #false]]
     (define e : (Option XML-Entity)
       (cond [(not ?int-entities) (hash-ref entities name (λ [] #false))]
             [else (hash-ref ?int-entities name (λ [] (hash-ref entities name (λ [] #false))))]))
     
     (cond [(xml-internal-entity? e) (xml-internal-entity-value e)]
-          [(xml-unparsed-entity? e) (make+exn:xml:foreign ntoken context) #false]
-          [(xml-external-entity? e) (make+exn:xml:external ntoken context) #false]
-          [else (make+exn:xml:undeclared ntoken context) #false])))
+          [(xml-unparsed-entity? e) (make+exn:xml:foreign ntoken context)]
+          [(xml-external-entity? e) (make+exn:xml:external ntoken context)]
+          [else (make+exn:xml:undeclared ntoken context)])))
+
+(define xml-entity-value-ref : (->* (XML-Token (U Symbol Keyword) XML-Type-Entities (Option XML-Type-Entities))
+                                    ((Option XML-Token))
+                                    (Values (Option String) Boolean))
+  (lambda [ntoken name entities int-entities [context #false]]
+    (define ?xstr : (U XML:String XML-Syntax-Error) (xml-entity-value-token-ref ntoken name entities int-entities context))
+    
+    (cond [(exn:xml? ?xstr) (values #false #false)]
+          [(xml:&string? ?xstr) (values (xml:string-datum ?xstr) #true)]
+          [else (values (xml:string-datum ?xstr) #false)])))
 
 (define xml-entity-value-tokens-ref : (->* ((U XML:Reference XML:PEReference)
                                             (U Symbol Keyword) XML-Type-Entities (Option XML-Type-Entities)
                                             (-> XML-Token XML:String XML-Type-Entities (Option XML-Type-Entities) (Option Index) XML-XXE-Config Any) (Option Index)
                                             (-> XML:String (Listof XML-Token))
-                                            XML-XXE-Config)
+                                            XML-XXE-Config (-> Input-Port (Option (Listof XML-Token))))
                                            ((Option XML-Token))
-                                           (Option (Listof XML-Token)))
-  (lambda [ntoken name entities ?int-entities replace topsize value->tokens xxec [context #false]]
+                                           (U (Listof XML-Token) XML-Syntax-Error))
+  (lambda [ntoken name entities ?int-entities replace topsize value->tokens xxec xxe-reader [context #false]]
     (define e : (Option XML-Entity)
       (cond [(not ?int-entities) (hash-ref entities name (λ [] #false))]
             [else (hash-ref ?int-entities name (λ [] (hash-ref entities name (λ [] #false))))]))
@@ -605,29 +627,60 @@
                                 [vflattened (if (xml-entity-value-normalize? vtoken topsize) (replace ntoken vtoken entities ?int-entities topsize xxec) vtoken)]
                                 [ts (if (xml:string? vflattened) (value->tokens vflattened) null)])
                            (set-xml-token-entity-body! e ts) ts)]))]
-          [(xml-unparsed-entity? e) (make+exn:xml:foreign ntoken context) #false]
-          [(xml-external-entity? e) (make+exn:xml:external ntoken context) #false]
-          [else (make+exn:xml:undeclared ntoken context) #false])))
+          [(xml-unparsed-entity? e) (make+exn:xml:foreign ntoken context)]
+          [(xml-external-entity? e)
+           (cond [(not xxec) (make+exn:xml:external ntoken context)]
+                 [else (or (xml-load-external-entity (xml-entity-name e) (xml-external-entity-public e) (xml-external-entity-system e)
+                                                     (vector-ref xxec 0) (vector-ref xxec 1) (vector-ref xxec 2)
+                                                     xxe-reader)
+                           null)])]
+          [else (make+exn:xml:undeclared ntoken context)])))
 
-(define xml-prentity-value-ref : (-> Symbol (Option Char))
-  ;;; https://www.w3.org/TR/xml/#sec-predefined-ent
-  (lambda [name]
-    (cond [(eq? name &lt) #\u3c]
-          [(eq? name &gt) #\u3e]
-          [(eq? name &amp) #\u26]
-          [(eq? name &apos) #\u27]
-          [(eq? name &quot) #\u22]
-          [else #false])))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define xml-load-external-entity : (All (E) (-> (Option XML-Token) (Option XML:String) (Option XML:String)
+                                                Open-Input-XML-XXE (Option Index) (Option Real) (-> Input-Port E)
+                                                (Option E)))
+  (lambda [content public system open-port topsize timeout read-entity]
+    (and (or public system) ; should not happen
+         (parameterize ([current-custodian (make-custodian)])
+           (define xxe : (Channelof (U E XML-Syntax-Error)) (make-channel))
+           (define ghostcat : Thread
+             (thread (λ [] (let* ([source (w3s-token-source (or public system))]
+                                  [rootdir (or (and (string? source) (path-only source)) (current-directory))]
+                                  [/dev/rawin (open-port rootdir (and public (xml:string-datum public)) (and system (xml:string-datum system)))])
+                             (channel-put xxe
+                                          (cond [(not /dev/rawin) (make+exn:xml:defense (filter xml:string? (list system public)) content)]
+                                                [else (let ([/dev/entin (if (not topsize) /dev/rawin (make-limited-input-port /dev/rawin topsize #false))])
+                                                        (unless (port-counts-lines? /dev/entin)
+                                                          (port-count-lines! /dev/entin))
+                                                        (let ([entity (read-entity /dev/entin)])
+                                                          (cond [(eof-object? (peek-char /dev/rawin)) entity]
+                                                                [else (make+exn:xml:bomb (filter xml:string? (list system public)) content)])))]))))))
+           
+           (let ([?entity (if (and (real? timeout) (> timeout 0.0))
+                              (sync/timeout/enable-break timeout xxe)
+                              (sync/enable-break xxe))])
+             (custodian-shutdown-all (current-custodian))
+             (cond [(not ?entity) (make+exn:xml:timeout (filter xml:string? (list system public)) content) #false]
+                   [(exn:xml? ?entity) #false]
+                   [else ?entity]))))))
 
-(define xml-entity-value-ref : (->* (XML-Token (U Symbol Keyword) XML-Type-Entities (Option XML-Type-Entities) XML-XXE-Config)
-                                    ((Option XML-Token))
-                                    (Values (Option String) Boolean))
-  (lambda [ntoken name entities int-entities xxec [context #false]]
-    (define ?xstr : (Option XML:String) (xml-entity-value-token-ref ntoken name entities int-entities xxec context))
-    
-    (cond [(not ?xstr) (values #false #false)]
-          [(xml:&string? ?xstr) (values (xml:string-datum ?xstr) #true)]
-          [else (values (xml:string-datum ?xstr) #false)])))
+(define xml-make-entity->tokens : (All (T) (-> T (-> Input-Port (U String Symbol) T (Listof XML-Token)) (-> XML:String (Listof XML-Token))))
+  (lambda [scope read-tokens]
+    (λ [[tv : XML:String]]
+      (define source : String (w3s-token-location-string tv))
+      (define /dev/subin : Input-Port (dtd-open-input-port (xml:string-datum tv) #true source))
+      
+      (read-tokens /dev/subin source scope))))
+
+(define xml-dtd-reader : (-> Input-Port (Listof XML-Token))
+  (lambda [/dev/dtdin]
+    (read-xml-tokens* /dev/dtdin (sgml-port-name /dev/dtdin) #false)))
+
+(define xml-make-cdata-reader : (-> XML:Reference (-> Input-Port (Listof XML-Token)))
+  (lambda [eref]
+    (λ [[/dev/entin : Input-Port]]
+      null)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml:lang-ref : (case-> [String -> (Option String)]
@@ -748,7 +801,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define default-xml:space : (Parameterof Symbol) (make-parameter 'default))
 
-(define-type XML-XXE-Config (Option (Vector Open-XML-XXE-Input-Port (Option Index) (Option Real))))
+(define-type XML-XXE-Config (Option (Vector Open-Input-XML-XXE (Option Index) (Option Real))))
 
 (define empty-entities : XML-Type-Entities (make-immutable-hasheq))
 (define empty-notations : XML-Type-Notations (make-immutable-hasheq))
@@ -764,36 +817,3 @@
   (lambda [token topsize]
     (and (xml:&string? token)
          (not (eq? topsize 0)))))
-
-(define make-entity-value->tokens : (All (T) (-> T (-> Input-Port (U String Symbol) T (Listof XML-Token)) (-> XML:String (Listof XML-Token))))
-  (lambda [scope read-tokens]
-    (λ [[tv : XML:String]]
-      (define source : String (w3s-token-location-string tv))
-      (define /dev/subin : Input-Port (dtd-open-input-port (xml:string-datum tv) #true source))
-      
-      (read-tokens /dev/subin source scope))))
-
-(define xml-load-external-entity : (All (E) (-> (Option XML-Token) (U String Symbol) (Option XML:String) (Option XML:String)
-                                                Open-XML-XXE-Input-Port (Option Index) (Option Real) (-> Input-Port E)
-                                                (Option E)))
-  (lambda [content source public system open-port topsize timeout read-entity]
-    (and (or public system) ; should not happen
-         (parameterize ([current-custodian (make-custodian)])
-           (define xxe : (Channelof (U E XML-Syntax-Error)) (make-channel))
-           (define ghostcat : Thread
-             (thread (λ [] (let* ([rootdir (or (and (string? source) (path-only source)) (current-directory))]
-                                  [/dev/rawin (open-port rootdir (and public (xml:string-datum public)) (and system (xml:string-datum system)))])
-                             (channel-put xxe
-                                          (cond [(not /dev/rawin) (make+exn:xml:defense (filter xml:string? (list system public)) content)]
-                                                [else (let* ([/dev/entin (if (not topsize) /dev/rawin (make-limited-input-port /dev/rawin topsize #false))]
-                                                             [entity (read-entity /dev/entin)])
-                                                        (cond [(eof-object? (peek-char /dev/rawin)) entity]
-                                                              [else (make+exn:xml:bomb (filter xml:string? (list system public)) content)]))]))))))
-
-           (let ([?entity (if (and (real? timeout) (> timeout 0.0))
-                              (sync/timeout/enable-break timeout xxe)
-                              (sync/enable-break xxe))])
-             (custodian-shutdown-all (current-custodian))
-             (cond [(not ?entity) (make+exn:xml:timeout (filter xml:string? (list system public)) content) #false]
-                   [(exn:xml? ?entity) #false]
-                   [else ?entity]))))))

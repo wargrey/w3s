@@ -42,8 +42,11 @@
 (define w3s-display-times : (-> Symbol Real Integer Integer Integer Void)
   (lambda [src MB cpu real gc]
     (define infomsg : String
-      (format "[~a]memory: ~aMB cpu time: ~a real time: ~a gc time: ~a"
-                 src (~r MB #:precision '(= 3)) cpu real gc))
+      (if (= gc 0)
+          (format "[~a]memory: ~aMB cpu time: ~a real time: ~a gc time: ~a"
+            src (~r MB #:precision '(= 3)) cpu real gc)
+          (format "[~a]memory: ~aMB cpu time: ~a(~a) real time: ~a(~a) gc time: ~a"
+            src (~r MB #:precision '(= 3)) cpu (- cpu gc) real (- real gc) gc)))
     
     (displayln infomsg)
     (log-message (current-logger) 'info src infomsg

@@ -1,0 +1,26 @@
+#lang sgml/xml
+
+<!DOCTYPE xxe [
+  <!ENTITY % SYMBOLS SYSTEM "symbols.dtd">
+  %SYMBOLS;
+]>
+
+<xxe>
+ <panel name="chkout" width="40" depth="22">Library Checkout Periods
+  <area>
+    <info width="38">
+      <p>&sb; allows you to check out an inventory
+      item for a maximum of &cotime;.
+      However, you can renew the item for an additional
+      &xcotime; by calling in your card number to our
+      checkout phone line (&cophone;) any time of day.</p>
+      <p>If an inventory item is a new shelf item
+      (indicated by the &nitem;), you may only reserve it for
+      a maximum of &nttime;.
+      You may not renew a new shelf item.</p>
+      <p>There is a fine of &lfine; per day for all
+      items returned late.</p>
+    </info>
+  </area>
+</panel>
+</xxe>

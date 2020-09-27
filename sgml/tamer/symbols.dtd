@@ -1,0 +1,9 @@
+#lang sgml/dtd
+
+<!ENTITY sb "ShelfBrowse">
+<!ENTITY cotime "ten days">
+<!ENTITY xcotime "five days">
+<!ENTITY nttime "three days">
+<!ENTITY nitem "red checkout card">
+<!ENTITY lfine "ten cents">
+<!ENTITY cophone "555-1234">
