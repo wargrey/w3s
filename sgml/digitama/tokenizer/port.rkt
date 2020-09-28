@@ -13,7 +13,7 @@
 (require racket/unsafe/ops)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Performance Hint:
+;;; Performance Hint
 ;; 0. See schema/digitama/exchange/csv/reader/port.rkt
 ;; 1. Checking empty file before reading makes it oscillate(500ms for 2.1MB xslx), weird
 ;; 2. for long tokens, `cons`ing each char should be avoided

@@ -1,13 +1,18 @@
 #lang sgml/xml
 
 <!DOCTYPE xxe [
-  <!ENTITY % SYMBOLS SYSTEM "symbols.dtd">
-  %SYMBOLS;
+  <![INCLUDE[
+    <!ENTITY % SYMBOLS SYSTEM "symbols.dtd">
+    %SYMBOLS;
+  ]]>
+
+  <!ENTITY SELF SYSTEM "external.xml">
+  <!ENTITY nested "&SELF;">
 ]>
 
 <xxe>
- <panel name="chkout" width="40" depth="22">Library Checkout Periods
-  <area>
+ <cdata>&SELF;</cdata>
+ <panel name="chkout" width="40" depth="22">Library Checkout Periods<area>
     <info width="38">
       <p>&sb; allows you to check out an inventory
       item for a maximum of &cotime;.
@@ -20,7 +25,7 @@
       You may not renew a new shelf item.</p>
       <p>There is a fine of &lfine; per day for all
       items returned late.</p>
-    </info>
-  </area>
-</panel>
+    </info></area>
+ </panel>
+ <cdata>&nested;</cdata>
 </xxe>
