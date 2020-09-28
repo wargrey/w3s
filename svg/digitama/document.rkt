@@ -7,7 +7,7 @@
 ;(require "../village/hashlang/svg11.dtd")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define svg-open-external-dtd-input-port : Open-XML-XXE-Input-Port
+(define svg-open-external-dtd-input-port : Open-Input-XML-XXE
   (lambda [rootdir public system]
     (open-input-file (collection-file-path "svg11.dtd" "svg" "village" "hashlang"))))
 

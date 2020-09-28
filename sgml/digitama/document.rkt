@@ -28,12 +28,16 @@
   #:transparent
   #:type-name XML-Document)
 
+(struct (T) xml-opaque
+  ([unbox : T])
+  #:type-name XML-Opaqueof)
+
 (struct xml-document*
   ([prolog : XML-Prolog]
    [doctype : XML-DocType*]
    [internal-dtd : XML-DTD]
-   [external-dtd : Special-Comment]
-   [type : Special-Comment]
+   [external-dtd : (XML-Opaqueof (Option XML-DTD))]
+   [type : (XML-Opaqueof (Option XML-Type))]
    [elements : (Listof XML-Content*)])
   #:transparent
   #:type-name XML-Document*)
@@ -46,7 +50,7 @@
            (let ([extdtd (simple-form-path system)])
              (and (file-exists? extdtd)
                   (string-prefix? (path->string extdtd) (path->string rootdir))
-                  (dtd-open-input-port extdtd #true)))))))
+                  (cons (dtd-open-input-port extdtd) #true)))))))
 
 (define read-xml-document : (-> SGML-StdIn XML-Document)
   (lambda [/dev/rawin]
@@ -91,8 +95,8 @@
     (define doc : XML-Document*
       (xml-document* (xml-prolog source version encoding standalone?)
                      doc-type
-                     (xml-make-type-definition source definitions) (make-special-comment ?external-dtd)
-                     (make-special-comment #false) grammars))
+                     (xml-make-type-definition source definitions) (xml-opaque ?external-dtd)
+                     (xml-opaque #false) grammars))
 
     (cond [(not normalize?) doc]
           [else (xml-document*-normalize #:ipe-topsize ipe-topsize #:xxe-topsize xxe-topsize #:xxe-timeout timeout
@@ -113,8 +117,7 @@
                      (or (xml-load-external-dtd alter-ext-dtd
                                                 (xml-document*-doctype doc)
                                                 xxe-topsize timeout)
-                         (let ([?dtd (special-comment-value (xml-document*-external-dtd doc))])
-                           (and (xml-dtd? ?dtd) ?dtd)))
+                         (xml-opaque-unbox (xml-document*-external-dtd doc)))
                      (xml-document*-elements doc)
                      xml:lang xml:space xml:space-filter ipe-topsize
                      (or open-xxe-port
@@ -125,7 +128,7 @@
     (xml-document* (xml-document*-prolog doc)
                    (xml-document*-doctype doc)
                    (xml-document*-internal-dtd doc) (xml-document*-external-dtd doc)
-                   (make-special-comment type) contents)))
+                   (xml-opaque type) contents)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define read-xml-document*->document : (-> XML-Document* XML-Document)

@@ -1,12 +1,13 @@
 #lang typed/racket/base
 
-(provide (all-defined-out))
+(provide (all-defined-out) SGML-StdIn)
 (provide (struct-out XML-DTD) read-xml-type-definition)
 (provide (struct-out XML-Type) XML-Type-Entities)
 (provide Open-Input-XML-XXE xml-dtd-expand)
 (provide default-xml-ipe-topsize default-xml-xxe-topsize default-xml-xxe-timeout)
 
 (require "digitama/dtd.rkt")
+(require "digitama/stdin.rkt")
 (require "digitama/normalize.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

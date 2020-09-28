@@ -4,18 +4,18 @@
 ;;; https://www.w3.org/TR/xml/                                                                  ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(provide (all-defined-out))
-(provide SGML-StdIn XML-DTD XML:Space-Filter XML-Space-Position Open-Input-XML-XXE)
+(provide (all-defined-out) (all-from-out "dtd.rkt"))
+(provide XML-DTD XML:Space-Filter XML-Space-Position)
 (provide (struct-out XML-Document) read-xml-document)
 (provide (struct-out XML-Document*) read-xml-document* xml-document*-normalize)
 (provide svg:space-filter xml-load-relative-system-dtd)
-(provide default-xml-ipe-topsize default-xml-xxe-topsize default-xml-xxe-timeout)
+
+(require "dtd.rkt")
 
 (require "digitama/dtd.rkt")
 (require "digitama/doctype.rkt")
 (require "digitama/document.rkt")
 (require "digitama/normalize.rkt")
-(require "digitama/stdin.rkt")
 
 (require "digitama/digicore.rkt")
 

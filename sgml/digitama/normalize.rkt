@@ -31,7 +31,7 @@
 
 (define-type Open-Input-XML-XXE
   (-> Path (Option String) (Option String)
-      (U False Input-Port)))
+      (U False Input-Port (Pairof Input-Port Boolean))))
 
 (define default-xml-ipe-topsize : (Parameterof (Option Index)) (make-parameter #x2000))
 (define default-xml-xxe-topsize : (Parameterof (Option Index)) (make-parameter #x200000))
@@ -640,30 +640,45 @@
 (define xml-load-external-entity : (All (E) (-> (Option XML-Token) (Option XML:String) (Option XML:String)
                                                 Open-Input-XML-XXE (Option Index) (Option Real) (-> Input-Port E)
                                                 (Option E)))
-  (lambda [content public system open-port topsize timeout read-entity]
+  (lambda [content public system open-port topsize0 timeout read-entity]
     (and (or public system) ; should not happen
          (parameterize ([current-custodian (make-custodian)])
-           (define xxe : (Channelof (U E XML-Syntax-Error)) (make-channel))
-           (define ghostcat : Thread
-             (thread (λ [] (let* ([source (w3s-token-source (or public system))]
-                                  [rootdir (or (and (string? source) (path-only source)) (current-directory))]
-                                  [/dev/rawin (open-port rootdir (and public (xml:string-datum public)) (and system (xml:string-datum system)))])
-                             (channel-put xxe
-                                          (cond [(not /dev/rawin) (make+exn:xml:defense (filter xml:string? (list system public)) content)]
-                                                [else (let ([/dev/entin (if (not topsize) /dev/rawin (make-limited-input-port /dev/rawin topsize #false))])
-                                                        (unless (port-counts-lines? /dev/entin)
-                                                          (port-count-lines! /dev/entin))
-                                                        (let ([entity (read-entity /dev/entin)])
-                                                          (cond [(eof-object? (peek-char /dev/rawin)) entity]
-                                                                [else (make+exn:xml:bomb (filter xml:string? (list system public)) content)])))]))))))
-           
-           (let ([?entity (if (and (real? timeout) (> timeout 0.0))
-                              (sync/timeout/enable-break timeout xxe)
-                              (sync/enable-break xxe))])
-             (custodian-shutdown-all (current-custodian))
-             (cond [(not ?entity) (make+exn:xml:timeout (filter xml:string? (list system public)) content) #false]
-                   [(exn:xml? ?entity) #false]
-                   [else ?entity]))))))
+           (define source : (U Symbol String) (w3s-token-source (or public system)))
+           (define rootdir : Path (or (and (string? source) (path-only source)) (current-directory)))
+
+           (define (read-xxe) : (U E XML-Syntax-Error)
+             (define ?port : (U Input-Port (Pairof Input-Port Boolean) False)
+               (open-port rootdir (and public (xml:string-datum public))
+                          (and system (xml:string-datum system))))
+
+             (define-values (/dev/rawin topsize)
+               (cond [(input-port? ?port) (values ?port topsize0)]
+                     [(not ?port) (values #false #false)]
+                     [(cdr ?port) (values (car ?port) #false)]
+                     [else (values (car ?port) topsize0)]))
+             
+             (if (not /dev/rawin)
+                 (make+exn:xml:defense (filter xml:string? (list system public)) content)
+                 
+                 (let ([/dev/entin (if (not topsize) /dev/rawin (make-limited-input-port /dev/rawin topsize #false))])
+                   (unless (port-counts-lines? /dev/entin)
+                     (port-count-lines! /dev/entin))
+                   (let ([entity (read-entity /dev/entin)])
+                     (cond [(eof-object? (peek-char /dev/rawin)) entity]
+                           [else (make+exn:xml:bomb (filter xml:string? (list system public)) content)])))))
+
+           (define ?entity : (U E XML-Syntax-Error False)
+             (if (and (real? timeout) (> timeout 0.0))
+                 (let* ([xxe : (Channelof (U XML-Syntax-Error E)) (make-channel)]
+                        [ghostcat (thread (λ [] (channel-put xxe (read-xxe))))])
+                   (sync/timeout/enable-break timeout xxe))
+                 (read-xxe)))
+
+           (custodian-shutdown-all (current-custodian))
+             
+           (cond [(not ?entity) (make+exn:xml:timeout (filter xml:string? (list system public)) content) #false]
+                 [(exn:xml? ?entity) #false]
+                 [else ?entity])))))
 
 (define xml-make-entity->tokens : (All (T) (-> T (-> Input-Port (U String Symbol) T (Listof XML-Token)) (-> XML:String (Listof XML-Token))))
   (lambda [scope read-tokens]
