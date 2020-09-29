@@ -6,7 +6,7 @@
 
 (provide (all-defined-out))
 (provide (all-from-out sgml/xml))
-(provide read-svg-document*)
+(provide read-svg-document* svg-document*-normalize)
 
 (require sgml/xml)
 

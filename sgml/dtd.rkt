@@ -4,11 +4,21 @@
 (provide (struct-out XML-DTD) read-xml-type-definition)
 (provide (struct-out XML-Type) XML-Type-Entities)
 (provide Open-Input-XML-XXE xml-dtd-expand)
-(provide default-xml-ipe-topsize default-xml-xxe-topsize default-xml-xxe-timeout)
+
+(require racket/path)
+(require racket/file)
+(require racket/port)
+(require racket/string)
+
+(require typed/net/url)
+(require typed/net/head)
 
 (require "digitama/dtd.rkt")
 (require "digitama/stdin.rkt")
 (require "digitama/normalize.rkt")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define-type XML-XXE-HTTP-URL-Filter (-> (Option String) (Option String) (Option String)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-dtd-entity-expand : (->* (XML-DTD)
@@ -24,6 +34,67 @@
                                        (and open-port (vector open-port xxe-topsize timeout))))
 
     entities))
+
+(define make-xml-load-http-entity : (->* () ((Option Path-String) (Option XML-XXE-HTTP-URL-Filter)) Open-Input-XML-XXE)
+  (let ([simple-url-filter : XML-XXE-HTTP-URL-Filter (λ [public system] (or system public))]
+        [topic : Symbol 'xml:public:entity])
+    (define (open-input-url [source : String] [url : URL] [local-dir : Path] [topsize : (Option Index)]) : (Option (Pairof Input-Port Boolean))
+      (define host : (Option String) (url-host url))
+      
+      (and (string? host)
+           (let ([subpath (filter string? (map path/param-path (url-path url)))])
+             (and (pair? subpath)
+                  (let ([path.ent (apply build-path local-dir host subpath)])
+                    
+                    (unless (file-exists? path.ent)
+                      (with-handlers ([exn? (λ [[e : exn]] (log-message (current-logger) 'warning topic (format "download failed: ~a" (exn-message e)) #false))])
+                        (log-message (current-logger) 'debug topic (format "downloading ~a" source) #false)
+
+                        (define temp.ent : Path (make-temporary-file "xml-~a.ent"))
+                        (define-values (/dev/entin raw-headers) (get-pure-port/headers url))
+
+                        (when (or (not topsize)
+                                  (let* ([headers (extract-all-fields raw-headers)]
+                                         [?field (assoc "content-length" headers)]
+                                         [?value (and ?field (cdr ?field))]
+                                         [?size (and ?value (string->number (if (bytes? ?value) (bytes->string/utf-8 ?value) ?value)))])
+                                    (and (index? ?size) (<= ?size topsize))))
+
+                          (make-parent-directory* path.ent)
+                          (call-with-output-file* temp.ent #:exists 'truncate/replace
+                            (λ [[/dev/entout : Output-Port]]
+                              (copy-port /dev/entin /dev/entout)))
+                          (rename-file-or-directory temp.ent path.ent #true)
+
+                          (log-message (current-logger) 'debug topic
+                                       (format "downloaded ~a to ~a" (file-name-from-path source) (path-only path.ent))
+                                       #false))
+                        
+                        (close-input-port /dev/entin)))
+                    
+                    (and (file-exists? path.ent)
+                         (cons (open-input-file path.ent) #true)))))))
+
+    (lambda [[?localdir #false] [?url-filter #false]]
+      (define url-filter : XML-XXE-HTTP-URL-Filter (or ?url-filter simple-url-filter))
+      (define local-rootdir : Path
+        (cond [(not ?localdir) (build-path (find-system-path 'temp-dir) "gydm.wargrey.xml:public:entity")]
+              [else (simple-form-path ?localdir)]))
+      
+      (λ [rootdir public system topsize &alt-source]
+        (define ?url : (Option String) (url-filter public system))
+        (and (string? ?url)
+             (if (path? rootdir)
+                 (let* ([url (string->url ?url)]
+                        [scheme (url-scheme url)])
+                   (set-box! &alt-source (url->string url))
+                   (and scheme
+                        (or (string=? scheme "http") (string=? scheme "https"))
+                        (open-input-url ?url url local-rootdir topsize)))
+                 (let* ([url (string->url (string-append rootdir ?url))]
+                        [source (url->string url)])
+                   (set-box! &alt-source source)
+                   (open-input-url source url local-rootdir topsize))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (module reader racket/base

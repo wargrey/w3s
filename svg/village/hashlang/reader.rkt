@@ -20,7 +20,7 @@
 (define svg-read-syntax
   (lambda [[src #false] [/dev/svgin (current-input-port)]]
     (sgml-read-syntax 'read-svg-document* 'svg #px"\\.svg$" ".svg" src /dev/svgin
-                      'xml-document*-normalize)))
+                      'svg-document*-normalize)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (svg-info in mod line col pos)

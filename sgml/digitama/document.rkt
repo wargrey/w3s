@@ -43,14 +43,15 @@
   #:type-name XML-Document*)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-load-relative-system-dtd : Open-Input-XML-XXE
-  (lambda [rootdir public system]
-    (parameterize ([current-directory rootdir])
-      (and (string? system)
-           (let ([extdtd (simple-form-path system)])
-             (and (file-exists? extdtd)
-                  (string-prefix? (path->string extdtd) (path->string rootdir))
-                  (cons (dtd-open-input-port extdtd) #true)))))))
+(define xml-load-relative-system-entity : Open-Input-XML-XXE
+  (lambda [rootdir public system topsize &alt-source]
+    (and (path? rootdir)
+         (string? system)
+         (parameterize ([current-directory rootdir])
+           (and (let ([extdtd (simple-form-path system)])
+                  (and (file-exists? extdtd)
+                       (string-prefix? (path->string extdtd) (path->string rootdir))
+                       (cons (dtd-open-input-port extdtd) #true))))))))
 
 (define read-xml-document : (-> SGML-StdIn XML-Document)
   (lambda [/dev/rawin]
@@ -76,7 +77,7 @@
                                   XML-Document*)
   (lambda [#:normalize? [normalize? #false] #:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false]
            #:ipe-topsize [ipe-topsize (default-xml-ipe-topsize)] #:xxe-topsize [xxe-topsize (default-xml-xxe-topsize)] #:xxe-timeout [timeout (default-xml-xxe-timeout)]
-           /dev/rawin [ext-dtd xml-load-relative-system-dtd] [open-xxe-port xml-load-relative-system-dtd]]
+           /dev/rawin [ext-dtd xml-load-relative-system-entity] [open-xxe-port xml-load-relative-system-entity]]
     (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin #true))
     (define source : (U Symbol String) (sgml-port-name /dev/xmlin))
     (define tokens : (Listof XML-Token) (read-xml-tokens* /dev/xmlin source))
@@ -111,7 +112,7 @@
                                        XML-Document*)
   (lambda [#:external-dtd [alter-ext-dtd #false] #:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false]
            #:ipe-topsize [ipe-topsize (default-xml-ipe-topsize)] #:xxe-topsize [xxe-topsize (default-xml-xxe-topsize)] #:xxe-timeout [timeout (default-xml-xxe-timeout)]
-           doc [open-xxe-port xml-load-relative-system-dtd]]
+           doc [open-xxe-port xml-load-relative-system-entity]]
     (define-values (type contents)
       (xml-normalize (xml-document*-internal-dtd doc)
                      (or (xml-load-external-dtd alter-ext-dtd

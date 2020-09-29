@@ -8,7 +8,7 @@
 (provide XML-DTD XML:Space-Filter XML-Space-Position)
 (provide (struct-out XML-Document) read-xml-document)
 (provide (struct-out XML-Document*) read-xml-document* xml-document*-normalize)
-(provide svg:space-filter xml-load-relative-system-dtd)
+(provide svg:space-filter xml-load-relative-system-entity)
 
 (require "dtd.rkt")
 

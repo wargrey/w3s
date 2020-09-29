@@ -32,12 +32,14 @@
           [Symbol (Option String) String (Option String) XML-Space-Position Boolean -> (Option String)]))
 
 (define-type Open-Input-XML-XXE
-  (-> Path (Option String) (Option String)
+  (-> Path-String (Option String) (Option String) (Option Index) (Boxof (U False String Symbol))
       (U False Input-Port (Pairof Input-Port Boolean))))
+
+(define-type XML-XXE-Reader (All (E) (->* (Input-Port) ((U False Symbol String)) E)))
 
 (define default-xml-ipe-topsize : (Parameterof (Option Index)) (make-parameter #x2000))
 (define default-xml-xxe-topsize : (Parameterof (Option Index)) (make-parameter #x200000))
-(define default-xml-xxe-timeout : (Parameterof (Option Real)) (make-parameter 2.0))
+(define default-xml-xxe-timeout : (Parameterof (Option Real)) (make-parameter 4.0))
 
 (define svg:space-filter : XML:Space-Filter
   (case-lambda
@@ -630,7 +632,7 @@
                                             (U Symbol Keyword) XML-Type-Entities (Option XML-Type-Entities)
                                             (-> XML-Token XML:String XML-Type-Entities (Option XML-Type-Entities) (Option Index) XML-XXE-Config Any) (Option Index)
                                             (-> XML:String (Listof XML-Token))
-                                            XML-XXE-Config (-> Input-Port (Listof XML-Token)))
+                                            XML-XXE-Config (XML-XXE-Reader (Listof XML-Token)))
                                            ((Option XML-Token))
                                            (U (Listof XML-Token) XML-Syntax-Error))
   (lambda [ntoken name entities ?int-entities replace topsize value->tokens xxec read-xxe [context #false]]
@@ -657,18 +659,25 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-load-external-entity : (All (E) (-> (Option XML-Token) (Option XML:String) (Option XML:String)
-                                                Open-Input-XML-XXE (Option Index) (Option Real) (-> Input-Port E)
+                                                Open-Input-XML-XXE (Option Index) (Option Real) (XML-XXE-Reader E)
                                                 (Option E)))
   (lambda [content public system open-port topsize0 timeout read-entity]
     (and (or public system) ; should not happen
          (parameterize ([current-custodian (make-custodian)])
            (define source : (U Symbol String) (w3s-token-source (or public system)))
-           (define rootdir : Path (or (and (string? source) (path-only source)) (current-directory)))
+           (define rootdir : Path-String
+             (or (and (string? source)
+                      (cond [(file-exists? source) (path-only source) #| local path |#]
+                            [else (string-trim source #px"[^/]" #:left? #false #:repeat? #true) #| remote path |#]))
+                 (current-directory)))
 
            (define (read-xxe) : (U E XML-Syntax-Error)
+             (define &port-name : (Boxof (U False String Symbol)) (box #false))
              (define ?port : (U Input-Port (Pairof Input-Port Boolean) False)
-               (open-port rootdir (and public (xml:string-datum public))
-                          (and system (xml:string-datum system))))
+               (open-port rootdir
+                          (and public (xml:string-datum public))
+                          (and system (xml:string-datum system))
+                          topsize0 &port-name))
 
              (define-values (/dev/rawin topsize)
                (cond [(input-port? ?port) (values ?port topsize0)]
@@ -682,7 +691,7 @@
                  (let ([/dev/entin (if (not topsize) /dev/rawin (make-limited-input-port /dev/rawin topsize #false))])
                    (unless (port-counts-lines? /dev/entin)
                      (port-count-lines! /dev/entin))
-                   (let ([entity (read-entity /dev/entin)])
+                   (let ([entity (read-entity /dev/entin (unbox &port-name))])
                      (cond [(eof-object? (peek-char /dev/rawin)) entity]
                            [else (make+exn:xml:bomb (filter xml:string? (list system public)) content)])))))
 
@@ -707,13 +716,13 @@
       
       (read-tokens /dev/subin source scope))))
 
-(define xml-dtd-reader : (-> Input-Port (Listof XML-Token))
-  (lambda [/dev/dtdin]
-    (read-xml-tokens* /dev/dtdin (sgml-port-name /dev/dtdin) #false)))
+(define xml-dtd-reader : (XML-XXE-Reader (Listof XML-Token))
+  (lambda [/dev/dtdin [port-name #false]]
+    (read-xml-tokens* /dev/dtdin (or port-name (sgml-port-name /dev/dtdin)) #false)))
 
-(define xml-cdata-reader : (-> Input-Port String)
+(define xml-cdata-reader : (XML-XXE-Reader String)
   ;;; https://www.w3.org/TR/xml/#sec-line-ends
-  (lambda [/dev/entin]
+  (lambda [/dev/entin [port-name #false]]
     (define /dev/entout : Output-Port (open-output-string '/dev/entout))
 
     (xml-skip-whitespace /dev/entin)
@@ -724,11 +733,10 @@
     
     (string-trim (get-output-string /dev/entout) #:left? #false)))
 
-(define xml-make-cdata-reader : (-> XML:Reference (-> Input-Port (List XML:String)))
+(define xml-make-cdata-reader : (-> XML:Reference (XML-XXE-Reader (List XML:String)))
   (lambda [e]
-    (λ [[/dev/entin : Input-Port]]
-      (list (w3s-remake-token e xml:string
-                              (xml-cdata-reader /dev/entin))))))
+    (λ [[/dev/entin : Input-Port] [port-name : (U False String Symbol) #false]]
+      (list (w3s-remake-token e xml:string (xml-cdata-reader /dev/entin port-name))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml:lang-ref : (case-> [String -> (Option String)]

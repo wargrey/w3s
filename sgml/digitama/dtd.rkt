@@ -104,7 +104,7 @@
 (define read-xml-type-definition : (->* (SGML-StdIn) ((U False String Symbol)) XML-DTD)
   (lambda [/dev/rawin [port-name #false]]
     (define /dev/dtdin : Input-Port (dtd-open-input-port /dev/rawin #true port-name))
-    (define source : (U Symbol String) (sgml-port-name /dev/dtdin))
+    (define source : (U Symbol String) (or port-name (sgml-port-name /dev/dtdin)))
     (define tokens : (Listof XML-Token) (read-xml-tokens* /dev/dtdin source))
     
     (xml-make-type-definition source (xml-syntax->definition* tokens))))
