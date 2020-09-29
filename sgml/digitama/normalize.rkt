@@ -110,23 +110,30 @@
 
     (let partition-dtd ([rest : (Listof XML-Type-Declaration*) (xml-dtd-declarations dtd)]
                         [snoitaralced : (Listof XML-Type-Declaration*) null]
-                        [entities : XML-Type-Entities initial-entities])
+                        [entities : XML-Type-Entities initial-entities]
+                        [PErefers : (Listof Keyword) null])
       (cond [(null? rest) (values entities (reverse snoitaralced))]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
-                    (cond [(xml-entity? self)
-                           ; NOTE: NDATA only concerns validity constraint, and therefore is not handled here.
-                           (if (xml-internal-entity? self)
-                               (partition-dtd rest++ snoitaralced (xml-entity-cons (xml-dtd-included-in-literal self entities int-entities topsize xxec) entities))
-                               (partition-dtd rest++ snoitaralced (xml-entity-cons self entities)))]
+                    (cond [(xml-entity? self) ; NOTE: NDATA only concerns validity constraint, and therefore is not handled here.
+                           (let* ([ntoken (xml-entity-name self)]
+                                  [name (if (xml:reference? ntoken) (xml:reference-datum ntoken) (xml:pereference-datum ntoken))])
+                             (cond [(hash-has-key? entities name) (make+exn:xml:multiple ntoken) (partition-dtd rest++ snoitaralced entities PErefers)]
+                                   [(xml-internal-entity? self)
+                                    (let ([?expanded (xml-dtd-included-in-literal self entities int-entities topsize xxec)])
+                                      (partition-dtd rest++ snoitaralced (if (not ?expanded) entities (hash-set entities name ?expanded)) PErefers))]
+                                   [else (partition-dtd rest++ snoitaralced (hash-set entities name self) PErefers)]))]
                           [(xml:pereference? self)
-                           (let ([subset (xml-dtd-included-as-PE self entities int-entities topsize xxec)])
-                             (cond [(null? subset) (partition-dtd rest++ snoitaralced entities)]
-                                   [else (let-values ([(entities++ snoitaralced++) (partition-dtd subset null entities)])
-                                           (partition-dtd rest++ (append (reverse snoitaralced++) snoitaralced) entities++))]))]
+                           (let ([name (xml:pereference-datum self)])
+                             (cond [(memq name PErefers) (make+exn:xml:defense self) (partition-dtd rest++ snoitaralced entities PErefers)]
+                                   [else (let ([PErefers++ (cons name PErefers)]
+                                               [subset (xml-dtd-included-as-PE self entities int-entities topsize xxec)])
+                                           (cond [(null? subset) (partition-dtd rest++ snoitaralced entities PErefers++)]
+                                                 [else (let-values ([(entities++ snoitaralced++) (partition-dtd subset null entities PErefers++)])
+                                                         (partition-dtd rest++ (append (reverse snoitaralced++) snoitaralced) entities++ PErefers++))]))]))]
                           [(pair? self)
                            (partition-dtd (append (xml-dtd-expand-section (car self) (cdr self) entities int-entities topsize) rest++)
-                                          snoitaralced entities)]
-                          [else (partition-dtd rest++ (cons self snoitaralced) entities)]))]))))
+                                          snoitaralced entities PErefers)]
+                          [else (partition-dtd rest++ (cons self snoitaralced) entities PErefers)]))]))))
 
 (define xml-dtd-type-declaration-expand : (-> XML-Type-Entities (Listof XML-Type-Declaration*) (Option Index) XML-XXE-Config XML-Type)
   (lambda [entities declarations topsize xxec]
@@ -515,21 +522,7 @@
             
             [else #false]))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-entity-select : (-> (U Symbol Keyword) XML-Type-Entities (Option XML-Type-Entities) XML-Type-Entities)
-  (lambda [entity entities ?int-entities]
-    (cond [(not ?int-entities) entities]
-          [(hash-has-key? ?int-entities entity) ?int-entities]
-          [else entities])))
-  
-(define xml-entity-cons : (-> (Option XML-Entity) XML-Type-Entities XML-Type-Entities)
-  (lambda [e entities]
-    (cond [(not e) entities]
-          [else (let* ([ntoken (xml-entity-name e)]
-                       [name (if (xml:reference? ntoken) (xml:reference-datum ntoken) (xml:pereference-datum ntoken))])
-                  (cond [(not (hash-has-key? entities name)) (hash-set entities name e)]
-                        [else (make+exn:xml:multiple ntoken) entities]))])))
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;  
 (define xml-notation-cons : (-> XML-Notation XML-Type-Notations XML-Type-Notations)
   (lambda [n notations]
     (let* ([ntoken (xml-notation-name n)]

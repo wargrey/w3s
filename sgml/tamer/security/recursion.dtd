@@ -1,0 +1,12 @@
+#lang sgml/dtd
+
+<!ENTITY % recursion "INCLUDE">
+
+<!ENTITY recursive1 "&recursive3;">
+<!ENTITY recursive2 "&recursive1;">
+<!ENTITY recursive3 "<recursive>this is a bad &recursive2; exmaple</recursive>">
+
+<![%recursion;[
+   <!ENTITY % self SYSTEM "recursion.dtd">
+   %self;
+]]>
