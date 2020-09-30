@@ -183,9 +183,13 @@
                   (cons (and public (xml:string-datum public))
                         (and system (xml:string-datum system))))])))
 
-(define xml-pair->datum : (-> (Pairof XML:Name XML:String) (Pairof Symbol String))
+(define xml-pair->datum : (-> XML-Element-Attribute* XML-Element-Attribute)
   (lambda [p]
-    (cons (xml:name-datum (car p)) (xml:string-datum (cdr p)))))
+    (cons (xml:name-datum (car p))
+          (let ([v (cdr p)])
+            (cond [(xml:string? v) (xml:string-datum v)]
+                  [(xml:name? v) (xml:name-datum v)]
+                  [else (map xml:name-datum v)])))))
 
 (define xml-load-external-dtd : (-> (U False XML-DTD Open-Input-XML-XXE) XML-DocType*
                                     (Option Index) (Option Real)

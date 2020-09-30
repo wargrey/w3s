@@ -16,7 +16,8 @@
 (define-type XML-Doctype-Body* (U XML-Token XML-Declaration* XML-Processing-Instruction* XML-Section))
 
 (define-type XML-Processing-Instruction* (MPairof XML:Name (Option XML:String)))
-(define-type XML-Element-Attribute* (Pairof XML:Name XML:String))
+(define-type XML-Element-Attribute-Value* (U XML:String XML:Name (Listof XML:Name)))
+(define-type XML-Element-Attribute* (Pairof XML:Name XML-Element-Attribute-Value*))
 (define-type XML-Subdatum* (U XML-CDATA-Token XML-Reference-Token XML-Processing-Instruction*))
 (define-type XML-Element* (Rec elem (List XML:Name (Listof XML-Element-Attribute*) (Listof (U elem XML-Subdatum*)))))
 

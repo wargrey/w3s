@@ -16,7 +16,8 @@
 (define-type XML-Doctype-Body (U XML-Datum XML-Declaration XML-Processing-Instruction))
 
 (define-type XML-Processing-Instruction (MPairof Symbol (Option String)))
-(define-type XML-Element-Attribute (Pairof Symbol (U String (Boxof String))))
+(define-type XML-Element-Attribute-Value (U String (Boxof String) Symbol (Listof Symbol)))
+(define-type XML-Element-Attribute (Pairof Symbol XML-Element-Attribute-Value))
 (define-type XML-Subdatum (U String XML-Processing-Instruction XML-White-Space Index Symbol))
 (define-type XML-Element (Rec elem (List Symbol (Listof XML-Element-Attribute) (Listof (U elem XML-Subdatum)))))
 

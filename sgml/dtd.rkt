@@ -2,7 +2,7 @@
 
 (provide (all-defined-out) SGML-StdIn)
 (provide (struct-out XML-DTD) read-xml-type-definition)
-(provide (struct-out XML-Type) XML-Type-Entities)
+(provide (struct-out XML-Type) DTD-Entities)
 (provide Open-Input-XML-XXE xml-dtd-expand)
 
 (require racket/path)
@@ -24,8 +24,8 @@
 (define xml-dtd-entity-expand : (->* (XML-DTD)
                                      (#:open-xxe-input-port (Option Open-Input-XML-XXE)
                                       #:ipe-topsize (Option Index) #:xxe-topsize (Option Index) #:xxe-timeout (Option Real)
-                                      (Option XML-Type-Entities) Boolean)
-                                     XML-Type-Entities)
+                                      (Option DTD-Entities) Boolean)
+                                     DTD-Entities)
   (lambda [#:open-xxe-input-port [open-port #false]
            #:ipe-topsize [ipe-topsize (default-xml-ipe-topsize)] #:xxe-topsize [xxe-topsize (default-xml-xxe-topsize)] #:xxe-timeout [timeout (default-xml-xxe-timeout)]
            dtd [int-entities #false] [merge? #true]]
