@@ -6,3 +6,5 @@
 (define version "1.0")
 
 (define scribblings '(["tamer/sgml.scrbl" (main-doc multi-page) (parsing-library)]))
+
+(define module-suffixes '(#"xml" #"dtd"))

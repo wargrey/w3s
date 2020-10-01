@@ -38,21 +38,11 @@
    [internal-dtd : XML-DTD]
    [external-dtd : (XML-Opaqueof (Option XML-DTD))]
    [type : (XML-Opaqueof (Option XML-Type))]
-   [elements : (Listof XML-Content*)])
+   [contents : (Listof XML-Content*)])
   #:transparent
   #:type-name XML-Document*)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-load-relative-system-entity : Open-Input-XML-XXE
-  (lambda [rootdir public system topsize &alt-source]
-    (and (path? rootdir)
-         (string? system)
-         (parameterize ([current-directory rootdir])
-           (and (let ([extdtd (simple-form-path system)])
-                  (and (file-exists? extdtd)
-                       (string-prefix? (path->string extdtd) (path->string rootdir))
-                       (cons (dtd-open-input-port extdtd) #true))))))))
-
 (define read-xml-document : (-> SGML-StdIn XML-Document)
   (lambda [/dev/rawin]
     (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin #false))
@@ -69,6 +59,22 @@
     (xml-document (xml-prolog (sgml-port-name /dev/xmlin) version encoding standalone?)
                   (xml-doctype name external)
                   dtd grammars)))
+
+(define make-xml-document* : (-> (U String Symbol) (Option Nonnegative-Flonum) (Option String) Boolean
+                                 (Option XML:Name) XML-External-ID* (Option XML-DTD) (Option XML-DTD) (Option XML-Type)
+                                 (Listof XML-Content*)
+                                 XML-Document*)
+  (lambda [source version encoding standalone? maybe-name external intdtd xxedtd type contents]
+    (define doc-type : XML-DocType*
+      (xml-doctype* (or maybe-name
+                        (let ([maybe-first-element (findf list? contents)])
+                          (and (pair? maybe-first-element)
+                               (car maybe-first-element))))
+                    external))
+    
+    (xml-document* (xml-prolog source version encoding standalone?) doc-type
+                   (or intdtd (xml-make-type-definition source null)) (xml-opaque xxedtd) (xml-opaque type)
+                   contents)))
 
 (define read-xml-document* : (->* (SGML-StdIn)
                                   ((U False XML-DTD Open-Input-XML-XXE) (Option Open-Input-XML-XXE)
@@ -91,13 +97,13 @@
                                (car maybe-first-element))))
                     external))
 
-    (define ?external-dtd : (Option XML-DTD) (xml-load-external-dtd ext-dtd doc-type xxe-topsize timeout))
+    (define ?external-dtd : (Option XML-DTD) (xml-load-external-dtd ext-dtd maybe-name external xxe-topsize timeout))
 
     (define doc : XML-Document*
-      (xml-document* (xml-prolog source version encoding standalone?)
-                     doc-type
-                     (xml-make-type-definition source definitions) (xml-opaque ?external-dtd)
-                     (xml-opaque #false) grammars))
+      (make-xml-document* source version encoding standalone?
+                          maybe-name external
+                          (xml-make-type-definition source definitions) ?external-dtd #false
+                          grammars))
 
     (cond [(not normalize?) doc]
           [else (xml-document*-normalize #:ipe-topsize ipe-topsize #:xxe-topsize xxe-topsize #:xxe-timeout timeout
@@ -115,15 +121,12 @@
            doc [open-xxe-port xml-load-relative-system-entity]]
     (define-values (type contents)
       (xml-normalize (xml-document*-internal-dtd doc)
-                     (or (xml-load-external-dtd alter-ext-dtd
-                                                (xml-document*-doctype doc)
-                                                xxe-topsize timeout)
+                     (or (let ([dt (xml-document*-doctype doc)])
+                           (xml-load-external-dtd alter-ext-dtd (xml-doctype*-name dt) (xml-doctype*-external dt) xxe-topsize timeout))
                          (xml-opaque-unbox (xml-document*-external-dtd doc)))
-                     (xml-document*-elements doc)
+                     (xml-document*-contents doc)
                      xml:lang xml:space xml:space-filter ipe-topsize
-                     (or open-xxe-port
-                         (cond [(xml-dtd? alter-ext-dtd) #false]
-                               [else alter-ext-dtd]))
+                     (or open-xxe-port (if (xml-dtd? alter-ext-dtd) #false alter-ext-dtd))
                      xxe-topsize timeout))
     
     (xml-document* (xml-document*-prolog doc)
@@ -132,7 +135,17 @@
                    (xml-opaque type) contents)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define read-xml-document*->document : (-> XML-Document* XML-Document)
+(define xml-load-relative-system-entity : Open-Input-XML-XXE
+  (lambda [rootdir public system topsize &alt-source]
+    (and (path? rootdir)
+         (string? system)
+         (parameterize ([current-directory rootdir])
+           (and (let ([extdtd (simple-form-path system)])
+                  (and (file-exists? extdtd)
+                       (string-prefix? (path->string extdtd) (path->string rootdir))
+                       (cons (dtd-open-input-port extdtd) #true))))))))
+
+(define xml-document*->document : (-> XML-Document* XML-Document)
   (lambda [doc.xml]
     (xml-document (xml-document*-prolog doc.xml)
                   (let* ([doctype (xml-document*-doctype doc.xml)]
@@ -141,7 +154,7 @@
                     (xml-doctype (and name (xml:name-datum name))
                                  (xml-external-id->datum id)))
                   (make-hasheq)
-                  (map xml-content->datum (xml-document*-elements doc.xml)))))
+                  (map xml-content->datum (xml-document*-contents doc.xml)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-content->datum : (-> XML-Content* XML-Content)
@@ -191,13 +204,10 @@
                   [(xml:name? v) (xml:name-datum v)]
                   [else (map xml:name-datum v)])))))
 
-(define xml-load-external-dtd : (-> (U False XML-DTD Open-Input-XML-XXE) XML-DocType*
+(define xml-load-external-dtd : (-> (U False XML-DTD Open-Input-XML-XXE) (Option XML:Name) XML-External-ID*
                                     (Option Index) (Option Real)
                                     (Option XML-DTD))
-  (lambda [ext-dtd doctype topsize timeout]
-    (define name (xml-doctype*-name doctype))
-    (define external (xml-doctype*-external doctype))
-    
+  (lambda [ext-dtd name external topsize timeout]
     (cond [(xml-dtd? ext-dtd) ext-dtd]
           [(not ext-dtd) #false]
           [(not external) #false]

@@ -7,6 +7,8 @@
 (require racket/port)
 (require racket/unsafe/ops)
 
+(require css/digitama/syntax/stdin)
+
 (require "digicore.rkt")
 
 (require typed/racket/unsafe)
@@ -36,10 +38,8 @@
 
     (when (and enable-line-counting? (not (port-counts-lines? /dev/rawin)))
       (port-count-lines! /dev/rawin))
-    
-    ;; skip racket `#lang` line
-    (when (regexp-match-peek #px"^#(lang|!)" /dev/rawin)
-      (read-line /dev/rawin))
+
+    (css-skip-lang-line /dev/rawin)
     
     (let-values ([(version encoding standalone?) (xml-read-declaration /dev/rawin)])
       (values (xml-reencode-port /dev/rawin encoding) version encoding standalone?))))
@@ -57,10 +57,8 @@
     (when (and enable-line-counting? (not (port-counts-lines? /dev/rawin)))
       (port-count-lines! /dev/rawin))
     
-    ;; skip racket `#lang` line
-    (when (regexp-match-peek #px"^#(lang|!)" /dev/rawin)
-      (read-line /dev/rawin))
-
+    (css-skip-lang-line /dev/rawin)
+    
     (let-values ([(version encoding standalone?) (xml-read-declaration /dev/rawin)])
       (xml-reencode-port /dev/rawin encoding))))
 

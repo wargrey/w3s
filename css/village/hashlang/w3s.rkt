@@ -16,7 +16,7 @@
               (define-values (lang.w3s MB cpu real gc)
                 (let*-values ([(mem0) (current-memory-use)]
                               [(&lang.w3s cpu real gc) (time-apply process (list doc))])
-                  (values (car &lang.w3s) (/ (- (current-memory-use) mem0) 1024.0 1024.0) cpu real gc)))
+                  (values (car &lang.w3s) (w3s-memory-difference mem0) cpu real gc)))
 
               (module+ main
                 (newline)
@@ -27,6 +27,11 @@
      #'(void)]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define w3s-memory-difference : (-> Natural Real)
+  (lambda [memory0]
+    (/ (- (current-memory-use) memory0)
+       1024.0 1024.0)))
+
 (define w3s-read-doc : (All (Doc) (-> Any Bytes Positive-Integer Nonnegative-Integer Positive-Integer (-> Input-Port Doc)
                                       (Values Doc Real Nonnegative-Integer Nonnegative-Integer Nonnegative-Integer)))
   (lambda [src bs line column position read-doc]
@@ -37,7 +42,7 @@
     (set-port-next-location! /dev/rawin line column position)
     
     (let-values ([(&lang.sgml cpu real gc) (time-apply read-doc (list /dev/rawin))])
-      (values (car &lang.sgml) (/ (- (current-memory-use) mem0) 1024.0 1024.0) cpu real gc))))
+      (values (car &lang.sgml) (w3s-memory-difference mem0) cpu real gc))))
 
 (define w3s-display-times : (-> Symbol Real Integer Integer Integer Void)
   (lambda [src MB cpu real gc]

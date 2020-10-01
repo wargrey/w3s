@@ -53,13 +53,14 @@
                                                 (set! peek-pool rest)
                                                 (car peeked))])))
                            (λ [[buf : Bytes] [skip : Nonnegative-Integer] [evt : Any]]
-                             ; NOTE: It seems that optimize this code to always throw the last peeked token
+                             ; NOTE: It seems that optimizing this code to always throw the last peeked token
                              ;        does not improve the performance.
                              (λ _ (and (for ([idx (in-range (length peek-pool) (add1 skip))])
                                          (set! peek-pool (cons (css-consume-token /dev/cssin portname) peek-pool)))
                                        (list-ref peek-pool (- (length peek-pool) skip 1)))))
-                           (λ [] (unless (eq? /dev/rawin /dev/cssin) (close-input-port /dev/cssin))
-                                  (unless (eq? /dev/rawin /dev/stdin) (close-input-port /dev/rawin)))
+                           (λ []
+                             (unless (eq? /dev/rawin /dev/cssin) (close-input-port /dev/cssin))
+                             (unless (eq? /dev/rawin /dev/stdin) (close-input-port /dev/rawin)))
                            #false #false
                            (λ [] (port-next-location /dev/cssin))
                            (λ [] (void (list css-fallback-encode-input-port '|has already set it|))))))))
@@ -80,6 +81,29 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define px.charset #px"^@charset \"(.*?)\";")
 
+(define css-skip-lang-line : (-> Input-Port Void)
+  (lambda [/dev/cssin]
+    (let skip ()
+      (define ch : (U EOF Char) (peek-char /dev/cssin))
+
+      (cond [(eq? ch #\#)
+             (cond [(equal? (peek-bytes 5 1 /dev/cssin) #"lang ") (read-line /dev/cssin)]
+                   [else (let ([nch (peek-byte /dev/cssin 1)])
+                           (cond [(eq? nch #;#\; #x3B) (read /dev/cssin) (skip)]
+                                 [(eq? nch #;#\| #x7C) (regexp-match-positions #px"^.*(?<=[|])[#]\\s*" /dev/cssin) (skip)]))])]
+            [(eq? ch #\;) (read-line /dev/cssin) (skip)]
+            [(and (char? ch) (char-whitespace? ch)) (regexp-match-positions #px"^\\s+" /dev/cssin) (skip)]))
+
+    (regexp-match-positions #px"^\\s*" /dev/cssin)
+    (void)))
+
+(define test-lang-line : (-> String (U String EOF))
+  (lambda [src]
+    (define /dev/cssin (open-input-string src))
+
+    (css-skip-lang-line /dev/cssin)
+    (read-line /dev/cssin)))
+
 (define css-fallback-charset : (-> Bytes String)
   (lambda [from]
     (define CHARSET : String (string-upcase (bytes->string/utf-8 from)))
@@ -91,10 +115,9 @@
   ;;; https://drafts.csswg.org/css-syntax/#charset-rule
   (lambda [/dev/rawin]
     (unless (port-counts-lines? /dev/rawin) (port-count-lines! /dev/rawin))
-    (when (regexp-match-peek #px"^#(lang|!)" /dev/rawin)
-      ;; skip racket `#lang` line and blanks.
-      (read-line /dev/rawin)
-      (regexp-match #px"^\\s*" /dev/rawin))
+
+    (css-skip-lang-line /dev/rawin)
+    
     (define magic : (Option (Pairof Bytes (Listof (Option Bytes)))) (regexp-match-peek px.charset /dev/rawin))
     (define charset : (Option Bytes) (and magic (let ([name (cdr magic)]) (and (pair? name) (car name)))))
     (define CHARSET : (Option String) (and charset (css-fallback-charset charset)))
