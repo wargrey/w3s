@@ -12,7 +12,7 @@
 (define-type XML-Content* (U XML-Processing-Instruction* XML-Element*))
 (define-type XML-Definition* (U XML:PEReference XML-Processing-Instruction* XML-Declaration* XML-Section))
 
-(define-type XML-Declaration* (Rec body (Vector XML:Name (Listof (U XML-Token body XML-Processing-Instruction* XML-Section)))))
+(define-type XML-Declaration* (Rec body (Immutable-Vector XML:Name (Listof (U XML-Token body XML-Processing-Instruction* XML-Section)))))
 (define-type XML-Doctype-Body* (U XML-Token XML-Declaration* XML-Processing-Instruction* XML-Section))
 
 (define-type XML-Processing-Instruction* (MPairof XML:Name (Option XML:String)))
@@ -93,7 +93,7 @@
       (cond [(null? rest) (make+exn:xml:eof eof) (values #false null)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml:whitespace? self) (extract-declaration rest++ name seidob)]
-                          [(xml:etag? self) (values (and name (vector name (reverse seidob))) rest++)]
+                          [(xml:etag? self) (values (and name (vector-immutable name (reverse seidob))) rest++)]
                           [(xml:name? self)
                            (cond [(not name) (extract-declaration rest++ self seidob)]
                                  [else (extract-declaration rest++ name (cons self seidob))])]

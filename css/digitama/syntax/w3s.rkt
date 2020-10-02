@@ -47,7 +47,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type W3S-Token-Source (U String Symbol))
-(define-type (W3S-Token-Datumof T) (Immutable-Vector Symbol W3S-Token-Source Positive-Integer Natural Positive-Integer Positive-Integer T))
+(define-type W3S-Datum (Rec datum (U String Symbol Keyword Integer Flonum Char Boolean (Pairof datum datum))))
 (define-type W3S-Token-Constructor (All (T W3S) (-> W3S-Token-Source Positive-Integer Natural Positive-Integer Positive-Integer T W3S)))
 
 (struct w3s-token
@@ -59,6 +59,17 @@
   #:type-name W3S-Token
   #:transparent)
 
+(struct (T) w3s-token-datum ; for #lang expander
+  ([typeid : Symbol]
+   [source : W3S-Token-Source]
+   [line : Positive-Integer]
+   [column : Natural]
+   [start : Positive-Integer]
+   [end : Positive-Integer]
+   [payload : T])
+  #:prefab
+  #:type-name W3S-Token-Datumof)
+
 (define w3s-token->syntax-location : (-> W3S-Token (Vector Any (Option Integer) (Option Integer) (Option Integer) (Option Integer)))
   (lambda [instance]
     (vector (w3s-token-source instance) (w3s-token-line instance) (w3s-token-column instance)
@@ -68,51 +79,57 @@
   (lambda [instance]
     (format "~a:~a:~a" (w3s-token-source instance) (w3s-token-line instance) (add1 (w3s-token-column instance)))))
 
-(define w3s-token->location+datum : (All (T) (-> W3S-Token T (W3S-Token-Datumof T)))
-  (lambda [instance datum]
-    (vector-immutable (assert (object-name instance) symbol?) (w3s-token-source instance)
-                      (w3s-token-line instance) (w3s-token-column instance)
-                      (w3s-token-start instance) (w3s-token-end instance)
+(define make-w3s-location+datum : (All (T) (-> T (W3S-Token-Datumof T)))
+  (lambda [datum]
+    (w3s-token-datum 'DEADCODE '/dev/ddcin
+                      1 0 1 1
                       datum)))
+
+(define w3s-token->location+datum : (All (W3S T) (case-> [(∩ W3S W3S-Token) (∩ T W3S-Datum) -> (W3S-Token-Datumof T)]
+                                                         [(∩ W3S W3S-Token) (-> W3S (∩ T W3S-Datum)) -> (W3S-Token-Datumof T)]))
+  (lambda [instance datum]
+    (w3s-token-datum (assert (object-name instance) symbol?) (w3s-token-source instance)
+                     (w3s-token-line instance) (w3s-token-column instance)
+                     (w3s-token-start instance) (w3s-token-end instance)
+                     (if (procedure? datum) (datum instance) datum))))
+
+(define w3s-token->location+datum* : (All (W3S T) (-> (Option W3S) (-> W3S (∩ T W3S-Datum)) (Option (W3S-Token-Datumof T))))
+  (lambda [instance datum]
+    (and (w3s-token? instance)
+         ((inst w3s-token->location+datum (∩ W3S W3S-Token) T)
+          instance datum))))
 
 (define w3s-location+datum->token : (All (T W3S) (case-> [(W3S-Token-Constructor T W3S) (W3S-Token-Datumof T) -> W3S]
                                                          [(W3S-Token-Constructor T W3S) (W3S-Token-Datumof Any) T -> W3S]))
   (case-lambda
     [(make-w3s:token datum)
-     (make-w3s:token (vector-ref datum 1)
-                     (vector-ref datum 2) (vector-ref datum 3)
-                     (vector-ref datum 4) (vector-ref datum 5)
-                     (w3s-datum-payload datum))]
+     (make-w3s:token (w3s-token-datum-source datum)
+                     (w3s-token-datum-line datum) (w3s-token-datum-column datum)
+                     (w3s-token-datum-start datum) (w3s-token-datum-end datum)
+                     (w3s-token-datum-payload datum))]
     [(make-w3s:token datum payload)
-     (make-w3s:token (vector-ref datum 1)
-                     (vector-ref datum 2) (vector-ref datum 3)
-                     (vector-ref datum 4) (vector-ref datum 5)
+     (make-w3s:token (w3s-token-datum-source datum)
+                     (w3s-token-datum-line datum) (w3s-token-datum-column datum)
+                     (w3s-token-datum-start datum) (w3s-token-datum-end datum)
                      payload)]))
 
-(define w3s-location+datum->token* : (All (T W3S) (case-> [(W3S-Token-Constructor T W3S) (W3S-Token-Datumof T) -> (Option W3S)]
+(define w3s-location+datum->token* : (All (T W3S) (case-> [(W3S-Token-Constructor T W3S) (Option (W3S-Token-Datumof T)) -> (Option W3S)]
                                                           [(W3S-Token-Constructor T W3S) (W3S-Token-Datumof Any) (-> Any Boolean : T) -> (Option W3S)]))
   (case-lambda
     [(make-w3s:token datum)
-     (and (w3s-datum-instance-of? datum make-w3s:token)
+     (and datum
+          (w3s-token-datum-typeof? datum make-w3s:token)
           (w3s-location+datum->token make-w3s:token datum))]
     [(make-w3s:token datum type?)
-     (let ([payload (w3s-datum-payload datum)])
+     (let ([payload (w3s-token-datum-payload datum)])
        (and (type? payload)
-            (w3s-datum-instance-of? datum make-w3s:token)
+            (w3s-token-datum-typeof? datum make-w3s:token)
             (w3s-location+datum->token make-w3s:token datum payload)))]))
 
-(define w3s-datum-instance-of? : (All (T) (-> (W3S-Token-Datumof T) (U Struct-TypeTop Procedure) Boolean))
+(define w3s-token-datum-typeof? : (All (T) (-> (W3S-Token-Datumof T) (U Struct-TypeTop Procedure) Boolean))
   (lambda [datum struct:type]
-    (eq? (vector-ref datum 0)
+    (eq? (w3s-token-datum-typeid datum)
          (object-name struct:type))))
-
-(define w3s-datum-type-name : (-> (W3S-Token-Datumof Any) Symbol)
-  (lambda [datum]
-    (vector-ref datum 0)))
-
-(define w3s-datum-payload : (All (T) (-> (W3S-Token-Datumof T) T))
-  (lambda [datum]
-    (vector-ref datum 6)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define w3s-empty-stack : Continuation-Mark-Set (continuation-marks #false))

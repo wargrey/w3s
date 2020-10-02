@@ -31,7 +31,7 @@
            dtd [int-entities #false] [merge? #true]]
     (define-values (entities _)
       (xml-dtd-entity-expand/partition dtd int-entities merge? ipe-topsize
-                                       (and open-port (vector open-port xxe-topsize timeout))))
+                                       (and open-port (vector-immutable open-port xxe-topsize timeout))))
 
     entities))
 

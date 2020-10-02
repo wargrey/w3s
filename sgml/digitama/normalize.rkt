@@ -59,7 +59,7 @@
                             (Option Index) (Option Open-Input-XML-XXE) (Option Index) (Option Real)
                             (Values XML-Type (Listof XML-Content*)))
   (lambda [int-dtd ?ext-dtd content xml:lang xml:space xml:space-filter ipe-topsize open-port xxe-topsize timeout]
-    (define xxec : XML-XXE-Config (and open-port (vector open-port xxe-topsize timeout)))
+    (define xxec : XML-XXE-Config (and open-port (vector-immutable open-port xxe-topsize timeout)))
     (define dtype : XML-Type
       (xml-dtd-expand #:open-xxe-input-port open-port
                       #:ipe-topsize ipe-topsize #:xxe-topsize xxe-topsize #:xxe-timeout timeout
@@ -88,10 +88,10 @@
     ;  Declarations in the intsubset may refer to external (parameter) entities
     ;  whose values could depend on previously defined entities within the intsubset
     ;
-    ;  Although parameter entities references are not allowed inside the declarations
+    ;  Although parameter entity references are not allowed inside the declarations
     ;  in the internal DTD, SVG's extensibility depends on this feature.
 
-    (define xxec : XML-XXE-Config (and open-port (vector open-port xxe-topsize timeout)))
+    (define xxec : XML-XXE-Config (and open-port (vector-immutable open-port xxe-topsize timeout)))
     (define-values (int-entities iothers)
       (xml-dtd-entity-expand/partition dtd #false #true ipe-topsize xxec))
     
@@ -300,23 +300,23 @@
 (define xml-element-attribute-normalize/further : (-> XML:Name DTD-Attribute-Type XML:String (Option XML-Element-Attribute-Value*))
   (lambda [attname atype value]
     (cond [(dtd-attribute-string-type? atype) value]
-          [(dtd-attribute-name-type? atype)
-           (w3s-remake-token value xml:name
-                             (let ([clean-value (xml-attribute-token-value-consolidate value)])
-                               (case (xml:name-datum (dtd-attribute-token-type-name atype))
-                                 [(ENTITY) (string->unreadable-symbol clean-value)]
-                                 [else (string->symbol clean-value)])))]
-          [(dtd-attribute-names-type? atype)
-           (let ([names (string-split (xml:string-datum value))])
-             (map (λ [[name : Symbol]] (w3s-remake-token value xml:name name))
-                  (case (xml:name-datum (dtd-attribute-token-type-name atype))
-                    [(ENTITY) (map string->unreadable-symbol names)]
-                    [else (map string->symbol names)])))]
           [(dtd-attribute-enum-type? atype)
            (let ([option (string->symbol (xml-attribute-token-value-consolidate value))])
              (cond [(memq option (map xml:name-datum (dtd-attribute-enum-type-options atype))) (w3s-remake-token value xml:name option)]
                    [(and (eq? (xml:name-datum attname) 'xml:space) (memq option '(default preserve))) (w3s-remake-token value xml:name option)]
                    [else (make+exn:xml:enum value attname) #false]))]
+          [(dtd-attribute-token-type? atype)
+           (if (not (dtd-attribute-token-type-names? atype))
+               (w3s-remake-token value xml:name
+                                 (let ([clean-value (xml-attribute-token-value-consolidate value)])
+                                   (case (xml:name-datum (dtd-attribute-token-type-name atype))
+                                     [(ENTITY) (string->unreadable-symbol clean-value)]
+                                     [else (string->symbol clean-value)])))
+               (map (λ [[name : Symbol]] (w3s-remake-token value xml:name name))
+                    (let ([names (string-split (xml:string-datum value))])
+                      (case (xml:name-datum (dtd-attribute-token-type-name atype))
+                        [(ENTITIES) (map string->unreadable-symbol names)]
+                        [else (map string->symbol names)]))))]
           [else #| deadcode |# value])))
 
 (define xml-subelement-normalize : (-> XML:Name (Listof (U XML-Subdatum* XML-Element*)) XML-Type (Option String) Symbol (Option XML:Space-Filter)
@@ -886,7 +886,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define default-xml:space : (Parameterof Symbol) (make-parameter 'default))
 
-(define-type XML-XXE-Config (Option (Vector Open-Input-XML-XXE (Option Index) (Option Real))))
+(define-type XML-XXE-Config (Option (Immutable-Vector Open-Input-XML-XXE (Option Index) (Option Real))))
 
 (define empty-entities : DTD-Entities (make-immutable-hasheq))
 (define empty-notations : DTD-Notations (make-immutable-hasheq))

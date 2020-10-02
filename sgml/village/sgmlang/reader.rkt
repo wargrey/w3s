@@ -64,8 +64,13 @@
                    [(&doc.xml cpu real gc) (time-apply read-sgml-document* (list /dev/sgmlin))])
         (values (car &doc.xml) (w3s-memory-difference memory0) cpu real gc)))
 
-    (define-values (location version encoding standalone? sexp)
+    (define-values (location version encoding standalone? root-name external-id sexp)
       (xml-document->location+datum doc.xml))
+
+    (define-values (internal-dtd external-dtd)
+      (let ([?ext (xml-opaque-unbox (xml-document*-external-dtd doc.xml))])
+        (values (xml-dtd->location+datum (xml-document*-internal-dtd doc.xml))
+                (and ?ext (xml-dtd->location+datum ?ext)))))
     
     (define lang.sgml
       (cond [(path? src)
@@ -82,7 +87,7 @@
 
     (strip-context
      #`(module #,lang.sgml typed/racket/base
-         (provide (all-from-out #,sgml) #;#,lang.sgml)
+         (provide (all-from-out #,sgml) #,lang.sgml)
 
          (require #,sgml)
          (require css/village/hashlang/w3s)
@@ -90,6 +95,7 @@
          
          (define #,lang.sgml
            (xml-location+datum->document '#,location '#,version '#,encoding '#,standalone?
+                                         '#,root-name '#,external-id '#,internal-dtd '#,external-dtd 
                                          '#,sexp))
 
          (module+ main
