@@ -42,6 +42,8 @@
   #:transparent
   #:type-name XML-Document*)
 
+(define xml-alternative-document-source : (Parameterof (U String Symbol False)) (make-parameter #false))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define read-xml-document : (-> SGML-StdIn XML-Document)
   (lambda [/dev/rawin]
@@ -87,7 +89,7 @@
            /dev/rawin [ext-dtd xml-load-relative-system-entity] [open-xxe-port xml-load-relative-system-entity]]
     (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin #true))
     (define source : (U Symbol String) (sgml-port-name /dev/xmlin))
-    (define tokens : (Listof XML-Token) (read-xml-tokens* /dev/xmlin source))
+    (define tokens : (Listof XML-Token) (read-xml-tokens* /dev/xmlin (or (xml-alternative-document-source) source)))
     (define-values (doctype definitions grammars) (xml-syntax->content* tokens))
     (define-values (maybe-name external) (xml-doctype-values* doctype))
     

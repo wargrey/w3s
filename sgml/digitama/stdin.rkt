@@ -1,7 +1,6 @@
 #lang typed/racket/base
 
 (provide (all-defined-out))
-(provide xml-read-syntax xml-peek-syntax)
 
 (require racket/path)
 (require racket/port)
@@ -10,15 +9,6 @@
 (require css/digitama/syntax/stdin)
 
 (require "digicore.rkt")
-
-(require typed/racket/unsafe)
-
-(unsafe-require/typed
- racket/base ; the output is gauranteed by the caller, hence the explicitly requiring.
- [[read-byte-or-special xml-read-syntax] (->* (Input-Port) (U XML-Token EOF))]
- [[peek-byte-or-special xml-peek-syntax] (->* (Input-Port Natural) (U XML-Token EOF))])
-
-(require (for-syntax racket/base))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type SGML-StdIn (U Input-Port Path-String Bytes))

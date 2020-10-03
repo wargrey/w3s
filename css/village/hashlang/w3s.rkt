@@ -3,6 +3,7 @@
 (provide (all-defined-out))
 
 (require racket/format)
+(require racket/port)
 
 (require (for-syntax racket/base))
 (require (for-syntax syntax/parse))
