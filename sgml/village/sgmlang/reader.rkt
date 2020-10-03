@@ -9,6 +9,7 @@
 
 (require sgml/digitama/dtd)
 (require sgml/digitama/document)
+(require sgml/digitama/normalize)
 
 (require css/village/hashlang/w3s)
 
@@ -19,72 +20,26 @@
   (lambda [read-sgml-document /dev/xmlin]
     (read-sgml-document /dev/xmlin)))
 
-(define sgml-read-syntax
-  (lambda [read-sgml-document* sgml px.sgml .ext src /dev/sgmlin [sgml-normalize #false]]
-    (define-values (line column position) (port-next-location /dev/sgmlin))
-    (define bytes-bag (port->bytes /dev/sgmlin))
+(define sgml-doc-read-syntax
+  (lambda [read-sgml-document sgml px.sgml .ext src /dev/sgmlin [sgml-normalize #false]]
+    (define-values (lang.sgml lang*.sgml) (sgml-lang-names src px.sgml .ext))
+
+    (define-values (doc.sgml MB cpu real gc) (w3s-read-doc /dev/sgmlin read-sgml-document))
+    (define-values (location version encoding standalone? root-name external-id sexp) (xml-document->sexp doc.sgml))
+    (define-values (internal-dtd external-dtd type) (xml-dtd+type doc.sgml))
+
+    (define-values (doc.sgml* MB* cpu* real* gc*)
+      (cond [(not sgml-normalize) (values #false MB cpu real gc)]
+            [else (w3s-read-doc doc.sgml sgml-normalize)]))
+
+    (define-values (location* version* encoding* standalone?* root-name* external-id* sexp*)
+      (cond [(not doc.sgml*) (values location version encoding standalone? root-name external-id #false)]
+            [else (xml-document->sexp doc.sgml*)]))
+
+    (define-values (internal-dtd* external-dtd* type*)
+      (cond [(not doc.sgml*) (values internal-dtd external-dtd type)]
+            [else (xml-dtd+type doc.sgml*)]))
     
-    (define lang.sgml
-      (cond [(path? src)
-             (let* ([src.sgml (path-replace-extension (file-name-from-path src) #"")]
-                    [path.sgml (if (regexp-match? px.sgml src.sgml) src.sgml (path-replace-extension src.sgml .ext))])
-               (string->symbol (path->string path.sgml)))]
-            [else '|this should not happen| (string->symbol (format "lang~a" .ext))]))
-
-    (define lang*.sgml
-      (string->symbol
-       (format "~a*~a"
-         (path-replace-extension (symbol->string lang.sgml) #"")
-         .ext)))
-
-    (strip-context
-     #`(module #,lang.sgml typed/racket/base
-         (provide (all-from-out #,sgml) #;#,lang.sgml)
-
-         (require #,sgml)
-         (require css/village/hashlang/w3s)
-
-
-         (define-values (#,lang.sgml MB cpu real gc)
-           (w3s-read-doc '#,src #,bytes-bag #,line #,column #,position
-                         #,(object-name read-sgml-document*))) 
-
-         (module+ main
-           #,lang.sgml
-           (w3s-display-times '#,lang.sgml MB cpu real gc))
-
-         (w3s-doc-process #,sgml-normalize #,lang*.sgml
-                          MB* cpu* real* gc*
-                          #,lang.sgml)))))
-
-(define sgml-read-syntax*
-  (lambda [read-sgml-document* sgml px.sgml .ext src /dev/sgmlin [sgml-normalize #false]]
-    (define-values (doc.xml MB cpu real gc)
-      (let-values ([(memory0) (current-memory-use)]
-                   [(&doc.xml cpu real gc) (time-apply read-sgml-document* (list /dev/sgmlin))])
-        (values (car &doc.xml) (w3s-memory-difference memory0) cpu real gc)))
-
-    (define-values (location version encoding standalone? root-name external-id sexp)
-      (xml-document->location+datum doc.xml))
-
-    (define-values (internal-dtd external-dtd)
-      (let ([?ext (xml-opaque-unbox (xml-document*-external-dtd doc.xml))])
-        (values (xml-dtd->location+datum (xml-document*-internal-dtd doc.xml))
-                (and ?ext (xml-dtd->location+datum ?ext)))))
-    
-    (define lang.sgml
-      (cond [(path? src)
-             (let* ([src.sgml (path-replace-extension (file-name-from-path src) #"")]
-                    [path.sgml (if (regexp-match? px.sgml src.sgml) src.sgml (path-replace-extension src.sgml .ext))])
-               (string->symbol (path->string path.sgml)))]
-            [else '|this should not happen| (string->symbol (format "lang~a" .ext))]))
-
-    (define lang*.sgml
-      (string->symbol
-       (format "~a*~a"
-         (path-replace-extension (symbol->string lang.sgml) #"")
-         .ext)))
-
     (strip-context
      #`(module #,lang.sgml typed/racket/base
          (provide (all-from-out #,sgml) #,lang.sgml)
@@ -94,17 +49,77 @@
          (require sgml/village/sgmlang/syntax)
          
          (define #,lang.sgml
-           (xml-location+datum->document '#,location '#,version '#,encoding '#,standalone?
-                                         '#,root-name '#,external-id '#,internal-dtd '#,external-dtd 
-                                         '#,sexp))
+           (xml-syntax->document '#,location '#,version '#,encoding '#,standalone? #,root-name #,external-id
+                                 '#,internal-dtd '#,external-dtd #,type #,sexp))
 
          (module+ main
            #,lang.sgml
            (w3s-display-times '#,lang.sgml #,MB #,cpu #,real #,gc))
 
-         (w3s-doc-process #,sgml-normalize #,lang*.sgml
-                          MB* cpu* real* gc*
-                          #,lang.sgml)))))
+         #;(w3s-doc-process #,(object-name sgml-normalize)
+                          #:main+ #,(and sgml-normalize lang*.sgml) #,MB* #,cpu* #,real* #,gc*
+                          #:body (define #,lang*.sgml
+                                   (xml-sexp->document '#,location* '#,version* '#,encoding* '#,standalone?* '#,root-name* '#,external-id*
+                                                                 '#,internal-dtd* '#,external-dtd* '#,type* '#,sexp*)))))))
+
+(define sgml-type-read-syntax
+  (lambda [read-sgml-type sgml px.sgml .ext src /dev/sgmlin [sgml-expand #false]]
+    (define-values (lang.sgml lang*.sgml) (sgml-lang-names src px.sgml .ext))
+
+    (define-values (type.sgml MB cpu real gc) (w3s-read-doc /dev/sgmlin read-sgml-type))
+    (define sexp (xml-dtd->sexp type.sgml))
+
+    (define-values (doc.sgml* MB* cpu* real* gc*)
+      (cond [(not sgml-expand) (values #false MB cpu real gc)]
+            [else (w3s-read-doc type.sgml sgml-expand)]))
+
+    (define sexp*
+      (cond [(not doc.sgml*) sexp]
+            [else (xml-type->sexp doc.sgml*)]))
+    
+    (strip-context
+     #`(module #,lang.sgml typed/racket/base
+         (provide (all-from-out #,sgml) #,lang.sgml)
+
+         (require #,sgml)
+         (require sgml/village/sgmlang/syntax)
+         (require css/village/hashlang/w3s)
+         
+         (define #,lang.sgml (xml-sexp->dtd '#,sexp))
+
+         (module+ main
+           #;#,lang.sgml
+           (w3s-display-times '#,lang.sgml #,MB #,cpu #,real #,gc))
+
+         (w3s-doc-process #:main+ #,(and sgml-expand lang*.sgml) #,MB* #,cpu* #,real* #,gc*
+                          #:body (define #,lang*.sgml (xml-sexp->type '#,sexp*)))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define sgml-lang-names
+  (lambda [src px.sgml .ext]
+    (define lang.sgml
+      (cond [(path? src)
+             (let* ([src.sgml (path-replace-extension (file-name-from-path src) #"")]
+                    [path.sgml (if (regexp-match? px.sgml src.sgml) src.sgml (path-replace-extension src.sgml .ext))])
+               (string->symbol (path->string path.sgml)))]
+            [else '|this should not happen| (string->symbol (format "lang~a" .ext))]))
+
+    (define lang*.sgml
+      (string->symbol
+       (format "~a*~a"
+         (path-replace-extension (symbol->string lang.sgml) #"")
+         .ext)))
+
+    (values lang.sgml lang*.sgml)))
+
+(define xml-dtd+type
+  (lambda [doc.xml]
+    (define ?ext (xml-opaque-unbox (xml-document*-external-dtd doc.xml)))
+    (define ?type (xml-opaque-unbox (xml-document*-type doc.xml)))
+    
+    (values (xml-dtd->sexp (xml-document*-internal-dtd doc.xml))
+            (and ?ext (xml-dtd->sexp ?ext))
+            (and ?type (xml-type->sexp ?type)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-read
@@ -113,8 +128,8 @@
 
 (define xml-read-syntax
   (lambda [[src #false] [/dev/xmlin (current-input-port)]]
-    (sgml-read-syntax* read-xml-document* 'sgml/xml #px"\\.xml$" ".xml" src /dev/xmlin
-                       'xml-document*-normalize)))
+    (sgml-doc-read-syntax read-xml-document* 'sgml/xml #px"\\.xml$" ".xml" src /dev/xmlin
+                          xml-document*-normalize)))
 
 (define dtd-read
   (lambda [[/dev/xmlin (current-input-port)]]
@@ -122,8 +137,8 @@
 
 (define dtd-read-syntax
   (lambda [[src #false] [/dev/dtdin (current-input-port)]]
-    (sgml-read-syntax read-xml-type-definition 'sgml/dtd #px"\\.dtd$" ".dtd" src /dev/dtdin
-                      'xml-dtd-expand)))
+    (sgml-type-read-syntax read-xml-type-definition 'sgml/dtd #px"\\.dtd$" ".dtd" src /dev/dtdin
+                           xml-dtd-expand)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (xml-info in mod line col pos)

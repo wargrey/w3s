@@ -10,8 +10,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type DTD-Attribute-Type (U DTD-Attribute-String-Type DTD-Attribute-Token-Type DTD-Attribute-Enum-Type))
 
-(define-type DTD-Element-Sequence (Immutable-Vectorof (Pairof Char (U XML:Name DTD-Element-Children))))
-(define-type DTD-Element-Choice (Listof (Pairof Char (U XML:Name DTD-Element-Children))))
+(define-type DTD-Element-Sequence (Immutable-Vectorof (Pairof (U XML:Name DTD-Element-Children) Char)))
+(define-type DTD-Element-Choice (Listof (Pairof (U XML:Name DTD-Element-Children) Char)))
 (define-type DTD-Element-Children (U DTD-Element-Sequence DTD-Element-Choice))
 
 (define-type DTD-Raw-Declaration* (Immutable-Vector XML:Name (Listof XML-Token)))
@@ -114,7 +114,7 @@
   #:type-name DTD-Mixed-Element)
 
 (struct dtd-element+children dtd-element
-  ([content : (Pairof Char DTD-Element-Children)])
+  ([content : (Pairof DTD-Element-Children Char)])
   #:transparent
   #:type-name DTD-Element+Children)
 
@@ -251,7 +251,7 @@
                                                 [else (make+exn:xml:enum ?content ELEMENT)])]))]))]))))
 
 (define xml-dtd-extract-element-content* : (-> XML:Name (Listof XML-Token)
-                                               (Values (U (Boxof (Listof XML:Name)) (Pairof Char DTD-Element-Children) XML-Syntax-Error)
+                                               (Values (U (Boxof (Listof XML:Name)) (Pairof DTD-Element-Children Char) XML-Syntax-Error)
                                                        (Listof XML-Token)))
   (lambda [elem body]
     (cond [(null? body) (values (make+exn:xml:malformed body elem) null)]
@@ -265,10 +265,10 @@
                                             [else (values (box null) rest++ #| let the caller deal with the malformation |#)]))]))
                       (xml-dtd-extract-element-children* elem body)))])))
 
-(define xml-dtd-extract-element-children* : (-> XML:Name (Listof XML-Token) (Values (U (Pairof Char DTD-Element-Children) XML-Syntax-Error) (Listof XML-Token)))
+(define xml-dtd-extract-element-children* : (-> XML:Name (Listof XML-Token) (Values (U (Pairof DTD-Element-Children Char) XML-Syntax-Error) (Listof XML-Token)))
   (lambda [elem body]
     (let extract-children ([rest : (Listof XML-Token) body]
-                           [nerdlihc : (Listof (Pairof Char (U XML:Name DTD-Element-Children))) null]
+                           [nerdlihc : (Listof (Pairof (U XML:Name DTD-Element-Children) Char)) null]
                            [sep? : Boolean #true]
                            [sep : (Option Char) #false])
       (cond [(null? body) (values (make+exn:xml:malformed body elem) null)]
@@ -276,7 +276,7 @@
                     (cond [(xml:name? ?e)
                            (let-values ([(p rest*) (xml-dtd-extract-element-children-particle* rest++)])
                              (when (not sep?) (make+exn:xml:malformed ?e elem))
-                             (extract-children rest* (if (not sep?) nerdlihc (cons (cons p ?e) nerdlihc)) #false sep))]
+                             (extract-children rest* (if (not sep?) nerdlihc (cons (cons ?e p) nerdlihc)) #false sep))]
                           [(xml:delim? ?e)
                            (let ([delim (xml:delim-datum ?e)])
                              (cond [(eq? delim #\|)
@@ -288,8 +288,8 @@
                                    [(eq? delim #\))
                                     (let-values ([(p rest*) (xml-dtd-extract-element-children-particle* rest++)]
                                                  [(content) (reverse nerdlihc)])
-                                      (values (cond [(eq? sep #\|) (cons p content)]
-                                                    [else (cons p (apply vector-immutable content))])
+                                      (values (cond [(eq? sep #\|) (cons content p)]
+                                                    [else (cons (apply vector-immutable content) p)])
                                               rest*))]
                                    [(eq? delim #\()
                                     (let-values ([(?content rest*) (extract-children rest++ null #true #false)])

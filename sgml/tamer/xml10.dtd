@@ -1,0 +1,42 @@
+#lang sgml/dtd
+
+<!ATTLIST poem  xml:space (default|preserve) 'preserve'>
+<!ATTLIST pre xml:space (preserve) #FIXED 'preserve'>
+
+<!ATTLIST poem   xml:lang CDATA 'fr'>
+<!ATTLIST gloss  xml:lang CDATA 'en'>
+<!ATTLIST note   xml:lang CDATA 'en'>
+
+<!ELEMENT br EMPTY>
+<!ELEMENT container ANY>
+<!ELEMENT spec (front, body, back?)>
+<!ELEMENT div1 (head, (p | list | note)*, div2*)>
+
+<!ELEMENT p (#PCDATA|a|ul|b|i|em)*>
+<!ELEMENT b (#PCDATA)>
+
+<!ATTLIST termdef
+          id      ID      #REQUIRED
+          name    CDATA   #IMPLIED>
+
+<!ATTLIST list
+          type    (bullets|ordered|glossary)  "ordered">
+
+<!ATTLIST form
+          method  CDATA   #FIXED "POST">
+
+<!ENTITY open-hatch
+         PUBLIC "-//Textuality//TEXT Standard open-hatch boilerplate//EN"
+         "http://www.textuality.com/boilerplate/OpenHatch.xml">
+
+<!ENTITY hatch-pic
+         SYSTEM "../grafix/OpenHatch.gif"
+         NDATA gif >
+
+<!ENTITY % YN '"Yes"' >
+<!ENTITY WhatHeSaid "He said %YN;" >
+
+<!ENTITY % pub    "&#xc9;ditions Gallimard" >
+<!ENTITY   rights "All rights reserved" >
+<!ENTITY   book   "La Peste: Albert Camus,
+&#xA9; 1947 %pub;. &rights;" >

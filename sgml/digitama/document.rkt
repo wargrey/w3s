@@ -61,7 +61,7 @@
                   dtd grammars)))
 
 (define make-xml-document* : (-> (U String Symbol) (Option Nonnegative-Flonum) (Option String) Boolean
-                                 (Option XML:Name) XML-External-ID* XML-DTD (Option XML-DTD) (Option XML-Type)
+                                 (Option XML:Name) XML-External-ID* (Option XML-DTD) (Option XML-DTD) (Option XML-Type)
                                  (Listof XML-Content*)
                                  XML-Document*)
   (lambda [source version encoding standalone? maybe-name external intdtd xxedtd type contents]
@@ -73,7 +73,9 @@
                     external))
     
     (xml-document* (xml-prolog source version encoding standalone?) doc-type
-                   intdtd (xml-opaque xxedtd) (xml-opaque type) contents)))
+                   (or intdtd (xml-make-type-definition source null))
+                   (xml-opaque xxedtd) (xml-opaque type)
+                   contents)))
 
 (define read-xml-document* : (->* (SGML-StdIn)
                                   ((U False XML-DTD Open-Input-XML-XXE) (Option Open-Input-XML-XXE)
