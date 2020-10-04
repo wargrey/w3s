@@ -142,8 +142,8 @@
                      [attributes : DTD-Attributes empty-element-attributes])
       (cond [(null? rest) (xml-type entities notations elements attributes)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
-                    (cond [(dtd-element? self) (expand-dtd rest++ notations (dtd-element-cons self elements) attributes)]
-                          [(dtd-attlist? self) (expand-dtd rest++ notations elements (dtd-attributes-cons self attributes))]
+                    (cond [(dtd-attribute? self) (expand-dtd rest++ notations elements (dtd-attributes-cons self attributes))]
+                          [(dtd-element? self) (expand-dtd rest++ notations (dtd-element-cons self elements) attributes)]
                           [(dtd-notation? self) (expand-dtd rest++ (dtd-notation-cons self notations) elements attributes)]
                           [else (or (and (vector? self)
                                          (let ([DECL (vector-ref self 0)]
@@ -151,8 +151,8 @@
                                            (case (xml:name-datum DECL)
                                              [(ATTLIST)
                                               (let ([?attr (xml-dtd-expand-raw-declaration xml-dtd-extract-attributes* DECL body entities topsize xxec)])
-                                                (and (dtd-attlist? ?attr)
-                                                     (expand-dtd rest++ notations elements (dtd-attributes-cons ?attr attributes))))]
+                                                (and (list? ?attr)
+                                                     (expand-dtd (append (reverse ?attr) rest++) notations elements attributes)))]
                                              [(ELEMENT)
                                               (let ([?elem (xml-dtd-expand-raw-declaration xml-dtd-extract-element* DECL body entities topsize xxec)])
                                                 (and (dtd-element? ?elem)
@@ -564,17 +564,16 @@
       (cond [(not (hash-has-key? elements name)) (hash-set elements name e)]
             [else (make+exn:xml:duplicate etoken) elements]))))
 
-(define dtd-attributes-cons : (-> DTD-AttList DTD-Attributes DTD-Attributes)
-  (lambda [as attributes]
-    (let* ([etoken (dtd-attlist-element as)]
+(define dtd-attributes-cons : (-> DTD-Attribute DTD-Attributes DTD-Attributes)
+  (lambda [a attributes]
+    (let* ([etoken (dtd-attribute-element a)]
            [ename (xml:name-datum etoken)])
       (hash-set attributes ename
-                (for/fold ([apool : (Immutable-HashTable Symbol DTD-Attribute) (hash-ref attributes ename (λ [] empty-attributes))])
-                          ([a (in-list (dtd-attlist-body as))])
-                  (let* ([atoken (dtd-attribute-name a)]
-                         [aname (xml:name-datum atoken)])
-                    (cond [(not (hash-has-key? apool aname)) (hash-set apool aname a)]
-                          [else (make+exn:xml:duplicate atoken etoken) apool])))))))
+                (let* ([apool (hash-ref attributes ename (λ [] empty-attributes))]
+                       [atoken (dtd-attribute-name a)]
+                       [aname (xml:name-datum atoken)])
+                  (cond [(not (hash-has-key? apool aname)) (hash-set apool aname a)]
+                        [else (make+exn:xml:duplicate atoken etoken) apool]))))))
 
 (define dtd-cdata-cons : (-> (Listof XML-CDATA-Token) (Option XML-CDATA-Token) (Option XML-CDATA-Token) (Listof (U XML-Subdatum* XML-Element*))
                              (Listof (U XML-Subdatum* XML-Element*)))

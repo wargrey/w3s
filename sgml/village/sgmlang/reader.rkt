@@ -21,7 +21,7 @@
     (read-sgml-document /dev/xmlin)))
 
 (define sgml-doc-read-syntax
-  (lambda [read-sgml-document sgml px.sgml .ext src /dev/sgmlin [sgml-normalize #false]]
+  (lambda [read-sgml-document DocType sgml px.sgml .ext src /dev/sgmlin [sgml-normalize #false]]
     (define-values (lang.sgml lang*.sgml) (sgml-lang-names src px.sgml .ext))
 
     (define-values (doc.sgml MB cpu real gc) (w3s-read-doc /dev/sgmlin read-sgml-document))
@@ -33,7 +33,7 @@
             [else (w3s-read-doc doc.sgml sgml-normalize)]))
 
     (define-values (location* version* encoding* standalone?* root-name* external-id* sexp*)
-      (cond [(not doc.sgml*) (values location version encoding standalone? root-name external-id #false)]
+      (cond [(not doc.sgml*) (values location version encoding standalone? root-name external-id sexp)]
             [else (xml-document->sexp doc.sgml*)]))
 
     (define-values (internal-dtd* external-dtd* type*)
@@ -48,22 +48,21 @@
          (require css/village/hashlang/w3s)
          (require sgml/village/sgmlang/expander)
          
-         (define #,lang.sgml
-           (xml-syntax->document '#,location '#,version '#,encoding '#,standalone? #,root-name #,external-id
+         (define #,lang.sgml : #,DocType
+           (xml-syntax->document '#,location #,version #,encoding #,standalone? #,root-name #,external-id
                                  #,internal-dtd #,external-dtd #,type #,sexp))
-
+         
          (module+ main
            #,lang.sgml
            (w3s-display-times '#,lang.sgml #,MB #,cpu #,real #,gc))
 
-         (w3s-doc-process #,(object-name sgml-normalize)
-                          #:main+ #,(and sexp* lang*.sgml) #,MB* #,cpu* #,real* #,gc*
-                          #:body (define #,lang*.sgml
-                                   (xml-sexp->document '#,location* '#,version* '#,encoding* '#,standalone?* #,root-name* #,external-id*
-                                                       #,internal-dtd* #,external-dtd* #,type* #,sexp*)))))))
+         (w3s-doc-process #:main+ #,(and doc.sgml* lang*.sgml) #,MB* #,cpu* #,real* #,gc*
+                          #:body (define #,lang*.sgml : #,DocType
+                                   (xml-syntax->document '#,location* #,version* #,encoding* #,standalone?* #,root-name* #,external-id*
+                                                         #,internal-dtd* #,external-dtd* #,type* #,sexp*)))))))
 
 (define sgml-type-read-syntax
-  (lambda [read-sgml-type sgml px.sgml .ext src /dev/sgmlin [sgml-expand #false]]
+  (lambda [read-sgml-type Type Expanded-Type sgml px.sgml .ext src /dev/sgmlin [sgml-expand #false]]
     (define-values (lang.sgml lang*.sgml) (sgml-lang-names src px.sgml .ext))
 
     (define-values (type.sgml MB cpu real gc) (w3s-read-doc /dev/sgmlin read-sgml-type))
@@ -85,14 +84,14 @@
          (require css/village/hashlang/w3s)
          (require sgml/village/sgmlang/expander)
          
-         (define #,lang.sgml (xml-syntax->dtd #:subset #,sexp))
+         (define #,lang.sgml : #,Type (xml-syntax->dtd #:subset #,sexp))
 
          (module+ main
            #,lang.sgml
            (w3s-display-times '#,lang.sgml #,MB #,cpu #,real #,gc))
 
          (w3s-doc-process #:main+ #,(and doc.sgml* lang*.sgml) #,MB* #,cpu* #,real* #,gc*
-                          #:body (define #,lang*.sgml (xml-syntax->type #,sexp*)))))))
+                          #:body (define #,lang*.sgml : #,Expanded-Type (xml-syntax->type #,sexp*)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define sgml-lang-names
@@ -129,7 +128,8 @@
 (define xml-read-syntax
   (lambda [[src #false] [/dev/xmlin (current-input-port)]]
     (parameterize ([xml-alternative-document-source (path->string src)])
-      (sgml-doc-read-syntax read-xml-document* 'sgml/xml #px"\\.xml$" ".xml" src /dev/xmlin
+      (sgml-doc-read-syntax read-xml-document* 'XML-Document*
+                            'sgml/xml #px"\\.xml$" ".xml" src /dev/xmlin
                             xml-document*-normalize))))
 
 (define dtd-read
@@ -139,7 +139,8 @@
 (define dtd-read-syntax
   (lambda [[src #false] [/dev/dtdin (current-input-port)]]
     (parameterize ([xml-alternative-document-source (path->string src)])
-      (sgml-type-read-syntax read-xml-type-definition 'sgml/dtd #px"\\.dtd$" ".dtd" src /dev/dtdin
+      (sgml-type-read-syntax read-xml-type-definition 'XML-DTD 'XML-Type
+                             'sgml/dtd #px"\\.dtd$" ".dtd" src /dev/dtdin
                              xml-dtd-expand))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

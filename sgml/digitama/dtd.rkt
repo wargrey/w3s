@@ -18,7 +18,7 @@
 
 (define-type DTD-Definition*
   (U XML-Processing-Instruction* DTD-Entity DTD-Notation
-     DTD-Element DTD-AttList DTD-Raw-Declaration*))
+     DTD-Element DTD-Attribute DTD-Raw-Declaration*))
 
 (define-type DTD-Declaration*
   (Rec defs (U DTD-Definition* XML:PEReference
@@ -92,12 +92,6 @@
   #:transparent
   #:type-name DTD-Attribute+Default)
 
-(struct dtd-attlist
-  ([element : XML:Name]
-   [body : (Listof DTD-Attribute)])
-  #:transparent
-  #:type-name DTD-AttList)
-
 (struct dtd-element
   ([name : XML:Name])
   #:transparent
@@ -166,7 +160,7 @@
                                     (filter-definition rest++ (if (dtd-entity? e) (cons e snoitaralced) snoitaralced)))]
                                  [(ATTLIST)
                                   (let ([a (xml-dtd-extract-attributes* DECL (vector-ref self 1))])
-                                    (cond [(dtd-attlist? a) (filter-definition rest++ (cons a snoitaralced))]
+                                    (cond [(list? a) (filter-definition rest++ (append a snoitaralced))]
                                           [(vector? a) (filter-definition rest++ (cons a snoitaralced))]
                                           [else (filter-definition rest++ snoitaralced)]))]
                                  [(ELEMENT)
@@ -311,7 +305,7 @@
                         [else (values defchar body)]))])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-dtd-extract-attributes* : (-> XML:Name (Listof XML-Doctype-Body*) (U DTD-AttList XML-Syntax-Error DTD-Raw-Declaration* Void))
+(define xml-dtd-extract-attributes* : (-> XML:Name (Listof XML-Doctype-Body*) (U (Listof DTD-Attribute) XML-Syntax-Error DTD-Raw-Declaration* Void))
   (lambda [ATTLIST body]
     (define tokens : (U (Listof XML-Token) XML-Syntax-Error Void) (xml-dtd-filter-tokens ATTLIST body))
     
@@ -322,7 +316,7 @@
                     (if (xml:name? ?element)
                         (let extract-attribute ([altokens : (Listof XML-Token) rest]
                                                 [setubirtta : (Listof DTD-Attribute) null])
-                          (cond [(null? altokens) (dtd-attlist ?element (reverse setubirtta))]
+                          (cond [(null? altokens) setubirtta]
                                 [else (let-values ([(?attr albody) (values (car altokens) (cdr altokens))])
                                         (if (xml:name? ?attr)
                                             (let*-values ([(?t albody++) (xml-dtd-extract-attribute-type* ?attr albody)]

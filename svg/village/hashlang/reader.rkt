@@ -19,7 +19,8 @@
 
 (define svg-read-syntax
   (lambda [[src #false] [/dev/svgin (current-input-port)]]
-    (sgml-doc-read-syntax read-svg-document* 'svg #px"\\.svg$" ".svg" src /dev/svgin
+    (sgml-doc-read-syntax read-svg-document* 'XML-Document*
+                          'svg #px"\\.svg$" ".svg" src /dev/svgin
                           svg-document*-normalize)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

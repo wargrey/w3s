@@ -110,7 +110,7 @@
     [(_ #:subset false) #'#false]
     [(_ (#:entity sexp ...)) #'(dtd-syntax->entity sexp ...)]
     [(_ (#:element sexp ...)) #'(dtd-syntax->element sexp ...)]
-    [(_ (#:dtd-attlist ename [[attr ...] ...])) #'(dtd-attlist (token-syntax->datum ename) (list (dtd-syntax->attribute attr ...) ...))]
+    [(_ (#:attribute sexp ...)) #'(dtd-syntax->attribute sexp ...)]
     [(_ (#:notation sexp ...)) #'(dtd-syntax->notation sexp ...)]
     [(_ (#:condsection condition section ...)) #'(cons (token-syntax->datum condition) (list (xml-syntax->dtd section) ...))]
     [(_ #(raw-datum ...)) #'(vector-immutable (token-syntax->datum raw-datum) ...)]
@@ -154,8 +154,7 @@
                                                      (list (cons 'att-name
                                                                  (dtd-syntax->attribute
                                                                   att-id att-datum ...)) ...))) ...)))]
-    [(_ nothing ...)
-     #'#false]))
+    [(_ false ...) #'#false]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-document->sexp : (-> XML-Document* (Values W3S-Token-Source (Option Nonnegative-Flonum) (Option String) Boolean Any Any (Listof Any)))
@@ -182,6 +181,7 @@
               (cond [(pair? d) (list* '#:condsection (xml-datum->sexp (car d)) (dtd-declaration->sexp (cdr d)))]
                     [(dtd-entity? d) (list* '#:entity (xml-datum->sexp d))]
                     [(dtd-element? d) (list* '#:element (xml-datum->sexp d))]
+                    [(dtd-attribute? d) (list* '#:attribute (xml-datum->sexp d))]
                     [(dtd-notation? d) (list* '#:notation (xml-datum->sexp d))]
                     [else (xml-datum->sexp d)]))))))
 
