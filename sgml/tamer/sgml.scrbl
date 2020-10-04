@@ -14,14 +14,17 @@ The @the-name is a typed XML parsing library which originally designed for my @r
 engine. That is, this library itself is not adequate for dealing with XML sources that used as data
 models.
 
-Meanwhile, @the-name will:
+Meanwhile, @|the-name|:
 
 @itemlist[
- @item{provide a sort of APIs to read and deal with the @tech{XML document}, with or without tokens
-  information.}
+ @item{provides a sort of APIs to read and deal with the @tech{XML document}, with or without source
+  location information.}
   
- @item{provide a Racket language @litchar{#lang sgml/xml} for embedding @tech{XML document}s in compiled
+ @item{provides a Racket language @litchar{#lang sgml/xml} for embedding @tech{XML Document}s in compiled
   files, as well as hightlighting XML files.}
+
+ @item{provides a Racket language @litchar{#lang sgml/dtd} for embedding @tech{XML Document Type Definition}s
+  in compiled files, as well as hightlighting DTD files.}                                             
  ]
 
 @handbook-smart-table[]

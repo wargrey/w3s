@@ -14,9 +14,12 @@ dealing with XML sources that used as data models.
 Meanwhile, `sgml/xml` will:
 
 * provide a sort of APIs to read and deal with the XML document, with or
-  without tokens information.
+  without source location information.
 
 * provide a Racket language `#lang sgml/xml` for embedding XML documents
   in compiled files, as well as hightlighting XML files.
+
+* provide a Racket language `#lang sgml/dtd` for embedding XML Type
+  Definitions in compiled files, as well as hightlighting DTD files.
 
 

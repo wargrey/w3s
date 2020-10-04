@@ -15,7 +15,7 @@
 (require css/digitama/syntax/w3s)
 
 (require (for-syntax racket/base))
-(require (for-syntax racket/syntax))
+(require (for-syntax syntax/parse))
 
 (require (for-syntax sgml/digitama/dtd))
 (require (for-syntax sgml/digitama/digicore))
@@ -29,18 +29,8 @@
  [mpair? (-> Any Boolean : (MPairof Any Any))])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(begin-for-syntax
-  (define (token-datum->syntax <datum>)
-    (define datum (syntax-e <datum>))
-
-    (cond [(and (list? datum) (= (length datum) 7) (keyword? (syntax-e (car datum))))
-           (let ([start (syntax-e (list-ref datum 4))])
-             (datum->syntax <datum> (syntax-e (list-ref datum 6))
-                            <datum>))]
-          [else <datum>])))
-
 (define-syntax (token-syntax->datum stx)
-  (syntax-case stx []
+  (syntax-parse stx #:datum-literals []
     [(_ (#:xml:pereference datum ...)) #'(xml:pereference 'datum ...)]
     [(_ (#:xml:reference datum ...)) #'(xml:reference 'datum ...)]
     [(_ (#:xml:name datum ...)) #'(xml:name 'datum ...)]
@@ -58,54 +48,39 @@
     [(_ datum) #''datum]))
 
 (define-syntax (dtd-syntax->entity stx)
-  (syntax-case stx []
+  (syntax-parse stx #:datum-literals []
     [(_ #:dtd-token-entity datum ...) #'(dtd-token-entity (token-syntax->datum datum) ... null)]
     [(_ #:dtd-unparsed-entity datum ...) #'(dtd-unparsed-entity (token-syntax->datum datum) ...)]
-    [(_ #:dtd-external-entity datum ...) #'(dtd-external-entity (token-syntax->datum datum) ...)]
-    [(_ error extra ...) (raise-syntax-error #false "dtd-syntax->entity"
-                                             (token-datum->syntax #'error) #false
-                                             (map token-datum->syntax (syntax->list #'(extra ...))))]))
+    [(_ #:dtd-external-entity datum ...) #'(dtd-external-entity (token-syntax->datum datum) ...)]))
 
 (define-syntax (dtd-syntax->notation stx)
-  (syntax-case stx []
-    [(_ #:dtd-notation datum ...) #'(dtd-notation (token-syntax->datum datum) ...)]
-    [(_ error extra ...) (raise-syntax-error #false "dtd-syntax->notation"
-                                             (token-datum->syntax #'error) #false
-                                             (map token-datum->syntax (syntax->list #'(extra ...))))]))
+  (syntax-parse stx #:datum-literals []
+    [(_ #:dtd-notation datum ...) #'(dtd-notation (token-syntax->datum datum) ...)]))
 
 (define-syntax (dtd-syntax->element stx)
-  (syntax-case stx []
+  (syntax-parse stx #:datum-literals []
     [(_ #:dtd-empty-element datum ...) #'(dtd-empty-element (token-syntax->datum datum) ...)]
     [(_ #:dtd-element+children datum ...) #'(dtd-element+children (token-syntax->datum datum) ...)]
     [(_ #:dtd-mixed-element datum ...) #'(dtd-mixed-element (token-syntax->datum datum) ...)]
-    [(_ #:dtd-element datum ...) #'(dtd-element (token-syntax->datum datum) ...)]
-    [(_ error extra ...) (raise-syntax-error #false "dtd-syntax->element"
-                                             (token-datum->syntax #'error) #false
-                                             (map token-datum->syntax (syntax->list #'(extra ...))))]))
+    [(_ #:dtd-element datum ...) #'(dtd-element (token-syntax->datum datum) ...)]))
 
 (define-syntax (dtd-syntax->attribute-type stx)
-  (syntax-case stx []
+  (syntax-parse stx #:datum-literals []
     [(_ (#:dtd-attribute-token-type datum ...)) #'(dtd-attribute-token-type (token-syntax->datum datum) ...)]
     [(_ (#:dtd-attribute-enum-type [options ...] flag)) #'(dtd-attribute-enum-type (list (token-syntax->datum options) ...) flag)]
-    [(_ (#:dtd-attribute-string-type placeholder ...)) #'dtd:attribute:cdata]
-    [(_ (error extra ...)) (raise-syntax-error #false "dtd-syntax->attribute-type"
-                                               (token-datum->syntax #'error) #false
-                                               (map token-datum->syntax (syntax->list #'(extra ...))))]))
+    [(_ (#:dtd-attribute-string-type placeholder ...)) #'dtd:attribute:cdata]))
 
 (define-syntax (dtd-syntax->attribute stx)
-  (syntax-case stx []
+  (syntax-parse stx #:datum-literals []
     [(_ #:dtd-attribute element name type datum ...)
      #'(dtd-attribute (token-syntax->datum element) (token-syntax->datum name) (dtd-syntax->attribute-type type) (token-syntax->datum datum) ...)]
     [(_ #:dtd-attribute/required element name type datum ...)
      #'(dtd-attribute/required (token-syntax->datum element) (token-syntax->datum name) (dtd-syntax->attribute-type type) (token-syntax->datum datum) ...)]
     [(_ #:dtd-attribute+default element name type datum ...)
-     #'(dtd-attribute+default (token-syntax->datum element) (token-syntax->datum name) (dtd-syntax->attribute-type type) (token-syntax->datum datum) ...)]
-    [(_ error extra ...) (raise-syntax-error #false "dtd-syntax->attribute"
-                                             (token-datum->syntax #'error) #false
-                                             (map token-datum->syntax (syntax->list #'(extra ...))))]))
+     #'(dtd-attribute+default (token-syntax->datum element) (token-syntax->datum name) (dtd-syntax->attribute-type type) (token-syntax->datum datum) ...)]))
 
 (define-syntax (xml-syntax->dtd stx)
-  (syntax-case stx []
+  (syntax-parse stx #:datum-literals []
     [(_ #:subset [source declaration ...]) #'(xml-dtd source (list (xml-syntax->dtd declaration) ...))]
     [(_ #:subset false) #'#false]
     [(_ (#:entity sexp ...)) #'(dtd-syntax->entity sexp ...)]
@@ -117,7 +92,7 @@
     [(_ token/pi) #'(token-syntax->datum token/pi)]))
 
 (define-syntax (xml-syntax->content stx)
-  (syntax-case stx []
+  (syntax-parse stx #:datum-literals []
     [(_ #:root-element [content ...])
      #'(list (xml-syntax->content content) ...)]
     [(_ [tagname [(attrname . attrvalue) ...] [children ...]])
@@ -127,7 +102,7 @@
     [(_ pi) #'(token-syntax->datum pi)]))
 
 (define-syntax (xml-syntax->document stx)
-  (syntax-case stx []
+  (syntax-parse stx #:datum-literals []
     [(_ location version encoding standalone? root-name external-id internal-dtd ?external-dtd ?type contents)
      #'(make-xml-document* location version encoding standalone?
 
@@ -141,7 +116,7 @@
                            (xml-syntax->content #:root-element contents))]))
 
 (define-syntax (xml-syntax->type stx)
-  (syntax-case stx []
+  (syntax-parse stx #:datum-literals []
     [(_ [[[ent-name ent-id ent-datum ...] ...]
          [[not-name not-id not-datum ...] ...]
          [[ele-name ele-id ele-datum ...] ...]
