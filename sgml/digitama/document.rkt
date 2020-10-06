@@ -12,11 +12,12 @@
 (require "grammar.rkt")
 (require "normalize.rkt")
 
+(require "plain/grammar.rkt")
+
 (require "digicore.rkt")
 (require "stdin.rkt")
 
 (require "tokenizer/port.rkt")
-(require "tokenizer/grammar.rkt")
 (require "tokenizer.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

@@ -8,6 +8,7 @@
 (require syntax/strip-context)
 
 (require sgml/digitama/dtd)
+(require sgml/digitama/validity)
 (require sgml/digitama/document)
 (require sgml/digitama/normalize)
 
@@ -39,7 +40,7 @@
     (define-values (internal-dtd* external-dtd* type*)
       (cond [(not doc.sgml*) (values internal-dtd external-dtd type)]
             [else (xml-dtd+type doc.sgml*)]))
-    
+
     (strip-context
      #`(module #,lang.sgml typed/racket/base
          (provide (all-from-out #,sgml) #,lang.sgml)

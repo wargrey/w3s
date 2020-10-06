@@ -11,15 +11,16 @@ The `sgml/xml` is a typed XML parsing library which originally designed
 for my `svg` engine. That is, this library itself is not adequate for
 dealing with XML sources that used as data models.
 
-Meanwhile, `sgml/xml` will:
+Meanwhile, `sgml/xml`:
 
-* provide a sort of APIs to read and deal with the XML document, with or
-  without source location information.
+* provides a sort of APIs to read and deal with the XML document, with
+  or without source location information.
 
-* provide a Racket language `#lang sgml/xml` for embedding XML documents
-  in compiled files, as well as hightlighting XML files.
+* provides a Racket language `#lang sgml/xml` for embedding XML
+  Documents in compiled files, as well as hightlighting XML files.
 
-* provide a Racket language `#lang sgml/dtd` for embedding XML Type
-  Definitions in compiled files, as well as hightlighting DTD files.
+* provides a Racket language `#lang sgml/dtd` for embedding XML Document
+  Type Definitions in compiled files, as well as hightlighting DTD
+  files.
 
 

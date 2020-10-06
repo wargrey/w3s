@@ -4,8 +4,8 @@
 
 (require racket/list)
 
-(require "port.rkt")
-(require "delimiter.rkt")
+(require "../tokenizer/port.rkt")
+(require "../tokenizer/delimiter.rkt")
 
 (require "../doctype.rkt")
 

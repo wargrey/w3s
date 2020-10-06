@@ -33,6 +33,8 @@ type    (bullets|ordered|glossary)  "ordered">
 <!ATTLIST form
 method  CDATA   #FIXED "POST">
 
+<!ELEMENT normalize ANY>
+
 <!ELEMENT br EMPTY>
 <!ELEMENT p (#PCDATA|emph)* >
 <!ELEMENT container ANY>
