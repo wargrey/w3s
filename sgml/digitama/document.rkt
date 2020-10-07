@@ -81,7 +81,7 @@
                    contents)))
 
 (define read-xml-document* : (->* (SGML-StdIn)
-                                  ((U False XML-DTD Open-Input-XML-XXE) (Option Open-Input-XML-XXE)
+                                  ((Option Open-Input-XML-XXE) (Option Open-Input-XML-XXE)
                                    #:ipe-topsize (Option Index) #:xxe-topsize (Option Index) #:xxe-timeout (Option Real)
                                    #:normalize? Boolean #:xml:lang String #:xml:space Symbol #:xml:space-filter (Option XML:Space-Filter))
                                   XML-Document*)
@@ -101,7 +101,9 @@
                                (car maybe-first-element))))
                     external))
 
-    (define ?external-dtd : (Option XML-DTD) (xml-load-external-dtd ext-dtd maybe-name external xxe-topsize timeout))
+    (define ?external-dtd : (Option XML-DTD)
+      (and (not standalone?)
+           (xml-load-external-dtd ext-dtd maybe-name external xxe-topsize timeout)))
 
     (define doc : XML-Document*
       (make-xml-document* source version encoding standalone?
@@ -116,21 +118,24 @@
                                          doc open-xxe-port)])))
 
 (define xml-document*-normalize : (->* (XML-Document*)
-                                       ((Option Open-Input-XML-XXE) #:external-dtd (U False XML-DTD Open-Input-XML-XXE)
+                                       ((Option Open-Input-XML-XXE) #:external-dtd (Option Open-Input-XML-XXE)
                                         #:ipe-topsize (Option Index) #:xxe-topsize (Option Index) #:xxe-timeout (Option Real)
                                         #:xml:lang String #:xml:space Symbol #:xml:space-filter (Option XML:Space-Filter))
                                        XML-Document*)
   (lambda [#:external-dtd [alter-ext-dtd #false] #:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false]
            #:ipe-topsize [ipe-topsize (default-xml-ipe-topsize)] #:xxe-topsize [xxe-topsize (default-xml-xxe-topsize)] #:xxe-timeout [timeout (default-xml-xxe-timeout)]
            doc [open-xxe-port xml-load-relative-system-entity]]
+    (define standalone? : Boolean (xml-prolog-standalone? (xml-document*-prolog doc)))
     (define-values (type contents)
       (xml-normalize (xml-document*-internal-dtd doc)
-                     (or (let ([dt (xml-document*-doctype doc)])
-                           (xml-load-external-dtd alter-ext-dtd (xml-doctype*-name dt) (xml-doctype*-external dt) xxe-topsize timeout))
-                         (xml-opaque-unbox (xml-document*-external-dtd doc)))
+                     (and (not standalone?)
+                          (or (let ([dt (xml-document*-doctype doc)])
+                                (xml-load-external-dtd alter-ext-dtd (xml-doctype*-name dt) (xml-doctype*-external dt) xxe-topsize timeout))
+                              (xml-opaque-unbox (xml-document*-external-dtd doc))))
                      (xml-document*-contents doc)
+                     (not standalone?)
                      xml:lang xml:space xml:space-filter ipe-topsize
-                     (or open-xxe-port (if (xml-dtd? alter-ext-dtd) #false alter-ext-dtd))
+                     (or open-xxe-port alter-ext-dtd)
                      xxe-topsize timeout))
     
     (xml-document* (xml-document*-prolog doc)
@@ -208,12 +213,11 @@
                   [(xml:name? v) (xml:name-datum v)]
                   [else (map xml:name-datum v)])))))
 
-(define xml-load-external-dtd : (-> (U False XML-DTD Open-Input-XML-XXE) (Option XML:Name) XML-External-ID*
+(define xml-load-external-dtd : (-> (U False Open-Input-XML-XXE) (Option XML:Name) XML-External-ID*
                                     (Option Index) (Option Real)
                                     (Option XML-DTD))
   (lambda [ext-dtd name external topsize timeout]
-    (cond [(xml-dtd? ext-dtd) ext-dtd]
-          [(not ext-dtd) #false]
+    (cond [(not ext-dtd) #false]
           [(not external) #false]
           [(pair? external) (xml-load-external-entity name (car external) (cdr external) ext-dtd topsize timeout read-xml-type-definition)]
           [else (xml-load-external-entity name #false external ext-dtd topsize timeout read-xml-type-definition)])))

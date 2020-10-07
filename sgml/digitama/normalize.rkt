@@ -55,13 +55,13 @@
                                    default-replace)))))])]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-normalize : (-> XML-DTD (Option XML-DTD) (Listof XML-Content*) String Symbol (Option XML:Space-Filter)
+(define xml-normalize : (-> XML-DTD (Option XML-DTD) (Listof XML-Content*) Boolean String Symbol (Option XML:Space-Filter)
                             (Option Index) (Option Open-Input-XML-XXE) (Option Index) (Option Real)
                             (Values XML-Type (Listof XML-Content*)))
-  (lambda [int-dtd ?ext-dtd content xml:lang xml:space xml:space-filter ipe-topsize open-port xxe-topsize timeout]
+  (lambda [int-dtd ?ext-dtd content stop? xml:lang xml:space xml:space-filter ipe-topsize open-port xxe-topsize timeout]
     (define xxec : XML-XXE-Config (and open-port (vector-immutable open-port xxe-topsize timeout)))
     (define dtype : XML-Type
-      (xml-dtd-expand #:open-xxe-input-port open-port
+      (xml-dtd-expand #:stop-if-xxe-unread? stop? #:open-xxe-input-port open-port
                       #:ipe-topsize ipe-topsize #:xxe-topsize xxe-topsize #:xxe-timeout timeout
                       int-dtd ?ext-dtd))
     
@@ -77,11 +77,11 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-dtd-expand : (->* (XML-DTD)
-                              (#:open-xxe-input-port (Option Open-Input-XML-XXE)
+                              (#:stop-if-xxe-unread? Boolean #:open-xxe-input-port (Option Open-Input-XML-XXE)
                                #:ipe-topsize (Option Index) #:xxe-topsize (Option Index) #:xxe-timeout (Option Real)
                                (Option XML-DTD))
                               XML-Type)
-  (lambda [#:open-xxe-input-port [open-port #false] #:ipe-topsize [ipe-topsize (default-xml-ipe-topsize)]
+  (lambda [#:stop-if-xxe-unread? [stop? #false] #:open-xxe-input-port [open-port #false] #:ipe-topsize [ipe-topsize (default-xml-ipe-topsize)]
            #:xxe-topsize [xxe-topsize (default-xml-xxe-topsize)] #:xxe-timeout [timeout (default-xml-xxe-timeout)]
            dtd [?ext-dtd #false]]
     ;;; NOTE
@@ -92,17 +92,18 @@
     ;  in the internal DTD, SVG's extensibility depends on this feature.
 
     (define xxec : XML-XXE-Config (and open-port (vector-immutable open-port xxe-topsize timeout)))
-    (define-values (int-entities iothers)
-      (xml-dtd-entity-expand/partition dtd #false #true ipe-topsize xxec))
+    (define-values (int-entities iothers stopped?)
+      (xml-dtd-entity-expand/partition dtd #false #true stop? ipe-topsize xxec))
     
-    (define-values (entities eothers)
-      (cond [(not ?ext-dtd) (values int-entities null)]
-            [else (xml-dtd-entity-expand/partition ?ext-dtd int-entities #true #false xxec)]))
+    (define-values (entities eothers _)
+      (cond [(or stopped? (not ?ext-dtd)) (values int-entities null #false)]
+            [else (xml-dtd-entity-expand/partition ?ext-dtd int-entities #true #false #false xxec)]))
     
     (xml-dtd-type-declaration-expand entities (append iothers eothers) ipe-topsize xxec)))
 
-(define xml-dtd-entity-expand/partition : (-> XML-DTD (Option DTD-Entities) Boolean (Option Index) XML-XXE-Config (Values DTD-Entities (Listof DTD-Declaration*)))
-  (lambda [dtd internal-entities merge? topsize xxec]
+(define xml-dtd-entity-expand/partition : (-> XML-DTD (Option DTD-Entities) Boolean Boolean (Option Index) XML-XXE-Config
+                                              (Values DTD-Entities (Listof DTD-Declaration*) Boolean))
+  (lambda [dtd internal-entities merge? stop? topsize xxec]
     (define-values (initial-entities int-entities)
       (cond [(not merge?) (values empty-entities internal-entities)]
             [else (values (or internal-entities empty-entities) #false)]))
@@ -111,7 +112,7 @@
                         [snoitaralced : (Listof DTD-Declaration*) null]
                         [entities : DTD-Entities initial-entities]
                         [PErefers : (Listof Keyword) null])
-      (cond [(null? rest) (values entities (reverse snoitaralced))]
+      (cond [(null? rest) (values entities (reverse snoitaralced) #false)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(dtd-entity? self) ; NOTE: NDATA only concerns validity constraint, and therefore is not handled here.
                            (let* ([ntoken (dtd-entity-name self)]
@@ -123,12 +124,19 @@
                                    [else (partition-dtd rest++ snoitaralced (hash-set entities name self) PErefers)]))]
                           [(xml:pereference? self)
                            (let ([name (xml:pereference-datum self)])
-                             (cond [(memq name PErefers) (make+exn:xml:defense self) (partition-dtd rest++ snoitaralced entities PErefers)]
-                                   [else (let ([PErefers++ (cons name PErefers)]
-                                               [subset (xml-dtd-included-as-PE self entities int-entities topsize xxec)])
-                                           (cond [(null? subset) (partition-dtd rest++ snoitaralced entities PErefers++)]
-                                                 [else (let-values ([(entities++ snoitaralced++) (partition-dtd subset null entities PErefers++)])
-                                                         (partition-dtd rest++ (append (reverse snoitaralced++) snoitaralced) entities++ PErefers++))]))]))]
+                             (if (memq name PErefers)
+                                 (and (make+exn:xml:defense self) ; defended cyclic reference
+                                      (partition-dtd rest++ snoitaralced entities PErefers))
+                                 (let-values ([(PErefers++) (cons name PErefers)]
+                                              [(subset read?) (xml-dtd-included-as-PE self entities int-entities topsize xxec)])
+                                   (cond [(pair? subset)
+                                          (let*-values ([(entities++ snoitaralced++ stopped?) (partition-dtd subset null entities PErefers++)]
+                                                        [(snoitaralced++++) (append (reverse snoitaralced++) snoitaralced)])
+                                            (if (not stopped?)
+                                                (partition-dtd rest++ snoitaralced++++ entities++ PErefers++)
+                                                (values entities snoitaralced++++ stopped?)))]
+                                         [(and (not read?) stop?) (values entities (reverse snoitaralced) #true)]
+                                         [else (partition-dtd rest++ snoitaralced entities PErefers++)]))))]
                           [(pair? self)
                            (partition-dtd (append (xml-dtd-expand-section (car self) (cdr self) entities int-entities topsize) rest++)
                                           snoitaralced entities PErefers)]
@@ -202,7 +210,7 @@
                        (dtd-token-entity (dtd-entity-name e)
                                          ?new-value #false)))])))
 
-(define xml-dtd-included-as-PE : (-> XML:PEReference DTD-Entities (Option DTD-Entities) (Option Index) XML-XXE-Config (Listof DTD-Declaration*))
+(define xml-dtd-included-as-PE : (-> XML:PEReference DTD-Entities (Option DTD-Entities) (Option Index) XML-XXE-Config (Values (Listof DTD-Declaration*) Boolean))
   ;;; https://www.w3.org/TR/xml/#as-PE
   (lambda [pe entities ?int-entities topsize xxec]
     (define ?tokens : (U (Listof XML-Token) XML-Syntax-Error)
@@ -211,9 +219,9 @@
                                    (xml-make-entity->tokens #false read-xml-tokens*)
                                    xxec xml-dtd-reader))
 
-    (if (pair? ?tokens)
-        (xml-dtd-definitions->declarations (xml-syntax->definition* ?tokens))
-        null)))
+    (cond [(pair? ?tokens) (values (xml-dtd-definitions->declarations (xml-syntax->definition* ?tokens)) #true)]
+          [(exn:xml? ?tokens) (values null #false)]
+          [else (values null #true)])))
 
 (define xml-dtd-included : (-> XML:Name XML:Reference DTD-Entities (Option Index) XML-XXE-Config Index (Listof (U XML-Subdatum* XML-Element*)))
   ;;; https://www.w3.org/TR/xml/#included

@@ -161,6 +161,7 @@
   [exn:xml:enum          #:-> exn:xml:vc]
   
   [exn:xml:wfc           #:-> exn:xml:fatal]
+  [exn:xml:multi-root    #:-> exn:xml:wfc]
   [exn:xml:unique        #:-> exn:xml:wfc]
   [exn:xml:external      #:-> exn:xml:wfc]
   [exn:xml:char          #:-> exn:xml:wfc]

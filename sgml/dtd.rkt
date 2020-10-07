@@ -22,15 +22,15 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-dtd-entity-expand : (->* (XML-DTD)
-                                     (#:open-xxe-input-port (Option Open-Input-XML-XXE)
+                                     (#:stop-if-xxe-unread? Boolean #:open-xxe-input-port (Option Open-Input-XML-XXE)
                                       #:ipe-topsize (Option Index) #:xxe-topsize (Option Index) #:xxe-timeout (Option Real)
                                       (Option DTD-Entities) Boolean)
                                      DTD-Entities)
-  (lambda [#:open-xxe-input-port [open-port #false]
+  (lambda [#:stop-if-xxe-unread? [stop? #false] #:open-xxe-input-port [open-port #false]
            #:ipe-topsize [ipe-topsize (default-xml-ipe-topsize)] #:xxe-topsize [xxe-topsize (default-xml-xxe-topsize)] #:xxe-timeout [timeout (default-xml-xxe-timeout)]
            dtd [int-entities #false] [merge? #true]]
-    (define-values (entities _)
-      (xml-dtd-entity-expand/partition dtd int-entities merge? ipe-topsize
+    (define-values (entities _ _?)
+      (xml-dtd-entity-expand/partition dtd int-entities merge? stop? ipe-topsize
                                        (and open-port (vector-immutable open-port xxe-topsize timeout))))
 
     entities))
