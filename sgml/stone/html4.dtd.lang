@@ -1,5 +1,3 @@
-#lang sgml/dtd
-
 <!--
     This is HTML 4.01 Strict DTD, which excludes the presentation 
     attributes and elements that W3C expects to phase out as 
