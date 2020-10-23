@@ -8,7 +8,6 @@
 
 (require sgml/digitama/dtd)
 (require sgml/digitama/doctype)
-(require sgml/digitama/grammar)
 (require sgml/digitama/document)
 (require sgml/digitama/digicore)
 
@@ -41,6 +40,8 @@
     [(_ (#:xml:whitespace datum ...)) #'(xml:whitespace 'datum ...)]
     [(_ (#:xml:delim datum ...)) #'(xml:delim 'datum ...)]
     [(_ (#:xml:char datum ...)) #'(xml:char 'datum ...)]
+    [(_ (#:xml:open datum ...)) #'(xml:open 'datum ...)]
+    [(_ (#:xml:close datum ...)) #'(xml:close 'datum ...)]
     [(_ (dcar . dcdr)) #'(cons (token-syntax->datum dcar) (token-syntax->datum dcdr))]
     [(_ (option ...)) #'(list (token-syntax->datum option) ...)]
     [(_ #(seq ...)) #'(vector-immutable (token-syntax->datum seq) ...)]
@@ -87,7 +88,7 @@
     [(_ (#:element sexp ...)) #'(dtd-syntax->element sexp ...)]
     [(_ (#:attribute sexp ...)) #'(dtd-syntax->attribute sexp ...)]
     [(_ (#:notation sexp ...)) #'(dtd-syntax->notation sexp ...)]
-    [(_ (#:condsection condition section ...)) #'(cons (token-syntax->datum condition) (list (xml-syntax->dtd section) ...))]
+    [(_ (#:condsection condition section ...)) #'(dtd-section (token-syntax->datum condition) (list (xml-syntax->dtd section) ...))]
     [(_ #(raw-datum ...)) #'(vector-immutable (token-syntax->datum raw-datum) ...)]
     [(_ token/pi) #'(token-syntax->datum token/pi)]))
 
@@ -153,7 +154,7 @@
     (cons (xml-dtd-location doc.dtd)
           (let dtd-declaration->sexp : (Listof Any) ([declarations : (Listof DTD-Declaration*) (xml-dtd-declarations doc.dtd)])
             (for/list : (Listof Any) ([d (in-list declarations)])
-              (cond [(pair? d) (list* '#:condsection (xml-datum->sexp (car d)) (dtd-declaration->sexp (cdr d)))]
+              (cond [(dtd-section? d) (list* '#:condsection (xml-datum->sexp (dtd-section-condition d)) (dtd-declaration->sexp (dtd-section-body d)))]
                     [(dtd-entity? d) (list* '#:entity (xml-datum->sexp d))]
                     [(dtd-element? d) (list* '#:element (xml-datum->sexp d))]
                     [(dtd-attribute? d) (list* '#:attribute (xml-datum->sexp d))]

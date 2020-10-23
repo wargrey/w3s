@@ -15,15 +15,16 @@
 (define-type DTD-Element-Children (U DTD-Element-Sequence DTD-Element-Choice))
 
 (define-type DTD-Raw-Declaration* (Immutable-Vector XML:Name (Listof XML-Token)))
+(define-type DTD-Definition* (U XML-Processing-Instruction* DTD-Entity DTD-Notation DTD-Element DTD-Attribute DTD-Raw-Declaration*))
+(define-type DTD-Declaration* (U DTD-Definition* XML:PEReference DTD-Section))
 
-(define-type DTD-Definition*
-  (U XML-Processing-Instruction* DTD-Entity DTD-Notation
-     DTD-Element DTD-Attribute DTD-Raw-Declaration*))
+(struct dtd-section
+  ([condition : (U XML:Name XML:PEReference)]
+   [body : (Listof DTD-Declaration*)])
+  #:transparent
+  #:type-name DTD-Section)
 
-(define-type DTD-Declaration*
-  (Rec defs (U DTD-Definition* XML:PEReference
-               (Pairof (U XML:Name XML:PEReference) (Listof defs)))))
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (struct dtd-entity
   ([name : (U XML:Reference XML:PEReference)])
   #:transparent
@@ -173,8 +174,8 @@
                                     (filter-definition rest++ (if (dtd-notation? e) (cons e snoitaralced) snoitaralced)))]
                                  [else (make+exn:xml:unrecognized DECL) (filter-definition rest++ snoitaralced)]))]
                             [(xml-section? self)
-                             (filter-definition rest++ (cons ((inst cons (U XML:Name XML:PEReference) (Listof DTD-Declaration*))
-                                                              (xml-section-condition self) (filter-definition (xml-section-body self) null))
+                             (filter-definition rest++ (cons (dtd-section (xml-section-condition self)
+                                                                          (filter-definition (xml-section-body self) null))
                                                              snoitaralced))]
                             [(xml:pereference? self) (filter-definition rest++ (cons self snoitaralced))]
                             [(mpair? self) (filter-definition rest++ (cons self snoitaralced))]

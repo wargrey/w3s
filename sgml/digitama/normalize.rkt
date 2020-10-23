@@ -137,9 +137,9 @@
                                                 (values entities snoitaralced++++ stopped?)))]
                                          [(and (not read?) stop?) (values entities (reverse snoitaralced) #true)]
                                          [else (partition-dtd rest++ snoitaralced entities PErefers++)]))))]
-                          [(pair? self)
-                           (partition-dtd (append (xml-dtd-expand-section (car self) (cdr self) entities int-entities topsize) rest++)
-                                          snoitaralced entities PErefers)]
+                          [(dtd-section? self)
+                           (let ([body (xml-dtd-expand-section (dtd-section-condition self) (dtd-section-body self) entities int-entities topsize)])
+                             (partition-dtd (append body rest++) snoitaralced entities PErefers))]
                           [else (partition-dtd rest++ (cons self snoitaralced) entities PErefers)]))]))))
 
 (define xml-dtd-type-declaration-expand : (-> DTD-Entities (Listof DTD-Declaration*) (Option Index) XML-XXE-Config XML-Type)
