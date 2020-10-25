@@ -310,7 +310,7 @@
     (cond [(dtd-attribute-string-type? atype) value]
           [(dtd-attribute-enum-type? atype)
            (let ([option (string->symbol (xml-attribute-token-value-consolidate value))])
-             (cond [(memq option (dtd-attribute-enum-type-options atype)) (w3s-remake-token value xml:name option)]
+             (cond [(memq option (map xml:name-datum (dtd-attribute-enum-type-options atype))) (w3s-remake-token value xml:name option)]
                    [(and (eq? (xml:name-datum attname) 'xml:space) (memq option '(default preserve))) (w3s-remake-token value xml:name option)]
                    [else (make+exn:xml:enum value attname) #false]))]
           [(dtd-attribute-token-type? atype)

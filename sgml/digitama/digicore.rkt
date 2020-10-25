@@ -152,7 +152,6 @@
   [exn:xml:token         #:-> exn:xml:vc]
   [exn:xml:duplicate     #:-> exn:xml:vc]
   [exn:xml:type          #:-> exn:xml:vc]
-  [exn:xml:entity        #:-> exn:xml:vc]
   [exn:xml:nest          #:-> exn:xml:vc]
   [exn:xml:enum          #:-> exn:xml:vc]
   [exn:xml:id            #:-> exn:xml:vc]
@@ -160,6 +159,7 @@
   [exn:xml:nonempty      #:-> exn:xml:vc]
   [exn:xml:adoptee       #:-> exn:xml:vc]
   [exn:xml:missing-attr  #:-> exn:xml:vc]
+  [exn:xml:entity        #:-> exn:xml:vc]
   
   [exn:xml:wfc           #:-> exn:xml:fatal]
   [exn:xml:multi-root    #:-> exn:xml:wfc]
