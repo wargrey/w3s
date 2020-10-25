@@ -70,7 +70,7 @@
   #:type-name DTD-Attribute-Token-Type)
 
 (struct dtd-attribute-enum-type
-  ([options : (Pairof XML:Name (Listof XML:Name))]
+  ([options : (Pairof Symbol (Listof Symbol))]
    [notation? : Boolean])
   #:transparent
   #:type-name DTD-Attribute-Enum-Type)
@@ -104,7 +104,7 @@
   #:type-name DTD-Empty-Element)
 
 (struct dtd-mixed-element dtd-element
-  ([children : (Listof XML:Name)])
+  ([children : (Listof Symbol)])
   #:transparent
   #:type-name DTD-Mixed-Element)
 
@@ -246,7 +246,7 @@
                                                 [else (make+exn:xml:enum ?content ELEMENT)])]))]))]))))
 
 (define xml-dtd-extract-element-content* : (-> XML:Name (Listof XML-Token)
-                                               (Values (U (Boxof (Listof XML:Name)) (Pairof DTD-Element-Children Char) XML-Syntax-Error)
+                                               (Values (U (Boxof (Listof Symbol)) (Pairof DTD-Element-Children Char) XML-Syntax-Error)
                                                        (Listof XML-Token)))
   (lambda [elem body]
     (cond [(null? body) (values (make+exn:xml:malformed body elem) null)]
@@ -368,11 +368,10 @@
                                (values ?v fixed? rest++))]
                           [else (make+exn:xml:malformed ?v attr) (values #false fixed? rest++)]))]))))
 
-(define xml-dtd-extract-enumeration* : (-> XML:Name (Listof XML-Token) Boolean (Values (U (Listof XML:Name) XML-Syntax-Error) (Listof XML-Token)))
+(define xml-dtd-extract-enumeration* : (-> XML:Name (Listof XML-Token) Boolean (Values (U (Listof Symbol) XML-Syntax-Error) (Listof XML-Token)))
   (lambda [attr body bar?]
     (let extract-enum ([rest : (Listof XML-Token) body]
-                       [smune : (Listof XML:Name) null]
-                       [enums : (Listof Symbol) null]
+                       [smune : (Listof Symbol) null]
                        [bar? : Boolean bar?])
       (cond [(null? body) (values (make+exn:xml:malformed attr) null)]
             [else (let-values ([(?e rest++) (values (car rest) (cdr rest))])
@@ -380,18 +379,18 @@
                            (let ([name (xml:name-datum ?e)])
                              (cond [(not bar?)
                                     (make+exn:xml:malformed ?e attr)
-                                    (extract-enum rest++ smune enums #false)]
-                                   [(memq name enums)
+                                    (extract-enum rest++ smune #false)]
+                                   [(memq name smune)
                                     (make+exn:xml:duplicate ?e attr)
-                                    (extract-enum rest++ smune enums #false)]
-                                   [else (extract-enum rest++ (cons ?e smune) (cons name enums) #false)]))]
+                                    (extract-enum rest++ smune #false)]
+                                   [else (extract-enum rest++ (cons (xml:name-datum ?e) smune) #false)]))]
                           [(xml:delim? ?e)
                            (let ([delim (xml:delim-datum ?e)])
                              (unless (not bar?) (make+exn:xml:malformed ?e attr))
-                             (cond [(eq? delim #\|) (extract-enum rest++ smune enums #true)]
+                             (cond [(eq? delim #\|) (extract-enum rest++ smune #true)]
                                    [(eq? delim #\)) (values (reverse smune) rest++)]
-                                   [else (make+exn:xml:malformed ?e attr) (extract-enum rest++ smune enums bar?)]))]
-                          [else (make+exn:xml:malformed ?e attr) (extract-enum rest++ smune enums bar?)]))]))))
+                                   [else (make+exn:xml:malformed ?e attr) (extract-enum rest++ smune bar?)]))]
+                          [else (make+exn:xml:malformed ?e attr) (extract-enum rest++ smune bar?)]))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-dtd-filter-tokens : (-> XML-Token (Listof XML-Doctype-Body*) (U (Listof XML-Token) XML-Syntax-Error Void))
@@ -409,3 +408,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define dtd:attribute:cdata : DTD-Attribute-String-Type (dtd-attribute-string-type))
+
+(define empty-entities : DTD-Entities (make-immutable-hasheq))
+(define empty-notations : DTD-Notations (make-immutable-hasheq))
+(define empty-elements : DTD-Elements (make-immutable-hasheq))
+(define empty-element-attributes : DTD-Attributes (make-immutable-hasheq))
+(define empty-attributes : (Immutable-HashTable Symbol DTD-Attribute) (make-immutable-hasheq))

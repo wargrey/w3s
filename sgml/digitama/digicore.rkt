@@ -34,14 +34,10 @@
 (define-syntax (define-token stx)
   (syntax-parse stx #:literals [: Symbol Keyword]
     [(_ id : Identifier parent ((~and (~or Symbol Keyword) Type) #:ci rest ...) #:with id? id-datum)
-     (with-syntax ([id=? (format-id #'id "~a=?" (syntax-e #'id))]
-                   [id-norm=? (format-id #'id "~a-norm=?" (syntax-e #'id))]
-                   [id-norm (format-id #'id "~a-norm" (syntax-e #'id))])
+     (with-syntax ([id=? (format-id #'id "~a=?" (syntax-e #'id))])
        #'(begin (struct id parent ([datum : Type] [norm : Type] rest ...) #:transparent #:type-name Identifier)
                 (define (id=? [t1 : Identifier] [t2 : Identifier]) : Boolean (eq? (id-datum t1) (id-datum t2)))
-                (define (id-norm=? [t1 : Identifier] [t2 : Identifier]) : Boolean (eq? (id-norm t1) (id-norm t2)))
-                (define-token-interface id : Type id? id-datum #:+ Identifier #:eq? eq?)
-                (define-token-interface id-norm : Type id? id-norm  #:+ Identifier #:eq? eq?)))]
+                (define-token-interface id : Type id? id-datum #:+ Identifier #:eq? eq?)))]
     [(_ id : Otherwise parent (Type rest ...) #:with id? id-datum)
      (with-syntax ([type=? (case (syntax-e #'Type) [(String) #'string=?] [(Char) #'char=?] [else #'equal?])]
                    [id=? (format-id #'id "~a=?" (syntax-e #'id))])
@@ -159,6 +155,11 @@
   [exn:xml:entity        #:-> exn:xml:vc]
   [exn:xml:nest          #:-> exn:xml:vc]
   [exn:xml:enum          #:-> exn:xml:vc]
+  [exn:xml:id            #:-> exn:xml:vc]
+  [exn:xml:fixed         #:-> exn:xml:vc]
+  [exn:xml:nonempty      #:-> exn:xml:vc]
+  [exn:xml:adoptee       #:-> exn:xml:vc]
+  [exn:xml:missing-attr  #:-> exn:xml:vc]
   
   [exn:xml:wfc           #:-> exn:xml:fatal]
   [exn:xml:multi-root    #:-> exn:xml:wfc]

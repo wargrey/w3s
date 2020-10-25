@@ -8,7 +8,6 @@
 (require racket/path)
 (require racket/file)
 (require racket/port)
-(require racket/string)
 
 (require typed/net/url)
 (require typed/net/head)

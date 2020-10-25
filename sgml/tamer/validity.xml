@@ -1,0 +1,37 @@
+#lang sgml/xml
+
+<?xml version="1.0" ?>
+
+<!DOCTYPE validity [
+    <!ELEMENT validity ANY>
+    <!ELEMENT tamer EMPTY>
+    <!ELEMENT digimon EMPTY>
+    <!ELEMENT desc (#PCDATA)>
+
+    <!ENTITY genderless "genderless">
+
+    <!ATTLIST tamer
+              id      ID            #REQUIRED
+              name    CDATA         #IMPLIED
+              partner IDREF         #REQUIRED
+              gender  (male|female) "female">
+
+    <!ATTLIST digimon
+              id      ID                       #REQUIRED
+              name    CDATA                    #IMPLIED
+              gender  (male|female|genderless) #FIXED "&genderless;">
+
+    <!ATTLIST boss
+              id      ID      #REQUIRED
+              name    CDATA   #IMPLIED>
+]>
+
+<validity xml:space="default">
+  <desc><title>Digimon Tamers</title></desc>
+  <desc>Digimon Tamers</desc>
+  
+  <tamer id="Takato" name="松田啓人" partner="guilmon" gender="males"/>
+  <tamer id="Ruki" name="牧野留姫" partner="renamon"/>
+  
+  <digimon id="guilmon" name="Guilmon" gender="male"/>
+</validity>
