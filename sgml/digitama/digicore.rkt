@@ -159,7 +159,8 @@
   [exn:xml:nonempty      #:-> exn:xml:vc]
   [exn:xml:adoptee       #:-> exn:xml:vc]
   [exn:xml:missing-attr  #:-> exn:xml:vc]
-  [exn:xml:entity        #:-> exn:xml:vc]
+  [exn:xml:parsed        #:-> exn:xml:vc]
+  [exn:xml:children      #:-> exn:xml:vc]
   
   [exn:xml:wfc           #:-> exn:xml:fatal]
   [exn:xml:multi-root    #:-> exn:xml:wfc]

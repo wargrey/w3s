@@ -3,7 +3,7 @@
 <?xml version="1.0" ?>
 
 <!DOCTYPE validity [
-    <!ELEMENT validity ANY>
+    <!ELEMENT validity (desc* | (tamer, digimon)* | digimon*)>
     <!ELEMENT tamer EMPTY>
     <!ELEMENT digimon EMPTY>
     <!ELEMENT desc (#PCDATA)>

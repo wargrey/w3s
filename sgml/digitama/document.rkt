@@ -8,6 +8,7 @@
 (require racket/string)
 
 (require "dtd.rkt")
+(require "schema.rkt")
 (require "validity.rkt")
 (require "doctype.rkt")
 (require "grammar.rkt")
@@ -22,6 +23,8 @@
 (require "tokenizer.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define-type XML-External-Doctype (U XML-DTD False))
+
 (struct xml-document
   ([prolog : XML-Prolog]
    [doctype : XML-DocType]
@@ -38,11 +41,14 @@
   ([prolog : XML-Prolog]
    [doctype : XML-DocType*]
    [internal-dtd : XML-DTD]
-   [external-dtd : (XML-Opaqueof (Option XML-DTD))]
-   [type : (XML-Opaqueof (Option XML-Type))]
+   [external-dtd : (XML-Opaqueof XML-External-Doctype)]
    [contents : (Listof XML-Content*)])
   #:transparent
   #:type-name XML-Document*)
+
+(struct xml-document+schema xml-document*
+  ([unbox : XML-Schema])
+  #:type-name XML-Document+Schema)
 
 (define xml-alternative-document-source : (Parameterof (U String Symbol False)) (make-parameter #false))
 
@@ -65,7 +71,7 @@
                   dtd grammars)))
 
 (define make-xml-document* : (-> (U String Symbol) (Option Nonnegative-Flonum) (Option String) Boolean
-                                 (Option XML:Name) XML-External-ID* (Option XML-DTD) (Option XML-DTD) (Option XML-Type)
+                                 (Option XML:Name) XML-External-ID* (Option XML-DTD) (Option XML-DTD) (Option XML-Schema)
                                  (Listof XML-Content*)
                                  XML-Document*)
   (lambda [source version encoding standalone? maybe-name external intdtd xxedtd type contents]
@@ -78,8 +84,7 @@
     
     (xml-document* (xml-prolog source version encoding standalone?) doc-type
                    (or intdtd (xml-make-type-definition source null))
-                   (xml-opaque xxedtd) (xml-opaque type)
-                   contents)))
+                   (xml-opaque xxedtd) contents)))
 
 (define read-xml-document* : (->* (SGML-StdIn)
                                   ((Option Open-Input-XML-XXE) (Option Open-Input-XML-XXE)
@@ -88,7 +93,7 @@
                                   XML-Document*)
   (lambda [#:normalize? [normalize? #false] #:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false]
            #:ipe-topsize [ipe-topsize (default-xml-ipe-topsize)] #:xxe-topsize [xxe-topsize (default-xml-xxe-topsize)] #:xxe-timeout [timeout (default-xml-xxe-timeout)]
-           /dev/rawin [ext-dtd xml-load-relative-system-entity] [open-xxe-port xml-load-relative-system-entity]]
+           /dev/rawin [ext-schema xml-load-relative-system-entity] [open-xxe-port xml-load-relative-system-entity]]
     (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin #true))
     (define source : (U Symbol String) (sgml-port-name /dev/xmlin))
     (define tokens : (Listof XML-Token) (read-xml-tokens* /dev/xmlin (or (xml-alternative-document-source) source)))
@@ -104,7 +109,7 @@
 
     (define ?external-dtd : (Option XML-DTD)
       (and (not standalone?)
-           (xml-load-external-dtd ext-dtd maybe-name external xxe-topsize timeout)))
+           (xml-load-external-dtd ext-schema maybe-name external xxe-topsize timeout)))
 
     (define doc : XML-Document*
       (make-xml-document* source version encoding standalone?
@@ -115,54 +120,53 @@
     (cond [(not normalize?) doc]
           [else (xml-document*-normalize #:ipe-topsize ipe-topsize #:xxe-topsize xxe-topsize #:xxe-timeout timeout
                                          #:xml:lang xml:lang #:xml:space xml:space #:xml:space-filter xml:space-filter
-                                         #:external-dtd ext-dtd
+                                         #:external-schema ext-schema
                                          doc open-xxe-port)])))
 
 (define xml-document*-normalize : (->* (XML-Document*)
-                                       ((Option Open-Input-XML-XXE) #:external-dtd (Option Open-Input-XML-XXE)
+                                       ((Option Open-Input-XML-XXE) #:external-schema (Option Open-Input-XML-XXE)
                                                                     #:ipe-topsize (Option Index) #:xxe-topsize (Option Index) #:xxe-timeout (Option Real)
                                                                     #:xml:lang String #:xml:space Symbol #:xml:space-filter (Option XML:Space-Filter))
                                        XML-Document*)
-  (lambda [#:external-dtd [alter-ext-dtd #false] #:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false]
+  (lambda [#:external-schema [alter-ext-schema #false] #:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false]
            #:ipe-topsize [ipe-topsize (default-xml-ipe-topsize)] #:xxe-topsize [xxe-topsize (default-xml-xxe-topsize)] #:xxe-timeout [timeout (default-xml-xxe-timeout)]
            doc [open-xxe-port xml-load-relative-system-entity]]
     (define standalone? : Boolean (xml-prolog-standalone? (xml-document*-prolog doc)))
-    (define-values (type contents)
+    (define-values (schema contents)
       (xml-normalize (xml-document*-internal-dtd doc)
                      (and (not standalone?)
                           (or (let ([dt (xml-document*-doctype doc)])
-                                (xml-load-external-dtd alter-ext-dtd (xml-doctype*-name dt) (xml-doctype*-external dt) xxe-topsize timeout))
+                                (xml-load-external-dtd alter-ext-schema (xml-doctype*-name dt) (xml-doctype*-external dt) xxe-topsize timeout))
                               (xml-opaque-unbox (xml-document*-external-dtd doc))))
                      (xml-document*-contents doc)
                      (not standalone?)
                      xml:lang xml:space xml:space-filter ipe-topsize
-                     (or open-xxe-port alter-ext-dtd)
+                     (or open-xxe-port alter-ext-schema)
                      xxe-topsize timeout))
     
-    (xml-document* (xml-document*-prolog doc)
-                   (xml-document*-doctype doc)
-                   (xml-document*-internal-dtd doc) (xml-document*-external-dtd doc)
-                   (xml-opaque type) contents)))
+    (xml-document+schema (xml-document*-prolog doc)
+                         (xml-document*-doctype doc)
+                         (xml-document*-internal-dtd doc) (xml-document*-external-dtd doc)
+                         contents schema)))
 
 (define xml-document*-valid? : (->* (XML-Document*)
-                                    ((Option Open-Input-XML-XXE) #:external-dtd (Option Open-Input-XML-XXE)
+                                    ((Option Open-Input-XML-XXE) #:external-schema (Option Open-Input-XML-XXE)
                                                                  #:ipe-topsize (Option Index) #:xxe-topsize (Option Index) #:xxe-timeout (Option Real)
                                                                  #:xml:lang String #:xml:space Symbol #:xml:space-filter (Option XML:Space-Filter))
                                     Boolean)
-  (lambda [#:external-dtd [alter-ext-dtd #false] #:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false]
+  (lambda [#:external-schema [alter-ext-schema #false] #:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false]
            #:ipe-topsize [ipe-topsize (default-xml-ipe-topsize)] #:xxe-topsize [xxe-topsize (default-xml-xxe-topsize)] #:xxe-timeout [timeout (default-xml-xxe-timeout)]
            doc [open-xxe-port xml-load-relative-system-entity]]
     (define standalone? : Boolean (xml-prolog-standalone? (xml-document*-prolog doc)))
-    (define ?type : (Option XML-Type) (xml-opaque-unbox (xml-document*-type doc)))
-    (define-values (type contents)
-      (cond [(and ?type) (values ?type (xml-document*-contents doc))]
-            [else (let ([ndoc (xml-document*-normalize #:external-dtd alter-ext-dtd #:xml:lang xml:lang #:xml:space xml:space #:xml:space-filter xml:space-filter
+    (define-values (schema contents)
+      (cond [(xml-document+schema? doc) (values (xml-document+schema-unbox doc) (xml-document*-contents doc))]
+            [else (let ([ndoc (xml-document*-normalize #:external-schema alter-ext-schema #:xml:lang xml:lang #:xml:space xml:space #:xml:space-filter xml:space-filter
                                                        #:ipe-topsize ipe-topsize #:xxe-topsize xxe-topsize #:xxe-timeout timeout
                                                        doc open-xxe-port)])
-                    (values (xml-opaque-unbox (xml-document*-type doc)) (xml-document*-contents doc)))]))
+                    (values (xml-document+schema-unbox (assert ndoc xml-document+schema?)) (xml-document*-contents doc)))]))
 
-    (and type
-         (xml-validate type contents standalone? ipe-topsize))))
+    (and schema
+         (xml-validate schema contents standalone? ipe-topsize))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-load-relative-system-entity : Open-Input-XML-XXE

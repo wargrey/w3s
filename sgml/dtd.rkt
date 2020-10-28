@@ -2,7 +2,7 @@
 
 (provide (all-defined-out) SGML-StdIn)
 (provide (struct-out XML-DTD) read-xml-type-definition)
-(provide (struct-out XML-Type) DTD-Entities)
+(provide XML-Schema xml-schema? struct:xml-schema)
 (provide Open-Input-XML-XXE xml-dtd-expand)
 
 (require racket/path)
@@ -14,10 +14,12 @@
 
 (require "digitama/dtd.rkt")
 (require "digitama/stdin.rkt")
+(require "digitama/schema.rkt")
 (require "digitama/normalize.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type XML-XXE-HTTP-URL-Filter (-> (Option String) (Option String) (Option String)))
+(define-type DTD-Entities Schema-Entities)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-dtd-entity-expand : (->* (XML-DTD)
