@@ -26,12 +26,6 @@
  [unsafe-string-ref (-> String Index Char)])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-type XML-Space-Position (U 'head 'body 'tail 'span))
-
-(define-type XML:Space-Filter
-  (case-> [Symbol (Option String) Char -> (Option Char)]
-          [Symbol (Option String) String (Option String) XML-Space-Position Boolean -> (Option String)]))
-
 (define-type XML-XXE-Reader (All (E) (->* (Input-Port) ((U False Symbol String)) E)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -64,6 +58,12 @@
 (define default-dtd-guard (xml-dtd-guard #x2000 default-xxe-guard))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define-type XML-Space-Position (U 'head 'body 'tail 'span))
+
+(define-type XML:Space-Filter
+  (case-> [Symbol (Option String) Char -> (Option Char)]
+          [Symbol (Option String) String (Option String) XML-Space-Position Boolean -> (Option String)]))
+
 (define svg:space-filter : XML:Space-Filter
   (case-lambda
     [(tag xml:lang ch) #\space]
@@ -78,12 +78,17 @@
                                    default-replace)))))])]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-normalize : (-> XML-DTD (Option XML-DTD) (Listof XML-Content*) Boolean String Symbol (Option XML:Space-Filter) XML-DTD-Guard
+(define xml-normalize : (-> (Listof DTD-Declaration*) (Option XML-DTD) (Listof XML-Content*) String Symbol (Option XML:Space-Filter) Boolean XML-DTD-Guard
                             (Values XML-Schema (Listof XML-Content*)))
-  (lambda [int-dtd ?ext-dtd content stop? xml:lang xml:space xml:space-filter dtdg]
-    (define schema : XML-Schema (xml-dtd-expand int-dtd ?ext-dtd #:stop-if-xxe-unread? stop? #:dtd-guard dtdg))
-    
-    (parameterize ([default-xml:space xml:space])
+  (lambda [intsubset ?ext-dtd content xml:lang xml:space xml:space-filter stop? dtdg]
+    (xml-normalize/schema (xml-dtd-declaration-expand intsubset ?ext-dtd stop? dtdg)
+                          content xml:lang xml:space xml:space-filter stop? dtdg)))
+
+(define xml-normalize/schema : (->* (XML-Schema (Listof XML-Content*) String Symbol (Option XML:Space-Filter))
+                                    (Boolean XML-DTD-Guard)
+                                    (Values XML-Schema (Listof XML-Content*)))
+  (lambda [schema content xml:lang xml:space xml:space-filter [stop? #false] [dtdg default-dtd-guard]]
+    (parameterize ([default-xml:space-signal xml:space])
       (define topsize : (Option Index) (xml-dtd-guard-ipe-topsize dtdg))
       (define xxeg : XML-XXE-Guard (xml-dtd-guard-xxe-guard dtdg))
 
@@ -97,8 +102,8 @@
                             [else (xml-content-normalize rest++ (cons self clear-content))]))])))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-dtd-expand : (->* (XML-DTD) ((Option XML-DTD) #:stop-if-xxe-unread? Boolean #:dtd-guard XML-DTD-Guard) XML-Schema)
-  (lambda [dtd [?ext-dtd #false] #:stop-if-xxe-unread? [stop? #false] #:dtd-guard [dtdg default-dtd-guard]]
+(define xml-dtd-declaration-expand : (-> (Listof DTD-Declaration*) (Option XML-DTD) Boolean XML-DTD-Guard XML-Schema)
+  (lambda [intsubset ?ext-dtd stop? dtdg]
     ;;; NOTE
     ;  Declarations in the intsubset may refer to external (parameter) entities
     ;  whose values could depend on previously defined entities within the intsubset
@@ -108,22 +113,22 @@
 
     (define topsize : (Option Index) (xml-dtd-guard-ipe-topsize dtdg))
     (define xxeg : XML-XXE-Guard (xml-dtd-guard-xxe-guard dtdg))
-    (define-values (int-entities iothers stopped?) (xml-dtd-entity-expand/partition dtd #false #true stop? topsize xxeg))
+    (define-values (int-entities iothers stopped?) (xml-dtd-entity-expand/partition intsubset #false #true stop? topsize xxeg))
     
     (define-values (entities eothers _)
       (cond [(or stopped? (not ?ext-dtd)) (values int-entities null #false)]
-            [else (xml-dtd-entity-expand/partition ?ext-dtd int-entities #true #false #false xxeg)]))
+            [else (xml-dtd-entity-expand/partition (xml-dtd-declarations ?ext-dtd) int-entities #true #false #false xxeg)]))
     
     (xml-dtd-type-declaration-expand entities (append iothers eothers) topsize xxeg)))
 
-(define xml-dtd-entity-expand/partition : (-> XML-DTD (Option Schema-Entities) Boolean Boolean (Option Index) XML-XXE-Guard
+(define xml-dtd-entity-expand/partition : (-> (Listof DTD-Declaration*) (Option Schema-Entities) Boolean Boolean (Option Index) XML-XXE-Guard
                                               (Values Schema-Entities (Listof DTD-Declaration*) Boolean))
-  (lambda [dtd internal-entities merge? stop? topsize xxeg]
+  (lambda [dtd-declarations internal-entities merge? stop? topsize xxeg]
     (define-values (initial-entities int-entities)
       (cond [(not merge?) (values xsch-empty-entities internal-entities)]
             [else (values (or internal-entities xsch-empty-entities) #false)]))
 
-    (let partition-dtd ([rest : (Listof DTD-Declaration*) (xml-dtd-declarations dtd)]
+    (let partition-dtd ([rest : (Listof DTD-Declaration*) dtd-declarations]
                         [snoitaralced : (Listof DTD-Declaration*) null]
                         [entities : Schema-Entities initial-entities]
                         [PErefers : (Listof Keyword) null])
@@ -797,7 +802,7 @@
             [else '||]))
 
     (cond [(eq? this:space 'preserve) 'preserve]
-          [(eq? this:space 'default) (default-xml:space)]
+          [(eq? this:space 'default) (default-xml:space-signal)]
           [else (make+exn:xml:enum (if (list? attval) (cons (car attr) attval) (list (car attr) attval)) tagname) inherited-space])))
 
 (define xml:space=preserve : (-> Symbol XML:WhiteSpace (Option XML:Space-Filter) (Option String) XML:WhiteSpace)
@@ -909,7 +914,7 @@
           [else (string-replace trimmed #px" +" " ")])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define default-xml:space : (Parameterof Symbol) (make-parameter 'default))
+(define default-xml:space-signal : (Parameterof Symbol) (make-parameter 'default))
 
 (define name-placeholder : XML:Name (xml:name '|| 1 0 1 1 '||))
 (define undeclared-attribute : XSch-Attribute (xsch-attribute name-placeholder name-placeholder xsch:attribute:cdata))

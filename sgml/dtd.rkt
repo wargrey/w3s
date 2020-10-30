@@ -3,7 +3,7 @@
 (provide (all-defined-out) SGML-StdIn)
 (provide (struct-out XML-DTD) read-xml-type-definition)
 (provide XML-Schema xml-schema? struct:xml-schema)
-(provide Open-Input-XML-XXE xml-dtd-expand)
+(provide Open-Input-XML-XXE)
 
 (require racket/path)
 (require racket/file)
@@ -25,12 +25,17 @@
 (define xml-dtd-entity-expand : (->* (XML-DTD) ((Option DTD-Entities) Boolean #:stop-if-xxe-unread? Boolean #:dtd-guard XML-DTD-Guard) DTD-Entities)
   (lambda [dtd [int-entities #false] [merge? #true] #:stop-if-xxe-unread? [stop? #false] #:dtd-guard [dtdg default-dtd-guard]]
     (define-values (entities _ _?)
-      (xml-dtd-entity-expand/partition dtd int-entities merge? stop?
+      (xml-dtd-entity-expand/partition (xml-dtd-declarations dtd) int-entities merge? stop?
                                        (xml-dtd-guard-ipe-topsize dtdg)
                                        (xml-dtd-guard-xxe-guard dtdg)))
 
     entities))
 
+(define xml-dtd-expand : (->* (XML-DTD) ((Option XML-DTD) #:stop-if-xxe-unread? Boolean #:dtd-guard XML-DTD-Guard) XML-Schema)
+  (lambda [dtd [?ext-dtd #false] #:stop-if-xxe-unread? [stop? #false] #:dtd-guard [dtdg default-dtd-guard]]
+    (xml-dtd-declaration-expand (xml-dtd-declarations dtd) ?ext-dtd stop? dtdg)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define make-xml-load-http-entity : (->* () ((Option Path-String) (Option XML-XXE-HTTP-URL-Filter)) Open-Input-XML-XXE)
   (let ([simple-url-filter : XML-XXE-HTTP-URL-Filter (λ [public system] (or system public))]
         [topic : Symbol 'xml:public:entity])

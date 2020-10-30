@@ -5,11 +5,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (provide (all-defined-out) (all-from-out "dtd.rkt"))
-(provide XML-DTD XML:Space-Filter XML-Space-Position)
+(provide XML-DTD XML-External-Doctype-Entity xml-load-relative-system-entity)
 (provide (struct-out XML-Document) read-xml-document xml-document*->document)
 (provide (struct-out XML-Document*) read-xml-document* xml-document*-normalize xml-document*-valid?)
-(provide svg:space-filter xml-load-relative-system-entity)
-(provide XML-DTD-Guard XML-XXE-Guard make-xml-dtd-guard)
+(provide XML-DTD-Guard XML-XXE-Guard make-xml-dtd-guard xml-dtd-guard? xml-xxe-guard?)
+(provide XML:Space-Filter XML-Space-Position svg:space-filter)
 
 (require "dtd.rkt")
 

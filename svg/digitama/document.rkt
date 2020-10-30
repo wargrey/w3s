@@ -15,8 +15,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define read-svg-document* : (-> SGML-StdIn XML-Document*)
   (lambda [/dev/rawin]
-    (read-xml-document* /dev/rawin svg-load-external-dtd #:dtd-guard svg-dtd-unsafe-guard)))
+    (read-xml-document* /dev/rawin)))
 
 (define svg-document*-normalize : (-> XML-Document* XML-Document*)
   (lambda [doc.svg]
-    (xml-document*-normalize doc.svg svg-load-external-dtd #:dtd-guard svg-dtd-unsafe-guard)))
+    (xml-document*-normalize doc.svg svg-load-external-dtd #:guard svg-dtd-unsafe-guard)))
