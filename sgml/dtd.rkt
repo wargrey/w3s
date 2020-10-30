@@ -22,17 +22,12 @@
 (define-type DTD-Entities Schema-Entities)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-dtd-entity-expand : (->* (XML-DTD)
-                                     (#:stop-if-xxe-unread? Boolean #:open-xxe-input-port (Option Open-Input-XML-XXE)
-                                      #:ipe-topsize (Option Index) #:xxe-topsize (Option Index) #:xxe-timeout (Option Real)
-                                      (Option DTD-Entities) Boolean)
-                                     DTD-Entities)
-  (lambda [#:stop-if-xxe-unread? [stop? #false] #:open-xxe-input-port [open-port #false]
-           #:ipe-topsize [ipe-topsize (default-xml-ipe-topsize)] #:xxe-topsize [xxe-topsize (default-xml-xxe-topsize)] #:xxe-timeout [timeout (default-xml-xxe-timeout)]
-           dtd [int-entities #false] [merge? #true]]
+(define xml-dtd-entity-expand : (->* (XML-DTD) ((Option DTD-Entities) Boolean #:stop-if-xxe-unread? Boolean #:dtd-guard XML-DTD-Guard) DTD-Entities)
+  (lambda [dtd [int-entities #false] [merge? #true] #:stop-if-xxe-unread? [stop? #false] #:dtd-guard [dtdg default-dtd-guard]]
     (define-values (entities _ _?)
-      (xml-dtd-entity-expand/partition dtd int-entities merge? stop? ipe-topsize
-                                       (and open-port (vector-immutable open-port xxe-topsize timeout))))
+      (xml-dtd-entity-expand/partition dtd int-entities merge? stop?
+                                       (xml-dtd-guard-ipe-topsize dtdg)
+                                       (xml-dtd-guard-xxe-guard dtdg)))
 
     entities))
 

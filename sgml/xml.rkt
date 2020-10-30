@@ -9,6 +9,7 @@
 (provide (struct-out XML-Document) read-xml-document xml-document*->document)
 (provide (struct-out XML-Document*) read-xml-document* xml-document*-normalize xml-document*-valid?)
 (provide svg:space-filter xml-load-relative-system-entity)
+(provide XML-DTD-Guard XML-XXE-Guard make-xml-dtd-guard)
 
 (require "dtd.rkt")
 

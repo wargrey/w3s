@@ -2,7 +2,7 @@
 
 <?xml version="1.0" ?>
 
-<!DOCTYPE tiny SYSTEM "tiny.dtd">
+<!DOCTYPE tiny SYSTEM "tiny.tdtd">
 
 <tiny xml:space="default">
   <author name="wargrey"/>

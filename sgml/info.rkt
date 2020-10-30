@@ -7,4 +7,4 @@
 
 (define scribblings '(["tamer/sgml.scrbl" (main-doc multi-page) (parsing-library)]))
 
-(define module-suffixes '(#"xml" #"dtd"))
+(define module-suffixes '(#"txml" #"tdtd"))

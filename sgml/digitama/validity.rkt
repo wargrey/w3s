@@ -164,7 +164,7 @@
 
     (define fixed-value-okay? : Boolean
       (cond [(and (xsch-attribute+default? aself) (xsch-attribute+default-fixed? aself))
-             (let ([?attr (xml-element-attribute-normalize aself (xml-schema-entities schema) null topsize #false)])
+             (let ([?attr (xml-element-attribute-normalize aself (xml-schema-entities schema) null topsize default-xxe-guard)])
                (and ?attr
                     (let ([fvalue (cdr ?attr)])
                       (cond [(and (xml:string? <avalue>) (xml:string? fvalue))

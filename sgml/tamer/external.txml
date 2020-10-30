@@ -2,7 +2,7 @@
 
 <!DOCTYPE xxe [
   <![INCLUDE[
-    <!ENTITY % SYMBOLS SYSTEM "symbols.dtd">
+    <!ENTITY % SYMBOLS SYSTEM "symbols.tdtd">
     %SYMBOLS;
   ]]>
 

@@ -9,7 +9,7 @@
     <!ELEMENT desc (#PCDATA)>
 
     <!ENTITY genderless "genderless">
-    <!ENTITY unparsed SYSTEM "tiny.dtd" NDATA foreign>
+    <!ENTITY unparsed SYSTEM "tiny.tdtd" NDATA foreign>
 
     <!ATTLIST tamer
               id      ID            #REQUIRED

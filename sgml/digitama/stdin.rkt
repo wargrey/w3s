@@ -21,7 +21,7 @@
     (define /dev/rawin : Input-Port
       (cond [(port? /dev/stdin) /dev/stdin]
             [(path? /dev/stdin) (open-input-file /dev/stdin)]
-            [(regexp-match? #px"\\.xml$" /dev/stdin) (open-input-file (~a /dev/stdin))]
+            [(regexp-match? #px"\\.t?xml$" /dev/stdin) (open-input-file (~a /dev/stdin))]
             [(string? /dev/stdin) (open-input-string /dev/stdin '/dev/xmlin/string)]
             [(bytes? /dev/stdin) (open-input-bytes /dev/stdin '/dev/xmlin/bytes)]
             [else (open-input-string (~s /dev/stdin) '/dev/xmlin/error)]))
@@ -39,7 +39,7 @@
     (define /dev/rawin : Input-Port
       (cond [(port? /dev/stdin) /dev/stdin]
             [(path? /dev/stdin) (open-input-file /dev/stdin)]
-            [(regexp-match? #px"\\.dtd$" /dev/stdin) (open-input-file (~a /dev/stdin))]
+            [(regexp-match? #px"\\.t?dtd$" /dev/stdin) (open-input-file (~a /dev/stdin))]
             [(string? /dev/stdin) (open-input-string /dev/stdin (or port-name '/dev/dtdin/string))]
             [(bytes? /dev/stdin) (open-input-bytes /dev/stdin (or port-name '/dev/dtdin/bytes))]
             [else (open-input-string (~s /dev/stdin) (or port-name '/dev/dtdin/error))]))
