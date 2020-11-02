@@ -167,17 +167,18 @@
                           [(xml:delim? ?e)
                            (let ([delim (xml:delim-datum ?e)])
                              (cond [(eq? delim #\|)
-                                    (when (or sep? (and sep (not (eq? sep #\|)))) (make+exn:xml:malformed ?e elem))
+                                    (cond [(or sep?) (make+exn:xml:empty ?e elem 'warning)]
+                                          [(and sep (not (eq? sep #\|))) (make+exn:xml:malformed ?e elem 'warning)])
                                     (extract-children rest++ nerdlihc #true (or sep #\|))]
                                    [(eq? delim #\,)
-                                    (when (or sep? (and sep (not (eq? sep #\,)))) (make+exn:xml:malformed ?e elem))
+                                    (cond [(or sep?) (make+exn:xml:empty ?e elem 'warning)]
+                                          [(and sep (not (eq? sep #\,))) (make+exn:xml:malformed ?e elem 'warning)])
                                     (extract-children rest++ nerdlihc #true (or sep #\,))]
                                    [(eq? delim #\))
                                     (let-values ([(p rest*) (xml-dtd-extract-element-children-particle* rest++)]
                                                  [(content) (reverse nerdlihc)])
-                                      (values (cond [(eq? sep #\,) (cons content p)]
-                                                    [else (cons (apply vector-immutable content) p)])
-                                              rest*))]
+                                      (cond [(null? content) (values (make+exn:xml:empty ?e elem 'warning) rest*)]
+                                            [else (values (cons (if (eq? sep #\,) content (apply vector-immutable content)) p) rest*)]))]
                                    [(eq? delim #\()
                                     (let-values ([(?content rest*) (extract-children rest++ null #true #false)])
                                       (extract-children rest* (if (exn:xml? ?content) nerdlihc (cons ?content nerdlihc)) #false sep))]

@@ -178,6 +178,7 @@
   [exn:xml:missing-name  #:-> exn:xml:malformed]
   [exn:xml:missing-value #:-> exn:xml:malformed]
   [exn:xml:unrecognized  #:-> exn:xml:malformed]
+  [exn:xml:empty         #:-> exn:xml:malformed]
   
   [exn:xml:space         #:-> exn:xml:char])
 

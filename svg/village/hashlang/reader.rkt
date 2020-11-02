@@ -2,15 +2,8 @@
 
 (provide (all-defined-out))
 
-(require racket/path)
-(require racket/port)
-
-(require syntax/strip-context)
-
 (require sgml/digitama/document)
 (require sgml/village/sgmlang/reader)
-
-(require svg/digitama/document)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define svg-read
@@ -19,9 +12,9 @@
 
 (define svg-read-syntax
   (lambda [[src #false] [/dev/svgin (current-input-port)]]
-    (sgml-doc-read-syntax read-svg-document* 'svg
+    (sgml-doc-read-syntax 'read-svg-document* 'svg
                           #px"\\.svg$" ".svg" src /dev/svgin
-                          svg-document*-normalize)))
+                          'svg-document*-normalize)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (svg-info in mod line col pos)

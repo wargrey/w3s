@@ -4,11 +4,12 @@
 
 (require "digicore.rkt")
 (require "grammar.rkt")
+(require "misc.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type Schema-Attribute-Type (U XSch-Attribute-String-Type XSch-Attribute-Token-Type XSch-Attribute-Enum-Type))
 
-(define-type Schema-Element-Sequence (Listof (Pairof (U Symbol Schema-Element-Children) Char)))
+(define-type Schema-Element-Sequence (Listof+ (Pairof (U Symbol Schema-Element-Children) Char)))
 (define-type Schema-Element-Choice (Immutable-Vectorof (Pairof (U Symbol Schema-Element-Children) Char)))
 (define-type Schema-Element-Children (U Schema-Element-Sequence Schema-Element-Choice))
 

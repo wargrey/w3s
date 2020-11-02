@@ -130,7 +130,7 @@
     (define self-attributes : XSch-AttList (hash-ref (xml-schema-attributes schema) self-name (λ [] xsch-empty-attributes)))
     (define self-requireds : XSch-Required-Attrs
       (for/hash : XSch-Required-Attrs ([(aname attr) (in-hash self-attributes)]
-                                      #:when (xsch-attribute/required? attr))
+                                       #:when (xsch-attribute/required? attr))
         (values aname (xsch-attribute-name attr))))
 
     (define-values (ids++ literal-valid? requireds rest-required-count)
@@ -242,8 +242,7 @@
                        (not (make+exn:xml:nonempty <self>))))]
           [(xsch-element+children? self) ; whitespaces, comments, PIs are allowed
            (for/fold ([ids : XSch-IDs ids]
-                      [valid? : Boolean (or (xml-children-match? (filter xml-element? children) (xsch-element+children-content self))
-                                            (not (make+exn:xml:children <self>)))])
+                      [valid? : Boolean (xml-children-match? <self> (filter xml-element? children) (xsch-element+children-content self))])
                      ([child (in-list children)])
              (cond [(xml:string? child)
                     (values ids (and valid? (not (make+exn:xml:adoptee child <self>))))]
@@ -267,34 +266,74 @@
           [else (values ids (not (make+exn:xml:undeclared <self> #false log-level/not-an-error)))])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-children-match? : (-> (Listof XML-Element*) (Pairof Schema-Element-Children Char) Boolean)
-  (lambda [children content]
+
+;;; WARNING: untested
+(define xml-children-match? : (-> XML:Name (Listof XML-Element*) (Pairof Schema-Element-Children Char) Boolean)
+  ;;; https://www.w3.org/TR/xml/#determinism
+  (lambda [<self> children content]
     (define-values (pattern particle) (values (car content) (cdr content)))
     (define-values (match? rest)
       (if (vector? pattern)
-          (xml-cat-choice children pattern particle)
-          (xml-cat-sequence children pattern particle)))
+          (xml-car-choice children pattern particle)
+          (xml-car-sequence children pattern particle)))
 
-    (and match? (null? rest))))
+    (or (and match? (null? rest))
+        (not (make+exn:xml:children <self>)))))
 
-(define xml-cat-choice : (-> (Listof XML-Element*) Schema-Element-Choice Char (Values Boolean (Listof XML-Element*)))
+(define xml-car-choice : (-> (Listof XML-Element*) Schema-Element-Choice Char (Values Boolean (Listof XML-Element*)))
   (lambda [children choice particle]
-    (xml-children-split children particle
-                        (let check ([rest : (Listof XML-Element*) children])
-                          (cond [(null? rest) rest]
-                                [(vector-memq (xml:name-datum (caar rest)) choice) (check (cdr rest))]
-                                [else rest])))))
+    (let match-next-round ([matcnt : Integer 0]
+                           [subelems : (Listof XML-Element*) children])
+      (cond [(null? subelems) (values (xml-quantifier-okay? matcnt particle) null)]
+            [else (let ([?rest (for/or : (Option (Listof XML-Element*)) ([cp (in-vector choice #| at least one options is guaranteed |#)])
+                                 (define-values (okay? rest) (xml-car-children subelems cp))
+                                 (and okay? rest))])
+                    (cond [(not ?rest) (values (xml-quantifier-okay? matcnt particle) subelems)]
+                          [(eq? subelems ?rest) (values (xml-quantifier-okay? matcnt particle) ?rest)]
+                          [else (match-next-round (add1 matcnt) ?rest)]))]))))
 
-(define xml-cat-sequence : (-> (Listof XML-Element*) Schema-Element-Sequence Char (Values Boolean (Listof XML-Element*)))
+(define xml-car-sequence : (-> (Listof XML-Element*) Schema-Element-Sequence Char (Values Boolean (Listof XML-Element*)))
   (lambda [children seq particle]
-    (values #false null)))
+    (let match-next-round ([matcnt : Integer 0]
+                           [children : (Listof XML-Element*) children])
+      (let match-this-round ([subelems : (Listof XML-Element*) children]
+                             [seqrest : (Listof (Pairof (U Symbol Schema-Element-Children) Char)) seq #| initially at least one components is guaranteed to exist |#])
+        (cond [(pair? seqrest)
+               (let-values ([(okay? subrest) (xml-car-children subelems (car seqrest))])
+                 (cond [(not okay?) (values (xml-quantifier-okay? matcnt particle) children)]
+                       [else (match-this-round subrest (cdr seqrest))]))]
+              [(eq? subelems children) (values (xml-quantifier-okay? matcnt particle) children)]
+              [(pair? subelems) (match-next-round (add1 matcnt) subelems)]
+              [else (values (xml-quantifier-okay? (add1 matcnt) particle) null)])))))
 
-(define xml-children-split : (-> (Listof XML-Element*) Char (Listof XML-Element*)  (Values Boolean (Listof XML-Element*)))
-  (lambda [children particle rest]
-    (define maxidx : Index (length children))
-    (define rstcnt : Index (length rest))
+(define xml-car-elements : (-> (Listof XML-Element*) Symbol Char (Values Boolean (Listof XML-Element*)))
+  (lambda [children name particle]
+    (define rest : (Listof XML-Element*)
+      (let match-next ([rest : (Listof XML-Element*) children])
+        (cond [(null? rest) rest]
+              [(eq? (xml:name-datum (caar rest)) name) (match-next (cdr rest))]
+              [else rest])))
+
+    (let ([maxcnt (length children)]
+          [rstcnt (length rest)])
+      (values (xml-quantifier-okay? (- maxcnt rstcnt) particle)
+              rest))))
+
+(define xml-car-children : (-> (Listof XML-Element*) (Pairof (U Symbol Schema-Element-Children) Char) (Values Boolean (Listof XML-Element*)))
+  (lambda [children cp]
+    (define-values (pattern particle) (values (car cp) (cdr cp)))
     
-    (values #false rest)))
+    (cond [(symbol? pattern) (xml-car-elements children pattern particle)]
+          [(vector? pattern) (xml-car-choice children pattern particle)]
+          [else (xml-car-sequence children pattern particle)])))
+
+(define xml-quantifier-okay? : (-> Integer Char Boolean)
+  (lambda [matcnt particle]
+    ;;; TODO: is greedy matching okay?
+    (cond [(eq? particle #\+) (>= matcnt 1)]
+          [(eq? particle #\*) (>= matcnt 0)]
+          [(eq? particle #\?) (<= matcnt 1)]
+          [else (= matcnt 1)])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml:attname? : (-> Symbol Boolean)
