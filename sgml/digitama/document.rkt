@@ -29,7 +29,6 @@
 (struct xml-document
   ([prolog : XML-Prolog]
    [doctype : XML-DocType]
-   [internal-dtd : XML-Plain-DTD]
    [elements : (Listof XML-Content)])
   #:transparent
   #:type-name XML-Document)
@@ -54,7 +53,7 @@
   (lambda [/dev/rawin]
     (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin #false))
     (define tokens : (Listof XML-Datum) (read-xml-tokens /dev/xmlin))
-    (define-values (doctype dtd grammars) (xml-syntax->content tokens))
+    (define-values (doctype grammars) (xml-syntax->content tokens))
     (define-values (maybe-name external) (xml-doctype-values doctype))
     
     (define name : (Option Symbol)
@@ -65,7 +64,7 @@
 
     (xml-document (xml-prolog (sgml-port-name /dev/xmlin) version encoding standalone?)
                   (xml-doctype name external)
-                  dtd grammars)))
+                  grammars)))
 
 (define read-xml-document* : (-> SGML-StdIn XML-Document*)
   (lambda [/dev/rawin]
@@ -156,7 +155,6 @@
                          [id (xml-doctype*-external doctype)])
                     (xml-doctype (and name (xml:name-datum name))
                                  (xml-external-id->datum id)))
-                  (make-hasheq)
                   (map xml-content->datum (xml-document*-contents doc.xml)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
