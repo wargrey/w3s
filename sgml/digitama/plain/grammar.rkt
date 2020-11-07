@@ -22,10 +22,10 @@
 (define-type XML-Element (Rec elem (List Symbol (Listof XML-Element-Attribute) (Listof (U elem XML-Subdatum)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-syntax->content : (-> (Listof XML-Datum) (Values (Option XML-DocType-Metadata) (Listof XML-Content)))
+(define xml-syntax->content : (-> (Listof XML-Datum) (Values (Option XML-Doctype-Metadata) (Listof XML-Content)))
   (lambda [tokens]
     (let syntax->grammar ([rest : (Listof XML-Datum) tokens]
-                          [doctype : (Option XML-DocType-Metadata) #false]
+                          [doctype : (Option XML-Doctype-Metadata) #false]
                           [srammarg : (Listof XML-Content) null])
       (cond [(null? rest) (values doctype (reverse srammarg))]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
@@ -34,8 +34,8 @@
                              (cond [(not d) (syntax->grammar r doctype srammarg)]
                                    [(eq? (vector-ref d 0) 'DOCTYPE)
                                     (cond [(not doctype) (syntax->grammar r doctype srammarg)]
-                                          [else (let-values ([(metadata sPI) (xml-grammar-parse-doctype d)])
-                                                  (syntax->grammar r metadata (append sPI srammarg)))])]
+                                          [else (let-values ([(?name ?public ?system sPI) (xml-grammar-parse-doctype d)])
+                                                  (syntax->grammar r (xml-doctype-metadata ?name ?public ?system) (append sPI srammarg)))])]
                                    [else (syntax->grammar r doctype srammarg)]))]
                           [(eq? self <?)
                            (let-values ([(p r) (xml-syntax-extract-pi rest++)])
@@ -52,7 +52,7 @@
     (let extract-declaration ([rest : (Listof XML-Datum) tokens]
                               [name : (Option Symbol) #false]
                               [bodies : (Listof XML-Doctype-Body) null])
-      (cond [(null? rest) #| PI is at the end of the file and malformed |# (values #false null)]
+      (cond [(null? rest) #| unexpected EOF |# (values #false null)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml-white-space? self) (extract-declaration rest++ name bodies)]
                           [(eq? self #\>) (values (and name (vector name (reverse bodies))) rest++)]
@@ -134,16 +134,16 @@
                           [else #| should not happen |# (extract-subelement rest++ nerdlidc)]))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-grammar-parse-doctype : (-> XML-Declaration (Values (Option XML-DocType-Metadata) (Listof XML-Processing-Instruction)))
+(define xml-grammar-parse-doctype : (-> XML-Declaration (Values (Option Symbol) (Option String) (Option String) (Listof XML-Processing-Instruction)))
   (lambda [doctype]
     ; Whitespaces have already been filtered out.
     (define-values (declname body) (values (vector-ref doctype 0) (vector-ref doctype 1)))
-    (cond [(null? body) (values #false null)]
+    (cond [(null? body) (values #false #false #false null)]
           [else (let-values ([(self rest) (values (car body) (cdr body))])
-                  (cond [(not (symbol? self)) (values #false null)]
-                        [else (let* ([ext (xml-grammar-extract-external (vector-ref doctype 0) rest)]
-                                     [metainfo (xml-doctype-metadata self (car ext) (cadr ext))])
-                                (values metainfo (xml-grammar-extract-internal self (cddr ext))))]))])))
+                  (cond [(not (symbol? self)) (values #false #false #false null)]
+                        [else (let ([ext (xml-grammar-extract-external (vector-ref doctype 0) rest)])
+                                (values self (car ext) (cadr ext)
+                                        (xml-grammar-extract-internal self (cddr ext))))]))])))
 
 (define xml-grammar-extract-external : (-> Symbol (Listof XML-Doctype-Body) (List* (Option String) (Option String) (Listof XML-Doctype-Body)))
   (lambda [declname doctype]
@@ -186,7 +186,7 @@
                           [else (extract-intsubset rest++ sIP)]))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-etag? : (-> XML-Datum Boolean)
+(define xml-etag? : (-> (U XML-Datum EOF) Boolean)
   (lambda [xd]
     (eq? xd #\>)))
 

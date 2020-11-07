@@ -4,7 +4,7 @@
 ;;; https://www.w3.org/TR/xml/                                                                  ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(provide (all-defined-out) (all-from-out "dtd.rkt"))
+(provide (all-defined-out) (all-from-out "dtd.rkt") (all-from-out "sax.rkt"))
 (provide XML-DTD XML-External-Doctype-Entity xml-load-relative-system-entity)
 (provide (struct-out XML-Document) read-xml-document xml-document*->document)
 (provide (struct-out XML-Document*) read-xml-document* xml-document*-normalize xml-document*-valid?)
@@ -12,6 +12,7 @@
 (provide XML:Space-Filter XML-Space-Position svg:space-filter)
 
 (require "dtd.rkt")
+(require "sax.rkt")
 
 (require "digitama/dtd.rkt")
 (require "digitama/doctype.rkt")

@@ -6,7 +6,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type XML-External-ID (U False String (Pairof String String)))
-(define-type XML-DocType-Metadata (Pairof Symbol XML-External-ID))
+(define-type XML-Doctype-Metadata (Pairof Symbol XML-External-ID))
 (define-type XML-Entities (HashTable Symbol (U String (Boxof String))))
 
 (define-type XML-External-ID* (U False XML:String (Pairof XML:String XML:String)))
@@ -34,7 +34,7 @@
   #:type-name XML-DocType*)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-doctype-metadata : (-> (Option Symbol) (Option String) (Option String) (Option XML-DocType-Metadata))
+(define xml-doctype-metadata : (-> (Option Symbol) (Option String) (Option String) (Option XML-Doctype-Metadata))
   (lambda [name public system]
     (and name
          (cons name
@@ -48,7 +48,7 @@
                (cond [(and public system) (cons public system)]
                      [else system])))))
 
-(define xml-doctype-values : (-> (Option XML-DocType-Metadata) (Values (Option Symbol) XML-External-ID))
+(define xml-doctype-values : (-> (Option XML-Doctype-Metadata) (Values (Option Symbol) XML-External-ID))
   (lambda [dt]
     (cond [(not dt) (values #false #false)]
           [else (values (car dt) (cdr dt))])))
