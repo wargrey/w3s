@@ -13,7 +13,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type SGML-StdIn (U Input-Port Path-String Bytes))
 
-(define xml-open-input-port : (->* (SGML-StdIn) (Boolean) (Values Input-Port (Option Nonnegative-Flonum) (Option String) Boolean))
+(define xml-open-input-port : (->* (SGML-StdIn) (Boolean) (Values Input-Port Nonnegative-Flonum (Option String) Boolean))
   ;;; https://www.w3.org/TR/xml/#sec-prolog-dtd
   ;;; https://www.w3.org/TR/xml/#NT-EncodingDecl
   ;;; https://www.w3.org/TR/xml/#sec-TextDecl
@@ -61,7 +61,7 @@
             [else (string->symbol (~a src))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-read-declaration : (-> Input-Port (Values (Option Nonnegative-Flonum) (Option String) Boolean))
+(define xml-read-declaration : (-> Input-Port (Values Nonnegative-Flonum (Option String) Boolean))
   (lambda [/dev/xmlin]
     (cond [(not (regexp-try-match #px"^\\s*<[?][Xx][Mm][Ll]\\s+" /dev/xmlin)) (values 1.0 "UTF-8" #true)]
           [else (let read-property ([version : (Option Number) #false]
@@ -71,7 +71,7 @@
                   (define name.value (and name=value (filter bytes? (cdr name=value))))
                   (if (not name.value)
                       (let ([?> (regexp-match #px"[^>]*[?]>\\s*" /dev/xmlin)])
-                        (values (and (real? version) (positive? version) (real->double-flonum version)) encoding standalone?))
+                        (values (or (and (real? version) (positive? version) (real->double-flonum version)) 0.0) encoding standalone?))
                       (let ([name (unsafe-car name.value)]
                             [value (unsafe-car (unsafe-cdr name.value))])
                         (cond [(bytes=? name #"version") (read-property (string->number (bytes->string/utf-8 value)) encoding standalone?)]

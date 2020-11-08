@@ -15,7 +15,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (struct xml-prolog
   ([location : (U String Symbol)]
-   [version : (Option Nonnegative-Flonum)]
+   [version : Nonnegative-Flonum]
    [encoding : (Option String)]
    [standalone? : Boolean])
   #:transparent

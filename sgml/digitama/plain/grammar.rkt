@@ -138,15 +138,16 @@
   (lambda [doctype]
     ; Whitespaces have already been filtered out.
     (define-values (declname body) (values (vector-ref doctype 0) (vector-ref doctype 1)))
+
     (cond [(null? body) (values #false #false #false null)]
           [else (let-values ([(self rest) (values (car body) (cdr body))])
                   (cond [(not (symbol? self)) (values #false #false #false null)]
-                        [else (let ([ext (xml-grammar-extract-external (vector-ref doctype 0) rest)])
+                        [else (let ([ext (xml-grammar-extract-external rest)])
                                 (values self (car ext) (cadr ext)
                                         (xml-grammar-extract-internal self (cddr ext))))]))])))
 
-(define xml-grammar-extract-external : (-> Symbol (Listof XML-Doctype-Body) (List* (Option String) (Option String) (Listof XML-Doctype-Body)))
-  (lambda [declname doctype]
+(define xml-grammar-extract-external : (-> (Listof XML-Doctype-Body) (List* (Option String) (Option String) (Listof XML-Doctype-Body)))
+  (lambda [doctype]
     (or (and (pair? doctype)
              (let-values ([(self rest) (values (car doctype) (cdr doctype))])
                (case self

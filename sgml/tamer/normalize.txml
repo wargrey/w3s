@@ -68,6 +68,8 @@ numerically (&#38;#38;#38;) or with a general entity
 ]]>
 ]>
 
+<?exec true?>
+
 <normalize id="&#xd;&#xd;A&#xa;&#xa;B&#xd;&#xa;" literacy="&book;" pe="%expansion;" pe="dup" ext="&open-hatch;" ndata="&hatch-pic;">
            <testcase>This sample shows an &tricky; method.</testcase>
            &example;
