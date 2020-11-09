@@ -126,13 +126,13 @@
                                                [else (let ([>rest (memf xml-etag? rest++)])
                                                        (cond [(not >rest) #| unexpected EOF |# (extract-subelement null nerdlidc)]
                                                              [else #| invalid element EndTag |# (values #false (cdr >rest))]))]))])]
-                          [(or (index? self) (symbol? self)) (extract-subelement rest++ (cons self nerdlidc))]  ; entities
                           [(eq? self <?)
                            (let-values ([(p r) (xml-syntax-extract-pi rest++)])
                              (extract-subelement r (if (not p) nerdlidc (cons p nerdlidc))))]
                           [(eq? self <!&CDATA&)
                            (cond [(or (null? rest++) (null? (cdr rest++))) #| unexpected EOF |# (extract-subelement null nerdlidc)]
                                  [else (extract-subelement (cddr rest++) (cons (assert (car rest++) string?) nerdlidc))])]
+                          [(or (index? self) (symbol? self)) (extract-subelement rest++ (cons self nerdlidc))]  ; entities
                           [else #| should not happen |# (extract-subelement rest++ nerdlidc)]))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

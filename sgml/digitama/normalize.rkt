@@ -269,11 +269,12 @@
                 (λ [] xsch-empty-attributes)))
     
     (define-values (setubirtta xml:this:lang xml:this:space)
-      (let attribute-filter-map : (Values (Listof XML-Element-Attribute*) (Option String) Symbol) ([rest : (Listof XML-Element-Attribute*) (cadr e)]
-                                                                                                   [setubirtta : (Listof XML-Element-Attribute*) null]
-                                                                                                   [names : (Listof Symbol) null]
-                                                                                                   [lang : (Option String) xml:lang]
-                                                                                                   [space : Symbol xml:space])
+      (let attribute-filter-map : (Values (Listof XML-Element-Attribute*) (Option String) Symbol)
+        ([rest : (Listof XML-Element-Attribute*) (cadr e)]
+         [setubirtta : (Listof XML-Element-Attribute*) null]
+         [names : (Listof Symbol) null]
+         [lang : (Option String) xml:lang]
+         [space : Symbol xml:space])
         (if (pair? rest)
             (let*-values ([(self rest++) (values (car rest) (cdr rest))]
                           [(decl) (hash-ref attlist (xml:name-datum (car self)) (λ [] undeclared-attribute))]
@@ -629,16 +630,6 @@
                (and ?cp (integer->char ?cp))))
         (and (make+exn:xml:char etoken context)
              #false))))
-
-(define xml-prentity-value-ref : (-> Symbol (Option Char))
-  ;;; https://www.w3.org/TR/xml/#sec-predefined-ent
-  (lambda [name]
-    (cond [(eq? name &lt) #\u3c]
-          [(eq? name &gt) #\u3e]
-          [(eq? name &amp) #\u26]
-          [(eq? name &apos) #\u27]
-          [(eq? name &quot) #\u22]
-          [else #false])))
 
 (define xml-internal-entity-value-ref : (->* (XML-Token (U Symbol Keyword) Schema-Entities (Option Schema-Entities)) ((Option XML-Token))
                                              (Values (Option String) Boolean))

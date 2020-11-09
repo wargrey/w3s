@@ -11,6 +11,7 @@
 (require "../plain/prompt.rkt")
 
 (require "../stdin.rkt")
+(require "../prentity.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type XML-Element-Event (U 'open 'close 'close-tag 'close-empty))
@@ -22,6 +23,8 @@
 (define-type (XML-Attribute-Handler seed) (-> Symbol Symbol (U String (Boxof String)) seed seed))
 (define-type (XML-AttriList-Handler seed) (-> Symbol (Listof XML-Element-Attribute) seed seed))
 (define-type (XML-PCData-Handler seed) (-> Symbol String Boolean seed seed))
+(define-type (XML-Space-Handler seed) (-> Symbol String Boolean seed seed))
+(define-type (XML-GEReference-Handler seed) (-> (U Symbol Index) (Option Char) seed seed))
 (define-type (XML-Comment-Handler seed) (-> (Option Symbol) String seed seed))
 
 (struct (seed) xml-event-handler
@@ -32,6 +35,8 @@
    [attribute : (XML-Attribute-Handler seed)]
    [attrilist : (XML-AttriList-Handler seed)]
    [pcdata : (XML-PCData-Handler seed)]
+   [space : (XML-Space-Handler seed)]
+   [geref : (XML-GEReference-Handler seed)]
    [comment : (XML-Comment-Handler seed)])
   #:type-name XML-Event-Handler
   #:transparent)
@@ -44,6 +49,8 @@
                          #:attribute [attr : (U (XML-Attribute-Handler seed) False Void) (void)]
                          #:attrilist [attrlist : (U (XML-AttriList-Handler seed) False Void) (void)]
                          #:pcdata [pcdata : (U (XML-PCData-Handler seed) False Void) (void)]
+                         #:space [space : (U (XML-Space-Handler seed) False Void) (void)]
+                         #:gereference [geref : (U (XML-GEReference-Handler seed) False Void) (void)]
                          #:comment [comment : (U (XML-Comment-Handler seed) False Void) (void)]
                          [src : (Option (XML-Event-Handler seed)) #false]) : (XML-Event-Handler seed)
   (xml-event-handler (or (if (void? document) (and src (xml-event-handler-prolog src)) document) sax-arity6-identity)
@@ -53,6 +60,8 @@
                      (or (if (void? attr) (and src (xml-event-handler-attribute src)) attr) sax-arity4-identity)
                      (or (if (void? attrlist) (and src (xml-event-handler-attrilist src)) attrlist) sax-arity3-identity)
                      (or (if (void? pcdata) (and src (xml-event-handler-pcdata src)) pcdata) sax-arity4-identity)
+                     (or (if (void? space) (and src (xml-event-handler-space src)) space) sax-arity4-identity)
+                     (or (if (void? geref) (and src (xml-event-handler-geref src)) geref) sax-arity3-identity)
                      (or (if (void? comment) (and src (xml-event-handler-comment src)) comment) sax-arity3-identity)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -90,10 +99,7 @@
                  (cond [(not d) (sax consume++++ scope++++ datum)]
                        [(eq? (vector-ref d 0) 'DOCTYPE)
                         (let-values ([(?name ?public ?system sPI) (xml-grammar-parse-doctype d)])
-                          (sax consume++++ scope++++
-                               (for/fold ([datum : seed (fdoctype ?name ?public ?system datum)])
-                                         ([pi (in-list sPI)])
-                                 (fprocess #false (mcar pi) (mcdr pi) datum))))]
+                          (sax consume++++ scope++++ (fdoctype ?name ?public ?system datum)))]
                        [else (sax consume++++ scope++++ datum)]))]
               [(eq? self <?)
                (let-values ([(p consume++++ scope++++) (xml-sax-pi /dev/xmlin consume++ scope++)])
@@ -109,22 +115,24 @@
     (let sax-decl ([consume : XML-Token-Consumer consume]
                    [scope : XML-Scope scope]
                    [name : (Option Symbol) #false]
-                   [bodies : (Listof XML-Doctype-Body) null])
+                   [bodies : (Listof XML-Doctype-Body) null]
+                   [need? : Boolean #false])
       (define-values (self consume++ scope++) (xml-consume-token /dev/xmlin consume scope))
       
       (cond [(eof-object? self) (values #false consume++ scope++)]
-            [(xml-white-space? self) (sax-decl consume++ scope++ name bodies)]
+            [(xml-white-space? self) (sax-decl consume++ scope++ name bodies need?)]
             [(eq? self #\>) (values (and name (vector name (reverse bodies))) consume++ scope++)]
             [(eq? self <!)
              (let-values ([(d consume++++ scope++++) (xml-sax-declaration /dev/xmlin consume++ scope++)])
-               (sax-decl consume++++ scope++++ name (if (not d) bodies (cons d bodies))))]
+               (sax-decl consume++++ scope++++ name bodies #| drop internal DTD declarations |# need?))]
             [(eq? self <?)
              (let-values ([(p consume++++ scope++++) (xml-sax-pi /dev/xmlin consume++ scope++)])
-               (sax-decl consume++++ scope++++ name (if (not p) bodies (cons p bodies))))]
+               (sax-decl consume++++ scope++++ name bodies #| drop processing instructions inside the internal DTD |# need?))]
             [(symbol? self) ; WARNING: do not move up this clause since `<!` and `<?` are also symbols
-             (cond [(not name) (sax-decl consume++ scope++ self bodies)]
-                   [else (sax-decl consume++ scope++ name (cons self bodies))])]
-            [else (sax-decl consume++ scope++ name (cons self bodies))]))))
+             (cond [(not name) (sax-decl consume++ scope++ self bodies (eq? self 'DOCTYPE))]
+                   [else (sax-decl consume++ scope++ name (if (not need?) bodies (cons self bodies)) need?)])]
+            [else (let ([need?++ (and need? (not (eq? self #\[)))]) ; only tokens between `DOCTYPE` and `[` are collected
+                    (sax-decl consume++ scope++ name (if (not need?++) bodies (cons self bodies)) need?++))]))))
 
 (define xml-sax-pi : (-> Input-Port XML-Token-Consumer XML-Scope (Values (Option XML-Processing-Instruction) XML-Token-Consumer XML-Scope))
   ;;; https://www.w3.org/TR/xml/#sec-pi
@@ -185,19 +193,25 @@
   (lambda [tagname /dev/xmlin consume scope saxcb datum0]
     (define felement : (XML-Element-Handler seed) (xml-event-handler-element saxcb))
     (define fcomment : (XML-Comment-Handler seed) (xml-event-handler-comment saxcb))
+    (define fpcdata : (XML-PCData-Handler seed) (xml-event-handler-pcdata saxcb))
+    (define fspace : (XML-Space-Handler seed) (xml-event-handler-space saxcb))
+    (define fgeref : (XML-GEReference-Handler seed) (xml-event-handler-geref saxcb))
     
-    (let extract-subelement ([consume : XML-Token-Consumer consume]
-                             [scope : XML-Scope scope]
-                             [datum : (Option seed) datum0])
+    (let sax-subelement ([consume : XML-Token-Consumer consume]
+                         [scope : XML-Scope scope]
+                         [datum : (Option seed) datum0])
       (define-values (self consume++ scope++) (xml-consume-token /dev/xmlin consume scope))
       
       (cond [(eof-object? rest) (values consume++ scope++ datum0)]
-            [(xml-comment? self) (extract-subelement consume++ scope++ (and datum (fcomment tagname (xml-white-space-raw self) datum)))]
-            [(xml-white-space? self) (extract-subelement consume++ scope++ datum)]
+            [(xml-comment? self) (sax-subelement consume++ scope++ (and datum (fcomment tagname (xml-white-space-raw self) datum)))]
+            [(xml-white-space? self)
+             (sax-subelement consume++ scope++
+                             (and tagname datum
+                                  (fspace tagname (xml-white-space-raw self) (xml-new-line? self) datum)))]
             [(eq? self #\<)
              (let-values ([(consume++++ scope++++ datum++) (xml-sax-element /dev/xmlin consume++ scope++ saxcb datum)])
-               (extract-subelement consume++++ scope++++ datum++))]
-            [(string? self) (extract-subelement consume++ scope++ datum)]
+               (sax-subelement consume++++ scope++++ datum++))]
+            [(string? self) (sax-subelement consume++ scope++ (and tagname datum (fpcdata tagname self #false datum)))]
             [(eq? self </)
              (let*-values ([(?name consume++++ scope++++) (xml-consume-token /dev/xmlin consume++ scope++)]
                            [(?etag consume** scope**) (xml-consume-token /dev/xmlin consume++++ scope++++)])
@@ -205,16 +219,17 @@
                        (and datum (eq? tagname ?name)
                             (symbol? ?name) (xml-etag? ?etag) 
                             (felement ?name (assert scope++ index?) 'close datum))))]
-            [(or (index? self) (symbol? self)) (extract-subelement consume++ scope++ datum)]  ; entities
             [(eq? self <?)
              (let-values ([(p consume++++ scope++++) (xml-sax-pi /dev/xmlin consume++ scope++)])
-               (extract-subelement consume++++ scope++++ datum))]
+               (sax-subelement consume++++ scope++++ datum))]
             [(eq? self <!&CDATA&)
              (let*-values ([(?cdata consume++++ scope++++) (xml-consume-token /dev/xmlin consume++ scope++)]
                            [(?ecdata consume** scope**) (xml-consume-token /dev/xmlin consume++++ scope++++)])
-               (cond [(eof-object? ?cdata) (extract-subelement consume** scope** datum)]
-                     [else (extract-subelement consume** scope** datum)]))]
-            [else #| should not happen |# (extract-subelement consume++ scope++ datum)]))))
+               (cond [(not (string? ?cdata)) (sax-subelement consume** scope** #false)]
+                     [else (sax-subelement consume** scope** (and tagname datum (fpcdata tagname ?cdata #true datum)))]))]
+            [(index? self) (sax-subelement consume++ scope++ (and tagname datum (fgeref self (integer->char self) datum)))]
+            [(symbol? self) (sax-subelement consume++ scope++ (and tagname datum (fgeref self (xml-prentity-value-ref self) datum)))]
+            [else #| should not happen |# (sax-subelement consume++ scope++ datum)]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define sax-arity3-identity : (All (seed) (-> Any Any seed seed))

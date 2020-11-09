@@ -17,9 +17,9 @@
 (define sax-display-doctype : (XML-Doctype-Handler Void)
   (lambda [?name public system datum]
     (cond [(not ?name) (sax-stop-with datum)]
-          [(and public system) (printf "<!DOCTYPE ~a PUBLIC ~a ~a>~n" ?name public system)]
-          [(and system) (printf "<!DOCTYPE ~a SYSTEM ~a>~n" ?name system)]
-          [else (printf "<!DOCTYPE ~a ~a ~a>~n" ?name public system)])))
+          [(and public system) (printf "<!DOCTYPE ~a PUBLIC \"~a\" \"~a\">~n" ?name public system)]
+          [(and system) (printf "<!DOCTYPE ~a SYSTEM \"~a\">~n" ?name system)]
+          [else (printf "<!DOCTYPE ~a>~n" ?name)])))
 
 (define sax-display-pi : (XML-PI-Handler Void)
   (lambda [?element target body datum]
@@ -44,21 +44,28 @@
   (lambda [element name value datum]
     (printf " ~a=\"~a\"" name value)))
 
-(define sax-display-attrilist : (XML-AttriList-Handler Void)
-  (lambda [element attributes datum]
-    (when (pair? attributes)
-      (display #\space))))
+(define sax-display-pcdata : (XML-PCData-Handler Void)
+  (lambda [element pcdata cdata? datum]
+    (when (and cdata?) (printf "<![CDATA["))
+    (display pcdata)
+    (when (and cdata?) (printf "]]>"))))
+
+(define sax-display-whitespace : (XML-Space-Handler Void)
+  (lambda [element space newline? datum]
+    (display space)))
+
+(define sax-display-entity : (XML-GEReference-Handler Void)
+  (lambda [entity ?default-char datum]
+    (when (char? ?default-char)
+      (display ?default-char))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (module+ main
   (define sax-handler
     ((inst make-xml-event-handler Void)
-     #:prolog sax-display-prolog
-     #:doctype sax-display-doctype
-     #:pi sax-display-pi
-     #:element sax-display-element
-     #:attribute sax-display-attribute
-     #:attrilist sax-display-attrilist
+     #:prolog sax-display-prolog #:doctype sax-display-doctype #:pi sax-display-pi
+     #:element sax-display-element #:attribute sax-display-attribute
+     #:pcdata sax-display-pcdata #:space sax-display-whitespace #:gereference sax-display-entity
      #:comment sax-display-comment))
 
   (read-xml-datum normalize.txml sax-handler))

@@ -4,8 +4,8 @@
 (provide XML-Event-Handler xml-event-handler? make-xml-event-handler)
 (provide XML-Prolog-Handler XML-Doctype-Handler XML-PI-Handler)
 (provide XML-Element-Handler XML-Attribute-Handler XML-AttriList-Handler)
-(provide XML-PCData-Handler XML-Comment-Handler)
-
+(provide XML-PCData-Handler XML-Space-Handler XML-GEReference-Handler)
+(provide XML-Comment-Handler XML-Element-Event)
 
 (require "digitama/plain/sax.rkt")
 (require "digitama/plain/prompt.rkt")
