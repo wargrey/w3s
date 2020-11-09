@@ -56,14 +56,16 @@
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml-white-space? self) (extract-declaration rest++ name bodies)]
                           [(eq? self #\>) (values (and name (vector name (reverse bodies))) rest++)]
-                          [(symbol? self) (if (not name) (extract-declaration rest++ self bodies) (extract-declaration rest++ name (cons self bodies)))]
                           [(eq? self <!)
-                           (let-values ([(d r) (xml-syntax-extract-declaration rest++)])
-                             (extract-declaration r name (if (not d) bodies (cons d bodies))))]
+                           (let-values ([(d rest++++) (xml-syntax-extract-declaration rest++)])
+                             (extract-declaration rest++++ name (if (not d) bodies (cons d bodies))))]
                           [(eq? self <?)
-                           (let-values ([(p r) (xml-syntax-extract-pi rest++)])
-                             (extract-declaration r name (if (not p) bodies (cons p bodies))))]
-                          [else (extract-declaration rest++ name bodies)]))]))))
+                           (let-values ([(p rest++++) (xml-syntax-extract-pi rest++)])
+                             (extract-declaration rest++++ name (if (not p) bodies (cons p bodies))))]
+                          [(symbol? self) ; WARNING: do not move up this clause since `<!` and `<?` are also symbols
+                           (cond [(not name) (extract-declaration rest++ self bodies)]
+                                 [else (extract-declaration rest++ name (cons self bodies))])]
+                          [else (extract-declaration rest++ name (cons self bodies))]))]))))
 
 (define xml-syntax-extract-pi : (-> (Listof XML-Datum) (Values (Option XML-Processing-Instruction) (Listof XML-Datum)))
   ;;; https://www.w3.org/TR/xml/#sec-pi
@@ -73,9 +75,9 @@
                      [body : (Option String) #false])
       (cond [(null? rest) #| PI is at the end of the file and malformed |# (values #false null)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
-                    (cond [(symbol? self) (extract-pi rest++ self body)]
+                    (cond [(eq? self ?>) (values (and target (mcons target body)) (cdr rest))]
+                          [(symbol? self) (extract-pi rest++ self body)] ; WARNING: do not move up this clause since `?>` is also a symbol
                           [(string? self) (extract-pi rest++ target self)]
-                          [(eq? self ?>) (values (and target (mcons target body)) (cdr rest))]
                           [else #| bad PI |# (extract-pi rest++ target body)]))]))))
 
 (define xml-syntax-extract-element : (-> (Listof XML-Datum) (Values (Option XML-Element) (Listof XML-Datum)))
