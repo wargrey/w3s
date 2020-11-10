@@ -193,6 +193,7 @@
   (lambda [tagname /dev/xmlin consume scope saxcb datum0]
     (define felement : (XML-Element-Handler seed) (xml-event-handler-element saxcb))
     (define fcomment : (XML-Comment-Handler seed) (xml-event-handler-comment saxcb))
+    (define fprocess : (XML-PI-Handler seed) (xml-event-handler-pi saxcb))
     (define fpcdata : (XML-PCData-Handler seed) (xml-event-handler-pcdata saxcb))
     (define fspace : (XML-Space-Handler seed) (xml-event-handler-space saxcb))
     (define fgeref : (XML-GEReference-Handler seed) (xml-event-handler-geref saxcb))
@@ -210,7 +211,7 @@
                                   (fspace tagname (xml-white-space-raw self) (xml-new-line? self) datum)))]
             [(eq? self #\<)
              (let-values ([(consume++++ scope++++ datum++) (xml-sax-element /dev/xmlin consume++ scope++ saxcb datum)])
-               (sax-subelement consume++++ scope++++ datum++))]
+               (sax-subelement consume++++ scope++++ (or datum++ datum)))]
             [(string? self) (sax-subelement consume++ scope++ (and tagname datum (fpcdata tagname self #false datum)))]
             [(eq? self </)
              (let*-values ([(?name consume++++ scope++++) (xml-consume-token /dev/xmlin consume++ scope++)]
@@ -221,11 +222,11 @@
                             (felement ?name (assert scope++ index?) 'close datum))))]
             [(eq? self <?)
              (let-values ([(p consume++++ scope++++) (xml-sax-pi /dev/xmlin consume++ scope++)])
-               (sax-subelement consume++++ scope++++ datum))]
+               (sax-subelement consume++++ scope++++ (if (mpair? p) (and tagname datum (fprocess #false (mcar p) (mcdr p) datum)) datum)))]
             [(eq? self <!&CDATA&)
              (let*-values ([(?cdata consume++++ scope++++) (xml-consume-token /dev/xmlin consume++ scope++)]
                            [(?ecdata consume** scope**) (xml-consume-token /dev/xmlin consume++++ scope++++)])
-               (cond [(not (string? ?cdata)) (sax-subelement consume** scope** #false)]
+               (cond [(not (string? ?cdata)) (sax-subelement consume** scope** datum)]
                      [else (sax-subelement consume** scope** (and tagname datum (fpcdata tagname ?cdata #true datum)))]))]
             [(index? self) (sax-subelement consume++ scope++ (and tagname datum (fgeref self (integer->char self) datum)))]
             [(symbol? self) (sax-subelement consume++ scope++ (and tagname datum (fgeref self (xml-prentity-value-ref self) datum)))]
