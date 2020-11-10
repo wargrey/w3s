@@ -14,14 +14,14 @@
 (require "../prentity.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-type XML-Element-Event (U 'open 'close 'close-tag 'close-empty))
+(define-type XML-Event-Handler (XML-Event-Handlerof Void))
+(define-type SAX-Attribute-Value (U String (Boxof String)))
+(define-type SAX-Attributes (Listof (Pairof Symbol SAX-Attribute-Value)))
 
-(define-type (XML-Prolog-Handler seed) (-> (U String Symbol) Nonnegative-Flonum (Option String) Boolean XML-Element-Event seed seed))
+(define-type (XML-Prolog-Handler seed) (-> (U String Symbol) Nonnegative-Flonum (Option String) Boolean Boolean seed seed))
 (define-type (XML-Doctype-Handler seed) (-> (Option Symbol) (Option String) (Option String) seed seed))
 (define-type (XML-PI-Handler seed) (-> (Option Symbol) Symbol (Option String) seed seed))
-(define-type (XML-Element-Handler seed) (-> Symbol Index XML-Element-Event seed seed))
-(define-type (XML-Attribute-Handler seed) (-> Symbol Symbol (U String (Boxof String)) seed seed))
-(define-type (XML-AttriList-Handler seed) (-> Symbol (Listof XML-Element-Attribute) seed seed))
+(define-type (XML-Element-Handler seed) (-> Symbol Index (Option SAX-Attributes) Boolean seed seed))
 (define-type (XML-PCData-Handler seed) (-> Symbol String Boolean seed seed))
 (define-type (XML-Space-Handler seed) (-> Symbol String Boolean seed seed))
 (define-type (XML-GEReference-Handler seed) (-> (U Symbol Index) (Option Char) seed seed))
@@ -32,13 +32,11 @@
    [doctype : (XML-Doctype-Handler seed)]
    [pi : (XML-PI-Handler seed)]
    [element : (XML-Element-Handler seed)]
-   [attribute : (XML-Attribute-Handler seed)]
-   [attrilist : (XML-AttriList-Handler seed)]
    [pcdata : (XML-PCData-Handler seed)]
    [space : (XML-Space-Handler seed)]
    [geref : (XML-GEReference-Handler seed)]
    [comment : (XML-Comment-Handler seed)])
-  #:type-name XML-Event-Handler
+  #:type-name XML-Event-Handlerof
   #:transparent)
 
 (define #:forall (seed) (make-xml-event-handler
@@ -46,27 +44,23 @@
                          #:doctype [doctype : (U (XML-Doctype-Handler seed) False Void) (void)]
                          #:pi [pi : (U (XML-PI-Handler seed) False Void) (void)]
                          #:element [element : (U (XML-Element-Handler seed) False Void) (void)]
-                         #:attribute [attr : (U (XML-Attribute-Handler seed) False Void) (void)]
-                         #:attrilist [attrlist : (U (XML-AttriList-Handler seed) False Void) (void)]
                          #:pcdata [pcdata : (U (XML-PCData-Handler seed) False Void) (void)]
                          #:space [space : (U (XML-Space-Handler seed) False Void) (void)]
                          #:gereference [geref : (U (XML-GEReference-Handler seed) False Void) (void)]
                          #:comment [comment : (U (XML-Comment-Handler seed) False Void) (void)]
-                         [src : (Option (XML-Event-Handler seed)) #false]) : (XML-Event-Handler seed)
+                         [src : (Option (XML-Event-Handlerof seed)) #false]) : (XML-Event-Handlerof seed)
   (xml-event-handler (or (if (void? document) (and src (xml-event-handler-prolog src)) document) sax-arity6-identity)
                      (or (if (void? doctype) (and src (xml-event-handler-doctype src)) doctype) sax-arity4-identity)
                      (or (if (void? pi) (and src (xml-event-handler-pi src)) pi) sax-arity4-identity)
-                     (or (if (void? element) (and src (xml-event-handler-element src)) element) sax-arity4-identity)
-                     (or (if (void? attr) (and src (xml-event-handler-attribute src)) attr) sax-arity4-identity)
-                     (or (if (void? attrlist) (and src (xml-event-handler-attrilist src)) attrlist) sax-arity3-identity)
+                     (or (if (void? element) (and src (xml-event-handler-element src)) element) sax-arity5-identity)
                      (or (if (void? pcdata) (and src (xml-event-handler-pcdata src)) pcdata) sax-arity4-identity)
                      (or (if (void? space) (and src (xml-event-handler-space src)) space) sax-arity4-identity)
                      (or (if (void? geref) (and src (xml-event-handler-geref src)) geref) sax-arity3-identity)
                      (or (if (void? comment) (and src (xml-event-handler-comment src)) comment) sax-arity3-identity)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define #:forall (seed) read-xml-datum : (case-> [SGML-StdIn (XML-Event-Handler Void) -> Void]
-                                                 [SGML-StdIn (XML-Event-Handler seed) seed -> seed])
+(define #:forall (seed) read-xml-datum : (case-> [SGML-StdIn XML-Event-Handler -> Void]
+                                                 [SGML-StdIn (XML-Event-Handlerof seed) seed -> seed])
   (case-lambda
     [(/dev/rawin saxcb) (read-xml-datum /dev/rawin saxcb (void))]
     [(/dev/rawin saxcb datum0)
@@ -82,7 +76,7 @@
              [else datum]))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define #:forall (seed) xml-sax : (-> Input-Port (U String Symbol) Nonnegative-Flonum (Option String) Boolean (XML-Event-Handler seed) seed seed)
+(define #:forall (seed) xml-sax : (-> Input-Port (U String Symbol) Nonnegative-Flonum (Option String) Boolean (XML-Event-Handlerof seed) seed seed)
   (lambda [/dev/xmlin pname version encoding standalone? saxcb datum0]
     (define fprolog : (XML-Prolog-Handler seed) (xml-event-handler-prolog saxcb))
     (define fdoctype : (XML-Doctype-Handler seed) (xml-event-handler-doctype saxcb))
@@ -91,9 +85,9 @@
     
     (let sax ([consume : XML-Token-Consumer xml-consume-token:*]
               [scope : XML-Scope xml-initial-scope]
-              [datum : seed (fprolog pname version encoding standalone? 'open datum0)])
+              [datum : seed (fprolog pname version encoding standalone? #true datum0)])
       (let-values ([(self consume++ scope++) (xml-consume-token /dev/xmlin consume scope)])
-        (cond [(eof-object? self) (fprolog pname version encoding standalone? 'close datum)]
+        (cond [(eof-object? self) (fprolog pname version encoding standalone? #false datum)]
               [(eq? self <!)
                (let-values ([(d consume++++ scope++++) (xml-sax-declaration /dev/xmlin consume++ scope++)])
                  (cond [(not d) (sax consume++++ scope++++ datum)]
@@ -149,46 +143,40 @@
             [(string? self) (sax-pi consume++ scope++ target self)]
             [else (sax-pi consume++ scope++ target body)]))))
 
-(define xml-sax-element : (All (seed) (-> Input-Port XML-Token-Consumer XML-Scope (XML-Event-Handler seed) (Option seed)
+(define xml-sax-element : (All (seed) (-> Input-Port XML-Token-Consumer XML-Scope (XML-Event-Handlerof seed) (Option seed)
                                           (Values XML-Token-Consumer XML-Scope (Option seed))))
   (lambda [/dev/xmlin consume scope saxcb datum0]
     (define-values (self consume++ scope++) (xml-consume-token /dev/xmlin consume scope))
     
     (cond [(eof-object? self) (values consume++ scope++ datum0)]
           [else (let* ([?tagname (and (symbol? self) self)]
-                       [felement (xml-event-handler-element saxcb)]
-                       [datum (and ?tagname datum0 (felement ?tagname (assert scope++ index?) 'open datum0))])
+                       [felement (xml-event-handler-element saxcb)])
                   ; broken start tag should not affect its parent and sibling elements
-                  (let-values ([(empty? consume++++ scope++++ ?datum) (xml-sax-element-attributes /dev/xmlin consume++ scope++ saxcb ?tagname datum)])
-                    (cond [(and empty?) (values consume++++ scope++++ (and ?tagname ?datum (felement ?tagname (assert scope++++ index?) 'close-empty ?datum)))]
-                          [else (xml-sax-subelement ?tagname /dev/xmlin consume++++ scope++++ saxcb
-                                                    (and ?tagname ?datum (felement ?tagname (assert scope++++ index?) 'close-tag ?datum)))])))])))
+                  (let*-values ([(?attrs empty? consume++++ scope++++) (xml-sax-element-attributes /dev/xmlin consume++ scope++)]
+                                [(datum) (and ?tagname ?attrs datum0 (felement ?tagname (assert scope++ index?) ?attrs empty? datum0))])
+                    (cond [(not empty?) (xml-sax-subelement ?tagname /dev/xmlin consume++++ scope++++ saxcb datum)]
+                          [else (values consume++++ scope++++ datum)])))])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-sax-element-attributes : (All (seed) (-> Input-Port XML-Token-Consumer XML-Scope (XML-Event-Handler seed) (Option Symbol) (Option seed)
-                                                     (Values Boolean XML-Token-Consumer XML-Scope (Option seed))))
-  (lambda [/dev/xmlin consume scope saxcb ?tagname datum0]
-    (define fattribute : (XML-Attribute-Handler seed) (xml-event-handler-attribute saxcb))
-    (define fattrilist : (XML-AttriList-Handler seed) (xml-event-handler-attrilist saxcb))
-    
+(define xml-sax-element-attributes : (-> Input-Port XML-Token-Consumer XML-Scope
+                                         (Values (Option (Listof (Pairof Symbol SAX-Attribute-Value))) Boolean XML-Token-Consumer XML-Scope))
+  (lambda [/dev/xmlin consume scope]
     (let sax-element-attributes ([consume : XML-Token-Consumer consume]
                                  [scope : XML-Scope scope]
-                                 [setubirtta : (Listof XML-Element-Attribute) null]
-                                 [datum : (Option seed) datum0])
+                                 [setubirtta : (Listof (Pairof Symbol SAX-Attribute-Value)) null])
       (define-values (self consume++ scope++) (xml-consume-token /dev/xmlin consume scope))
       
-      (cond [(eof-object? self) (values #false consume++ scope++ datum0)]
-            [(eq? self />) (values #true consume++ scope++ (and ?tagname datum (fattrilist ?tagname (reverse setubirtta) datum)))]
-            [(eq? self stag>) (values #false consume++ scope++ (and ?tagname datum (fattrilist ?tagname (reverse setubirtta) datum)))]
-            [(not (symbol? self)) #| missing name |# (sax-element-attributes consume++ scope++ setubirtta datum)]
+      (cond [(eof-object? self) (values #false #false consume++ scope++)]
+            [(eq? self />) (values (reverse setubirtta) #true consume++ scope++)]
+            [(eq? self stag>) (values (reverse setubirtta) #false consume++ scope++)]
+            [(not (symbol? self)) #| missing name |# (sax-element-attributes consume++ scope++ setubirtta)]
             [else (let*-values ([(?eq consume++++ scope++++) (xml-consume-token /dev/xmlin consume++ scope++)]
                                 [(?value consume** scope**) (xml-consume-token /dev/xmlin consume++++ scope++++)])
-                    (cond [(eof-object? ?value) (sax-element-attributes consume** scope** setubirtta datum)] ; Maybe Typed Racket is buggy here
-                          [(not (and (eq? ?eq #\=) (xml-value-string? ?value))) (sax-element-attributes consume** scope** setubirtta datum)]
-                          [else (sax-element-attributes consume** scope** (cons (cons self ?value) setubirtta)
-                                                        (and ?tagname datum (fattribute ?tagname self ?value datum)))]))]))))
+                    (cond [(eof-object? ?value) (sax-element-attributes consume** scope** setubirtta)] ; Maybe Typed Racket is buggy here
+                          [(not (and (eq? ?eq #\=) (xml-value-string? ?value))) (sax-element-attributes consume** scope** setubirtta)]
+                          [else (sax-element-attributes consume** scope** (cons (cons self ?value) setubirtta))]))]))))
 
-(define xml-sax-subelement : (All (seed) (-> (Option Symbol) Input-Port XML-Token-Consumer XML-Scope (XML-Event-Handler seed) (Option seed)
+(define xml-sax-subelement : (All (seed) (-> (Option Symbol) Input-Port XML-Token-Consumer XML-Scope (XML-Event-Handlerof seed) (Option seed)
                                              (Values XML-Token-Consumer XML-Scope (Option seed))))
   (lambda [tagname /dev/xmlin consume scope saxcb datum0]
     (define felement : (XML-Element-Handler seed) (xml-event-handler-element saxcb))
@@ -219,7 +207,7 @@
                (values consume** scope**
                        (and datum (eq? tagname ?name)
                             (symbol? ?name) (xml-etag? ?etag) 
-                            (felement ?name (assert scope++ index?) 'close datum))))]
+                            (felement ?name (assert scope++ index?) #false #false datum))))]
             [(eq? self <?)
              (let-values ([(p consume++++ scope++++) (xml-sax-pi /dev/xmlin consume++ scope++)])
                (sax-subelement consume++++ scope++++ (if (mpair? p) (and tagname datum (fprocess #false (mcar p) (mcdr p) datum)) datum)))]

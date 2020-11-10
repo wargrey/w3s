@@ -31,18 +31,14 @@
     (printf "<!--~a-->~n" comment)))
 
 (define sax-display-element : (XML-Element-Handler Void)
-  (lambda [name depth event datum]
+  (lambda [name depth attrs empty? datum]
     (define indent (make-string (* depth 4) #\space))
-    
-    (case event
-      [(open) (printf "~a<~a" indent name)]
-      [(close) (printf "~a</~a>~n" indent name)]
-      [(close-empty) (printf "/>~n" name)]
-      [(close-tag) (printf ">")])))
 
-(define sax-display-attribute : (XML-Attribute-Handler Void)
-  (lambda [element name value datum]
-    (printf " ~a=\"~a\"" name value)))
+    (cond [(not attrs) (printf "~a</~a>~n" indent name)]
+          [else (printf "~a<~a" indent name)
+                (for ([attr (in-list attrs)])
+                  (printf " ~a=\"~a\"" (car attr) (cdr attr)))
+                (if (not empty?) (printf ">") (printf "/>~n"))])))
 
 (define sax-display-pcdata : (XML-PCData-Handler Void)
   (lambda [element pcdata cdata? datum]
@@ -64,8 +60,7 @@
   (define sax-handler
     ((inst make-xml-event-handler Void)
      #:prolog sax-display-prolog #:doctype sax-display-doctype #:pi sax-display-pi
-     #:element sax-display-element #:attribute sax-display-attribute
-     #:pcdata sax-display-pcdata #:space sax-display-whitespace #:gereference sax-display-entity
-     #:comment sax-display-comment))
+     #:element sax-display-element #:pcdata sax-display-pcdata #:space sax-display-whitespace
+     #:gereference sax-display-entity #:comment sax-display-comment))
 
   (read-xml-datum normalize.txml sax-handler))
