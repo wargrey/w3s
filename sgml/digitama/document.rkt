@@ -13,10 +13,12 @@
 (require "doctype.rkt")
 (require "grammar.rkt")
 (require "normalize.rkt")
+(require "whitespace.rkt")
 
 (require "plain/grammar.rkt")
 
 (require "digicore.rkt")
+(require "misc.rkt")
 (require "stdin.rkt")
 
 (require "tokenizer/port.rkt")
@@ -45,8 +47,6 @@
   ([external-entity : XML-External-Doctype-Entity]
    [body : XML-Schema])
   #:type-name XML-Document+Schema)
-
-(define xml-alternative-document-source : (Parameterof (U String Symbol False)) (make-parameter #false))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define read-xml-document : (-> SGML-StdIn XML-Document)

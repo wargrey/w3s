@@ -8,6 +8,7 @@
 (require syntax/strip-context)
 
 (require sgml/digitama/document)
+(require sgml/digitama/misc)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define sgml-read

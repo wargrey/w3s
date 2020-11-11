@@ -16,6 +16,8 @@
 (require "digicore.rkt")
 (require "tokenizer.rkt")
 (require "prentity.rkt")
+(require "whitespace.rkt")
+(require "misc.rkt")
 (require "stdin.rkt")
 
 (require "tokenizer/port.rkt")
@@ -56,26 +58,6 @@
 
 (define default-xxe-guard (xml-xxe-guard xml-load-relative-system-entity #x200000 4.0))
 (define default-dtd-guard (xml-dtd-guard #x2000 default-xxe-guard))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-type XML-Space-Position (U 'head 'body 'tail 'span))
-
-(define-type XML:Space-Filter
-  (case-> [Symbol (Option String) Char -> (Option Char)]
-          [Symbol (Option String) String (Option String) XML-Space-Position Boolean -> (Option String)]))
-
-(define svg:space-filter : XML:Space-Filter
-  (case-lambda
-    [(tag xml:lang ch) #\space]
-    [(tag xml:lang raw-spaces default-replace position has-newline?)
-     (cond [(not has-newline?) default-replace]
-           [else (and (eq? position 'body)
-                      (let ([size (string-length raw-spaces)])
-                        (let svg-check-space ([idx : Nonnegative-Fixnum 0])
-                          (and (< idx size)
-                               (if (eq? (unsafe-string-ref raw-spaces idx) #\linefeed)
-                                   (svg-check-space (+ idx 1))
-                                   default-replace)))))])]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-normalize : (-> (Listof DTD-Declaration*) (Option XML-DTD) (Listof XML-Content*) String Symbol (Option XML:Space-Filter) Boolean XML-DTD-Guard
@@ -280,10 +262,13 @@
                           [(decl) (hash-ref attlist (xml:name-datum (car self)) (λ [] undeclared-attribute))]
                           [(?attr) (xml-element-attribute-normalize decl self entities names tagname topsize xxeg)])
               (cond [(not ?attr) (attribute-filter-map rest++ setubirtta names lang space)]
-                    [else (let ([attr-name (xml:name-datum (car ?attr))])
-                            (attribute-filter-map rest++ (cons ?attr setubirtta) (cons attr-name names)
-                                                  (if (eq? attr-name 'xml:lang) (xml:lang-ref tagname ?attr) lang)
-                                                  (if (eq? attr-name 'xml:space) (xml:space-ref tagname ?attr space) space)))]))
+                    [else (let* ([attr-name (xml:name-datum (car ?attr))]
+                                 [setubirtta++ (cons ?attr setubirtta)]
+                                 [names++ (cons attr-name names)])
+                            (case attr-name
+                              [(xml:lang) (attribute-filter-map rest++ setubirtta++ names++ (xml:lang-ref tagname ?attr) space)]
+                              [(xml:space) (attribute-filter-map rest++ setubirtta++ names++ lang (xml:space-ref tagname ?attr space))]
+                              [else (attribute-filter-map rest++ setubirtta++ names++ lang space)]))]))
             
             (for/fold ([setubirtta : (Listof XML-Element-Attribute*) setubirtta]
                        [this:lang : (Option String) lang]
@@ -292,10 +277,12 @@
                        #:unless (memq key names))
               (let ([?attr (xml-element-attribute-normalize attr entities names topsize xxeg)])
                 (cond [(not ?attr) (values setubirtta this:lang this:space)]
-                      [else (let ([attname (xsch-attribute-element attr)])
-                              (values (cons ?attr setubirtta)
-                                      (if (eq? key 'xml:lang) (xml:lang-ref attname ?attr) this:lang)
-                                      (if (eq? key 'xml:space) (xml:space-ref attname ?attr space) this:space)))]))))))
+                      [else (let ([attname (xsch-attribute-element attr)]
+                                  [setubirtta++ (cons ?attr setubirtta)])
+                              (case key
+                                [(xml:lang) (values setubirtta++ (xml:lang-ref attname ?attr) this:space)]
+                                [(xml:space) (values setubirtta++ this:lang (xml:space-ref attname ?attr space))]
+                                [else (values setubirtta++ this:lang this:space)]))]))))))
 
     (define ?children : (Listof (U XML-Subdatum* XML-Element*))
       (xml-subelement-normalize tagname (caddr e) schema
@@ -905,8 +892,6 @@
           [else (string-replace trimmed #px" +" " ")])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define default-xml:space-signal : (Parameterof Symbol) (make-parameter 'default))
-
 (define name-placeholder : XML:Name (xml:name '|| 1 0 1 1 '||))
 (define undeclared-attribute : XSch-Attribute (xsch-attribute name-placeholder name-placeholder xsch:attribute:cdata))
 

@@ -10,8 +10,10 @@
 (require "../plain/grammar.rkt")
 (require "../plain/prompt.rkt")
 
+(require "../misc.rkt")
 (require "../stdin.rkt")
 (require "../prentity.rkt")
+(require "../whitespace.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type XML-Event-Handler (XML-Event-Handlerof Void))
@@ -59,25 +61,36 @@
                      (or (if (void? comment) (and src (xml-event-handler-comment src)) comment) sax-arity3-identity)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define #:forall (seed) read-xml-datum : (case-> [SGML-StdIn XML-Event-Handler -> Void]
-                                                 [SGML-StdIn (XML-Event-Handlerof seed) seed -> seed])
-  (case-lambda
-    [(/dev/rawin saxcb) (read-xml-datum /dev/rawin saxcb (void))]
-    [(/dev/rawin saxcb datum0)
-     (parameterize ([current-custodian (make-custodian)])
-       (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin #false))
-       (define pname : (U String Symbol) (sgml-port-name /dev/xmlin))
-       (define datum : (U seed exn)
-         (with-handlers ([exn? (λ [[e : exn]] e)])
-           (sax-start (if (string? pname) (string->symbol pname) pname)
-                      (λ [] (xml-sax /dev/xmlin pname version encoding standalone? saxcb datum0)))))
-       (custodian-shutdown-all (current-custodian))
-       (cond [(exn? datum) (raise datum)]
-             [else datum]))]))
+(define #:forall (seed) load-xml-datum : (->* (SGML-StdIn XML-Event-Handler)
+                                              (#:xml:lang String #:xml:space Symbol #:xml:space-filter (Option XML:Space-Filter))
+                                              Void)
+  (lambda [#:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false]
+           /dev/rawin saxcb]
+    (read-xml-datum #:xml:lang xml:lang #:xml:space xml:space #:xml:space-filter xml:space-filter
+                    /dev/rawin saxcb (void))))
+
+(define #:forall (seed) read-xml-datum : (->* (SGML-StdIn (XML-Event-Handlerof seed) seed)
+                                              (#:xml:lang String #:xml:space Symbol #:xml:space-filter (Option XML:Space-Filter))
+                                              seed)
+  (lambda [#:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false]
+           /dev/rawin saxcb datum0]
+    (parameterize ([current-custodian (make-custodian)]
+                   [default-xml:space-signal xml:space])
+      (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin #false))
+      (define pname : (U String Symbol) (sgml-port-name /dev/xmlin))
+      (define datum : (U seed exn)
+        (with-handlers ([exn? (λ [[e : exn]] e)])
+          (sax-start (if (string? pname) (string->symbol pname) pname)
+                     (λ [] (xml-sax /dev/xmlin pname version encoding standalone? saxcb datum0
+                                    (xml:lang-ref xml:lang) xml:space xml:space-filter)))))
+      (custodian-shutdown-all (current-custodian))
+      (cond [(exn? datum) (raise datum)]
+            [else datum]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define #:forall (seed) xml-sax : (-> Input-Port (U String Symbol) Nonnegative-Flonum (Option String) Boolean (XML-Event-Handlerof seed) seed seed)
-  (lambda [/dev/xmlin pname version encoding standalone? saxcb datum0]
+(define #:forall (seed) xml-sax : (-> Input-Port (U String Symbol) Nonnegative-Flonum (Option String) Boolean (XML-Event-Handlerof seed) seed
+                                      (Option String) Symbol (Option XML:Space-Filter) seed)
+  (lambda [/dev/xmlin pname version encoding standalone? saxcb datum0 xml:lang xml:space xml:space-filter]
     (define fprolog : (XML-Prolog-Handler seed) (xml-event-handler-prolog saxcb))
     (define fdoctype : (XML-Doctype-Handler seed) (xml-event-handler-doctype saxcb))
     (define fprocess : (XML-PI-Handler seed) (xml-event-handler-pi saxcb))
@@ -99,7 +112,7 @@
                (let-values ([(p consume++++ scope++++) (xml-sax-pi /dev/xmlin consume++ scope++)])
                  (sax consume++++ scope++++ (if (mpair? p) (fprocess #false (mcar p) (mcdr p) datum) datum)))]
               [(eq? self #\<)
-               (let-values ([(consume++++ scope++++ datum++) (xml-sax-element /dev/xmlin consume++ scope++ saxcb datum)])
+               (let-values ([(consume++++ scope++++ datum++) (xml-sax-element /dev/xmlin consume++ scope++ saxcb datum xml:lang xml:space xml:space-filter)])
                  (sax consume++++ scope++++ (or datum++ datum)))]
               [(xml-comment? self) (sax consume++ scope++ (fcomment #false (xml-white-space-raw self) datum))]
               [else (sax consume++ scope++ datum)])))))
@@ -144,41 +157,47 @@
             [else (sax-pi consume++ scope++ target body)]))))
 
 (define xml-sax-element : (All (seed) (-> Input-Port XML-Token-Consumer XML-Scope (XML-Event-Handlerof seed) (Option seed)
-                                          (Values XML-Token-Consumer XML-Scope (Option seed))))
-  (lambda [/dev/xmlin consume scope saxcb datum0]
+                                          (Option String) Symbol (Option XML:Space-Filter) (Values XML-Token-Consumer XML-Scope (Option seed))))
+  (lambda [/dev/xmlin consume scope saxcb datum0 xml:lang xml:space xml:space-filter]
     (define-values (self consume++ scope++) (xml-consume-token /dev/xmlin consume scope))
     
     (cond [(eof-object? self) (values consume++ scope++ datum0)]
           [else (let* ([?tagname (and (symbol? self) self)]
                        [felement (xml-event-handler-element saxcb)])
                   ; broken start tag should not affect its parent and sibling elements
-                  (let*-values ([(?attrs empty? consume++++ scope++++) (xml-sax-element-attributes /dev/xmlin consume++ scope++)]
+                  (let*-values ([(?attrs empty? consume++++ scope++++ lang space) (xml-sax-element-attributes /dev/xmlin consume++ scope++ xml:lang xml:space)]
                                 [(datum) (and ?tagname ?attrs datum0 (felement ?tagname (assert scope++ index?) ?attrs empty? datum0))])
-                    (cond [(not empty?) (xml-sax-subelement ?tagname /dev/xmlin consume++++ scope++++ saxcb datum)]
+                    (cond [(not empty?) (xml-sax-subelement ?tagname /dev/xmlin consume++++ scope++++ saxcb datum lang space xml:space-filter)]
                           [else (values consume++++ scope++++ datum)])))])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-sax-element-attributes : (-> Input-Port XML-Token-Consumer XML-Scope
-                                         (Values (Option (Listof (Pairof Symbol SAX-Attribute-Value))) Boolean XML-Token-Consumer XML-Scope))
-  (lambda [/dev/xmlin consume scope]
+(define xml-sax-element-attributes : (-> Input-Port XML-Token-Consumer XML-Scope (Option String) Symbol
+                                         (Values (Option (Listof (Pairof Symbol SAX-Attribute-Value))) Boolean XML-Token-Consumer XML-Scope (Option String) Symbol))
+  (lambda [/dev/xmlin consume scope xml:lang xml:space]
     (let sax-element-attributes ([consume : XML-Token-Consumer consume]
                                  [scope : XML-Scope scope]
-                                 [setubirtta : (Listof (Pairof Symbol SAX-Attribute-Value)) null])
+                                 [setubirtta : (Listof (Pairof Symbol SAX-Attribute-Value)) null]
+                                 [lang : (Option String) xml:lang]
+                                 [space : Symbol xml:space])
       (define-values (self consume++ scope++) (xml-consume-token /dev/xmlin consume scope))
       
-      (cond [(eof-object? self) (values #false #false consume++ scope++)]
-            [(eq? self />) (values (reverse setubirtta) #true consume++ scope++)]
-            [(eq? self stag>) (values (reverse setubirtta) #false consume++ scope++)]
-            [(not (symbol? self)) #| missing name |# (sax-element-attributes consume++ scope++ setubirtta)]
+      (cond [(eof-object? self) (values #false #false consume++ scope++ lang space)]
+            [(eq? self />) (values (reverse setubirtta) #true consume++ scope++ lang space)]
+            [(eq? self stag>) (values (reverse setubirtta) #false consume++ scope++ lang space)]
+            [(not (symbol? self)) #| missing name |# (sax-element-attributes consume++ scope++ setubirtta lang space)]
             [else (let*-values ([(?eq consume++++ scope++++) (xml-consume-token /dev/xmlin consume++ scope++)]
                                 [(?value consume** scope**) (xml-consume-token /dev/xmlin consume++++ scope++++)])
-                    (cond [(eof-object? ?value) (sax-element-attributes consume** scope** setubirtta)] ; Maybe Typed Racket is buggy here
-                          [(not (and (eq? ?eq #\=) (xml-value-string? ?value))) (sax-element-attributes consume** scope** setubirtta)]
-                          [else (sax-element-attributes consume** scope** (cons (cons self ?value) setubirtta))]))]))))
+                    (cond [(eof-object? ?value) (sax-element-attributes consume** scope** setubirtta lang space)] ; Maybe Typed Racket is buggy here
+                          [(not (and (eq? ?eq #\=) (xml-value-string? ?value))) (sax-element-attributes consume** scope** setubirtta lang space)]
+                          [else (let ([setubirtta++ (cons (cons self ?value) setubirtta)])
+                                  (case self
+                                    [(xml:space) (sax-element-attributes consume** scope** setubirtta++ lang (xml:space-ref ?value space))]
+                                    [(xml:lang) (sax-element-attributes consume** scope** setubirtta++ (xml:lang-ref '|| ?value) space)]
+                                    [else (sax-element-attributes consume** scope** setubirtta++ lang space)]))]))]))))
 
 (define xml-sax-subelement : (All (seed) (-> (Option Symbol) Input-Port XML-Token-Consumer XML-Scope (XML-Event-Handlerof seed) (Option seed)
-                                             (Values XML-Token-Consumer XML-Scope (Option seed))))
-  (lambda [tagname /dev/xmlin consume scope saxcb datum0]
+                                             (Option String) Symbol (Option XML:Space-Filter) (Values XML-Token-Consumer XML-Scope (Option seed))))
+  (lambda [tagname /dev/xmlin consume scope saxcb datum0 xml:lang xml:space xml:space-filter]
     (define felement : (XML-Element-Handler seed) (xml-event-handler-element saxcb))
     (define fcomment : (XML-Comment-Handler seed) (xml-event-handler-comment saxcb))
     (define fprocess : (XML-PI-Handler seed) (xml-event-handler-pi saxcb))
@@ -198,7 +217,7 @@
                              (and tagname datum
                                   (fspace tagname (xml-white-space-raw self) (xml-new-line? self) datum)))]
             [(eq? self #\<)
-             (let-values ([(consume++++ scope++++ datum++) (xml-sax-element /dev/xmlin consume++ scope++ saxcb datum)])
+             (let-values ([(consume++++ scope++++ datum++) (xml-sax-element /dev/xmlin consume++ scope++ saxcb datum xml:lang xml:space xml:space-filter)])
                (sax-subelement consume++++ scope++++ (or datum++ datum)))]
             [(string? self) (sax-subelement consume++ scope++ (and tagname datum (fpcdata tagname self #false datum)))]
             [(eq? self </)
@@ -219,6 +238,26 @@
             [(index? self) (sax-subelement consume++ scope++ (and tagname datum (fgeref self (integer->char self) datum)))]
             [(symbol? self) (sax-subelement consume++ scope++ (and tagname datum (fgeref self (xml-prentity-value-ref self) datum)))]
             [else #| should not happen |# (sax-subelement consume++ scope++ datum)]))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define xml:lang-ref : (case-> [String -> (Option String)]
+                               [Any SAX-Attribute-Value -> (Option String)])
+  (case-lambda
+    [(lang)
+     (and (> (string-length lang) 0) lang)]
+    [(tagname v)
+     (and (string? v)
+          (xml:lang-ref v))]))
+
+(define xml:space-ref : (-> SAX-Attribute-Value Symbol Symbol)
+  (lambda [attval inherited-space]
+    (define this:space : String
+      (cond [(string? attval) attval]
+            [else (unbox attval)]))
+
+    (cond [(string-ci=? this:space "preserve") 'preserve]
+          [(string-ci=? this:space "default") (default-xml:space-signal)]
+          [else inherited-space])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define sax-arity3-identity : (All (seed) (-> Any Any seed seed))

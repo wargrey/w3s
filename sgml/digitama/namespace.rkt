@@ -1,5 +1,7 @@
 #lang typed/racket/base
 
+;;; https://www.w3.org/TR/xml-names/#ns-qualnames
+
 (provide (all-defined-out))
 
 (require racket/string)
