@@ -1,6 +1,6 @@
 #lang typed/racket/base
 
-(require sgml/xml)
+(require sgml/sax)
 
 (require racket/runtime-path)
 
@@ -63,4 +63,4 @@
      #:element sax-display-element #:pcdata sax-display-pcdata #:space sax-display-whitespace
      #:gereference sax-display-entity #:comment sax-display-comment))
 
-  (read-xml-datum normalize.txml sax-handler))
+  (load-xml-datum normalize.txml sax-handler))
