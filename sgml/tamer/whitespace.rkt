@@ -51,6 +51,8 @@
 
 
 (module+ main
+  (require "normalize.txml")
+  
   (tamer-xml:space 'preserve
                    #\return #\newline
                    #\newline
@@ -64,4 +66,10 @@
   (tamer-svg:space 'preserve
                    #\return #\newline
                    #\newline
-                   #\return))
+                   #\return)
+
+  normalize.xml
+
+  ; NOTE: Plain APIs does not support DTD, so don't be surprised entity references are not expanded properly.
+  (xml-document-normalize #:xml:space 'default #:xml:space-filter svg:space-filter
+                          (read-xml-document (assert (xml-doc-location normalize.xml) string?))))
