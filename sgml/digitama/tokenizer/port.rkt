@@ -24,7 +24,7 @@
 (define-type XML-Scope (U Symbol Fixnum))
 (define-type XML-Token-Consumer (Rec λ (-> Input-Port Char XML-Scope (Values (U XML-Datum EOF) λ XML-Scope))))
 
-(struct xml-white-space ([raw : String]) #:type-name XML-White-Space)
+(struct xml-white-space ([raw : String]) #:type-name XML-White-Space #:transparent)
 (struct xml-new-line xml-white-space () #:type-name XML-New-Line)
 (struct xml-comment xml-white-space () #:type-name XML-Comment)
 

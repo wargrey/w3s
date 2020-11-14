@@ -16,6 +16,7 @@
 (require "whitespace.rkt")
 
 (require "plain/grammar.rkt")
+(require "plain/normalize.rkt")
 
 (require "digicore.rkt")
 (require "misc.rkt")
@@ -66,6 +67,14 @@
                   (xml-doctype name external)
                   grammars)))
 
+(define xml-document-normalize : (->* (XML-Document)
+                                      (#:xml:lang String #:xml:space Symbol #:xml:space-filter (Option XML:Space-Filter))
+                                      XML-Document)
+  (lambda [#:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false]
+           doc]
+    (xml-document (xml-document-prolog doc) (xml-document-doctype doc)
+                  (xml-normalize (xml-document-elements doc) xml:lang xml:space xml:space-filter))))
+
 (define read-xml-document* : (-> SGML-StdIn XML-Document*)
   (lambda [/dev/rawin]
     (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin #true))
@@ -104,14 +113,14 @@
     
     (define-values (schema contents)
       (if (xml-schema? sch)
-          (xml-normalize/schema sch (xml-document*-contents doc)
-                                xml:lang xml:space xml:space-filter
-                                stop-if-xxe-not-loaded? dtdg)
+          (xml-normalize*/schema sch (xml-document*-contents doc)
+                                 xml:lang xml:space xml:space-filter
+                                 stop-if-xxe-not-loaded? dtdg)
           (let ([int-decls (if (not ignore-intsubset?) (xml-dtd-declarations (xml-document*-internal-dtd doc)) null)]
                 [ext-dtd (and (not standalone?) external-dtd)])
-            (xml-normalize int-decls ext-dtd (xml-document*-contents doc)
-                           xml:lang xml:space xml:space-filter
-                           stop-if-xxe-not-loaded? dtdg))))
+            (xml-normalize* int-decls ext-dtd (xml-document*-contents doc)
+                            xml:lang xml:space xml:space-filter
+                            stop-if-xxe-not-loaded? dtdg))))
     
     (xml-document+schema (xml-document*-prolog doc) (xml-document*-doctype doc) (xml-document*-internal-dtd doc)
                          contents external-dtd schema)))

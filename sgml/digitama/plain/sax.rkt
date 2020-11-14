@@ -4,6 +4,8 @@
 
 (require racket/list)
 
+(require "whitespace.rkt")
+
 (require "../tokenizer/port.rkt")
 (require "../tokenizer/delimiter.rkt")
 
@@ -13,7 +15,6 @@
 (require "../misc.rkt")
 (require "../stdin.rkt")
 (require "../prentity.rkt")
-(require "../whitespace.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type XML-Event-Handler (XML-Event-Handlerof Void))
@@ -238,26 +239,6 @@
             [(index? self) (sax-subelement consume++ scope++ (and tagname datum (fgeref self (integer->char self) datum)))]
             [(symbol? self) (sax-subelement consume++ scope++ (and tagname datum (fgeref self (xml-prentity-value-ref self) datum)))]
             [else #| should not happen |# (sax-subelement consume++ scope++ datum)]))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml:lang-ref : (case-> [String -> (Option String)]
-                               [Any SAX-Attribute-Value -> (Option String)])
-  (case-lambda
-    [(lang)
-     (and (> (string-length lang) 0) lang)]
-    [(tagname v)
-     (and (string? v)
-          (xml:lang-ref v))]))
-
-(define xml:space-ref : (-> SAX-Attribute-Value Symbol Symbol)
-  (lambda [attval inherited-space]
-    (define this:space : String
-      (cond [(string? attval) attval]
-            [else (unbox attval)]))
-
-    (cond [(string-ci=? this:space "preserve") 'preserve]
-          [(string-ci=? this:space "default") (default-xml:space-signal)]
-          [else inherited-space])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define sax-arity3-identity : (All (seed) (-> Any Any seed seed))
