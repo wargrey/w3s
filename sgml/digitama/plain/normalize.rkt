@@ -91,8 +91,3 @@
           [(null? (cdr cdatas)) (cons (car cdatas) children)]
           [else (let ([cdata (apply string-append (filter-map xml-cdata->datum cdatas))])
                   (cons cdata children))])))
-
-(define xml-cdata->datum : (-> (U String XML-White-Space) String)
-  (lambda [cdata]
-    (cond [(string? cdata) cdata]
-          [else (xml-white-space-raw cdata)])))

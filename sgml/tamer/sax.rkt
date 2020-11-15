@@ -46,10 +46,6 @@
     (display pcdata)
     (when (and cdata?) (printf "]]>"))))
 
-(define sax-display-whitespace : (XML-Space-Handler Void)
-  (lambda [element space newline? datum]
-    (display space)))
-
 (define sax-display-entity : (XML-GEReference-Handler Void)
   (lambda [entity ?default-char datum]
     (when (char? ?default-char)
@@ -60,7 +56,7 @@
   (define sax-handler
     ((inst make-xml-event-handler Void)
      #:prolog sax-display-prolog #:doctype sax-display-doctype #:pi sax-display-pi
-     #:element sax-display-element #:pcdata sax-display-pcdata #:space sax-display-whitespace
+     #:element sax-display-element #:pcdata sax-display-pcdata
      #:gereference sax-display-entity #:comment sax-display-comment))
 
   (load-xml-datum normalize.txml sax-handler))

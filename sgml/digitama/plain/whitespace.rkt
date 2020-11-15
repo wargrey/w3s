@@ -33,9 +33,8 @@
   #:space=preserve xml:space=preserve #:space-newline? xml-new-line?)
 
 (define xml-whitespaces-consolidate : (-> (Pairof XML-White-Space (Listof XML-White-Space)) XML-White-Space)
-  (let ([consolidated-whitespace (xml-white-space " ")])
-    (lambda [secaps]
-      consolidated-whitespace)))
+  (lambda [secaps]
+    xml-whitespace/1))
 
 (define xml-whitespaces-fold : (-> (Pairof XML-White-Space (Listof XML-White-Space)) XML-White-Space)
   (lambda [secaps]
@@ -76,14 +75,10 @@
           [else inherited-space])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml:space-cons : (-> String Fixnum Char Char (-> Symbol (Option String) Char (Option Char)) (U Zero One) (Option (Listof Char))
-                             Symbol (Option String) (Option (Listof Char)))
-  (lambda [spaces idx s os filter nl-span secaps0 tagname xml:lang]
-    (define ns : (Option Char) (filter tagname xml:lang s))
-    (cond [(eq? ns os) (if (list? secaps0) (cons s secaps0) secaps0)]
-          [else (let ([secaps (if (list? secaps0) secaps0 (reverse (string->list (substring spaces 0 (- idx nl-span)))))])
-                  (if (not ns) secaps (cons ns secaps)))])))
+(define xml-whitespace/0 : XML-White-Space (xml-white-space "")) ; to tell `xml-child-cons` here isn't the head position
+(define xml-whitespace/1 : XML-White-Space (xml-white-space " ")) ; consolidated whitespace
 
-(define xml:space-values : (-> Symbol (Option String) Char (Option Char))
-  (lambda [tag xml:lang char]
-    char))
+(define xml-cdata->datum : (-> (U String XML-White-Space) String)
+  (lambda [cdata]
+    (cond [(string? cdata) cdata]
+          [else (xml-white-space-raw cdata)])))

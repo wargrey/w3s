@@ -63,8 +63,10 @@ numerically (&#38;#38;#38;) or with a general entity
 
 <![%svg-xml:space;[
 <!ATTLIST svg:text
-          xml:space  (default|preserve) "preserve"
-          xml:lang CDATA #FIXED "svg">
+          test      (given|expected) #REQUIRED
+          desc      CDATA
+          xml:space (default|preserve) "preserve"
+          xml:lang  CDATA #FIXED "svg">
 ]]>
 ]>
 
@@ -80,18 +82,19 @@ numerically (&#38;#38;#38;) or with a general entity
      svg has special rules to dealing with non-space whitespaces,
      and those rules are applied subsequent to applying XML rules.
 
-     Those rules CANNOT be illustrated in `#lang sgml/xml` -->
+     Those rules CANNOT be illustrated in `#lang sgml/xml`
+     instead, checking tamer/whitespace.rkt to see the demonstration -->
 
-<svg:text xml:space="default">
+<svg:text xml:space="default" test="given" desc="indented">
       WS example
       indented lines
 </svg:text>
-<svg:text>WS example indented lines</svg:text>
+<svg:text xml:space='preserve' test="expected">WS example indented lines</svg:text>
 
-<svg:text xml:space='default'>
+<svg:text xml:space='default' test="given" desc="non-indented">
 WS example
 non-indented lines
 </svg:text>
-<svg:text xml:space='preserve'>WS examplenon-indented lines</svg:text>
+<svg:text xml:space='preserve' test="expected">WS example<!-- no spaces here -->non-indented lines</svg:text>
 
 </normalize>
