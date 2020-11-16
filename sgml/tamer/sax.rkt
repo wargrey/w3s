@@ -2,10 +2,6 @@
 
 (require sgml/sax)
 
-(require racket/runtime-path)
-
-(define-runtime-path normalize.txml "normalize.txml")
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define sax-display-prolog : (XML-Prolog-Handler Void)
   (lambda [pname version encoding standalone? etype datum]
@@ -28,7 +24,7 @@
 
 (define sax-display-comment : (XML-Comment-Handler Void)
   (lambda [?element comment datum]
-    (printf "<!--~a-->~n" comment)))
+    (printf "<!--~a-->" comment)))
 
 (define sax-display-element : (XML-Element-Handler Void)
   (lambda [name depth attrs empty? datum]
@@ -38,13 +34,14 @@
           [else (printf "~a<~a" indent name)
                 (for ([attr (in-list attrs)])
                   (printf " ~a=\"~a\"" (car attr) (cdr attr)))
-                (if (not empty?) (printf ">") (printf "/>~n"))])))
+                (if (not empty?) (printf ">~n") (printf "/>~n"))])))
 
 (define sax-display-pcdata : (XML-PCData-Handler Void)
-  (lambda [element pcdata cdata? datum]
-    (when (and cdata?) (printf "<![CDATA["))
-    (display pcdata)
-    (when (and cdata?) (printf "]]>"))))
+  (lambda [element depth pcdata cdata? datum]
+    (define indention (make-string (* (+ depth 1) 4) #\space))
+    
+    (cond [(and cdata?) (printf "<![CDATA[~a[[>" pcdata)]
+          [else (printf "~a~a~n" indention pcdata)])))
 
 (define sax-display-entity : (XML-GEReference-Handler Void)
   (lambda [entity ?default-char datum]
@@ -53,10 +50,12 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (module+ main
+  (require "normalize.txml")
+  
   (define sax-handler
     ((inst make-xml-event-handler Void)
      #:prolog sax-display-prolog #:doctype sax-display-doctype #:pi sax-display-pi
      #:element sax-display-element #:pcdata sax-display-pcdata
      #:gereference sax-display-entity #:comment sax-display-comment))
 
-  (load-xml-datum normalize.txml sax-handler))
+  (load-xml-datum (assert (xml-doc-location normalize.xml) string?) sax-handler))
