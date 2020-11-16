@@ -59,13 +59,13 @@
                      (or (if (void? comment) (and src (xml-event-handler-comment src)) comment) sax-arity3-identity)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define #:forall (seed) load-xml-datum : (->* (SGML-StdIn XML-Event-Handler)
+(define #:forall (seed) load-xml-datum : (->* (SGML-StdIn (XML-Event-Handlerof (U Void seed)))
                                               (#:xml:lang String #:xml:space Symbol #:xml:space-filter (Option XML:Space-Filter))
                                               Void)
   (lambda [#:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:filter #false]
            /dev/rawin saxcb]
-    (read-xml-datum #:xml:lang xml:lang #:xml:space xml:space #:xml:space-filter xml:filter
-                    /dev/rawin saxcb (void))))
+    (void (read-xml-datum #:xml:lang xml:lang #:xml:space xml:space #:xml:space-filter xml:filter
+                          /dev/rawin saxcb (void)))))
 
 (define #:forall (seed) read-xml-datum : (->* (SGML-StdIn (XML-Event-Handlerof seed) seed)
                                               (#:xml:lang String #:xml:space Symbol #:xml:space-filter (Option XML:Space-Filter))
