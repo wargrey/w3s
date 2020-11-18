@@ -59,6 +59,13 @@
           [else (xml-external-id->datum (xml-doctype*-external (xml-document*-doctype xml)))])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define xml-blank : (->* () (Symbol) XML-Document)
+  (lambda [[root 'blank]]
+    (xml-document (xml-prolog 'sgml/xml 1.0 #false #false)
+                  (xml-doctype root #false)
+                  (list (list root null null)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (module reader racket/base
   (provide (except-out (all-from-out racket/base) read read-syntax))
 
