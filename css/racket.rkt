@@ -53,25 +53,28 @@
      (with-syntax ([the-pool (parameterize ([current-namespace (make-base-namespace)])
                                (eval `(require ,@(syntax->datum #'(modpaths ...))))
                                (make-pool #'the-@λ-pool (syntax->datum #'λnames)))])
-       #'(define the-@λ-pool : CSS-@λ-Pool the-pool))]))
+       (syntax/loc stx (define the-@λ-pool : CSS-@λ-Pool the-pool)))]))
 
 (define-syntax (define-css-racket-value-filter stx)
   (syntax-case stx []
     [(_ <racket-value> #:with ?value #:as ValueType asserts ...)
-     #'(define <racket-value> : (-> (CSS:Filter ValueType))
+     (syntax/loc stx
+       (define <racket-value> : (-> (CSS:Filter ValueType))
          (lambda []
            (λ [[token : CSS-Syntax-Any]] : (CSS-Option ValueType)
              (and (css:racket? token)
                   (let ([catch (λ [[e : exn]] (css-log-eval-error e '<racket-value>) (make-exn:css:racket token))])
                     (define ?value (with-handlers ([exn? catch]) (css-eval-value token (current-namespace))))
                     (cond asserts ... [(exn:css? ?value) ?value]
-                          [else (make-exn:css:contract token)]))))))]
+                          [else (make-exn:css:contract token)])))))))]
     [(_ <racket-value> #:is-a? class% #:as ValueType)
-     #'(define-css-racket-value-filter <racket-value> #:with ?value #:as ValueType
-         [(is-a? ?value class%) (cast ?value ValueType)])]
+     (syntax/loc stx
+       (define-css-racket-value-filter <racket-value> #:with ?value #:as ValueType
+         [(is-a? ?value class%) (cast ?value ValueType)]))]
     [(_ <racket-value> #:? type? #:as ValueType)
-     #'(define-css-racket-value-filter <racket-value> #:with ?value #:as ValueType
-         [(type? ?value) ?value])]))
+     (syntax/loc stx
+       (define-css-racket-value-filter <racket-value> #:with ?value #:as ValueType
+         [(type? ?value) ?value]))]))
 
 (define-css-atomic-filter <css:@λ> #:-> CSS-@λ
   #:with [[token : css:λracket?] [λpool : CSS-@λ-Pool] [λfilter : CSS-@λ-Filter] [λids : (Listof Symbol) null]]

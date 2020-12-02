@@ -12,7 +12,8 @@
 (define-syntax (w3s-doc-process stx)
   (syntax-parse stx #:datum-literals []
     [(_ #:main+ lang.w3s:id MB cpu real gc #:body sexp ...)
-     #'(begin (provide lang.w3s)
+     (syntax/loc stx
+       (begin (provide lang.w3s)
 
               sexp ...
 
@@ -20,12 +21,13 @@
                 (newline)
                 
                 lang.w3s
-                (w3s-display-times 'lang.w3s MB cpu real gc)))]
+                (w3s-display-times 'lang.w3s MB cpu real gc))))]
     [(_ process:id lang.w3s MB cpu real gc doc)
-     #'(w3s-doc-process #:main+ lang.w3s MB cpu real gc
-                        #:body (define-values (lang.w3s MB cpu real gc) (w3s-read-doc doc process)))]
+     (syntax/loc stx
+       (w3s-doc-process #:main+ lang.w3s MB cpu real gc
+                        #:body (define-values (lang.w3s MB cpu real gc) (w3s-read-doc doc process))))]
     [(_ ignored ...)
-     #'(void)]))
+     (syntax/loc stx (void))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define w3s-memory-difference : (-> Natural Real)

@@ -36,11 +36,12 @@
   (syntax-parse stx
     [(_ (~optional (~seq #:descriptors ?env)) sexp ...)
      (with-syntax ([env (or (attribute ?env) #'(default-css-media-features))])
-       #'(let ([w (hash-ref env 'width (λ [] #false))]
+       (syntax/loc stx
+         (let ([w (hash-ref env 'width (λ [] #false))]
                [h (hash-ref env 'height (λ [] #false))])
            (when (and (real? w) (positive? w)) (css-vw (real->double-flonum w)))
            (when (and (real? h) (positive? h)) (css-vh (real->double-flonum h)))
-           sexp ...))]))
+           sexp ...)))]))
 
 (define css-cascade
   : (All (Preference Env)

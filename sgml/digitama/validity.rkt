@@ -34,8 +34,7 @@
 (define-syntax (and* stx)
   (syntax-case stx []
     [(_ bexp bexps ...)
-     #'(let* ([b bexp] [b (and bexps b)] ...)
-         b)]))
+     (syntax/loc stx (let* ([b bexp] [b (and bexps b)] ...) b))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-validate : (-> XML-Schema (Listof XML-Content*) Boolean (Option Index) Boolean)

@@ -15,7 +15,8 @@
                       (list (format-id <exn> "make-~a" (syntax-e <exn>))
                             (format-id <exn> "make+~a" (syntax-e <exn>))
                             (format-id <exn> "throw-~a" (syntax-e <exn>))))])
-       #'(begin (define-type Syntax-Error exn:w3s)
+       (syntax/loc stx
+         (begin (define-type Syntax-Error exn:w3s)
                 (struct exn:w3s exn:fail:syntax ())
                 (struct subexn parent ()) ...
 
@@ -34,16 +35,17 @@
                 (define throw-exn : (->* ((U EOF Token (Listof Token))) ((Option Token) Log-Level) Nothing)
                   (lambda [v [property #false] [level 'warning]]
                     (raise (make+exn v property level))))
-                ...))]))
+                ...)))]))
 
 (define-syntax (w3s-remake-token stx)
   (syntax-case stx []
     [(_ [start-token end-token] make-w3s:token datum extra ...)
-     #'(make-w3s:token (w3s-token-source start-token) (w3s-token-line start-token)
+     (syntax/loc stx
+       (make-w3s:token (w3s-token-source start-token) (w3s-token-line start-token)
                        (w3s-token-column start-token) (w3s-token-start start-token)
-                       (w3s-token-end end-token) datum extra ...)]
+                       (w3s-token-end end-token) datum extra ...))]
     [(_ here-token make-w3s:token datum ...)
-     #'(w3s-remake-token [here-token here-token] make-w3s:token datum ...)]))
+     (syntax/loc stx (w3s-remake-token [here-token here-token] make-w3s:token datum ...))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type W3S-Token-Source (U String Symbol))

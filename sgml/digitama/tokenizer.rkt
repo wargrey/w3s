@@ -21,19 +21,21 @@
 (define-syntax (xml-make-token stx)
   (syntax-case stx []
     [(_ source prev-env end make-xml:token datum ...)
-     #'(make-xml:token source (xml-parser-env-line prev-env) (xml-parser-env-column prev-env) (xml-parser-env-position prev-env) end datum ...)]))
+     (syntax/loc stx (make-xml:token source (xml-parser-env-line prev-env) (xml-parser-env-column prev-env) (xml-parser-env-position prev-env) end datum ...))]))
   
 (define-syntax (xml-make-bad-token stx)
   (syntax-case stx []
     [(_ source prev-env end xml:bad:sub datum)
-     #'(let ([bad (xml-make-token source prev-env end xml:bad:sub datum)])
+     (syntax/loc stx
+       (let ([bad (xml-make-token source prev-env end xml:bad:sub datum)])
          (w3s-log-exn (xml-token->string bad) 'exn:xml:read)
-         bad)]))
+         bad))]))
 
 (define-syntax (xml-datum->token stx)
   (syntax-case stx []
     [(_ source prev-env end datum)
-     #'(cond [(xml-white-space? datum)
+     (syntax/loc stx
+       (cond [(xml-white-space? datum)
               (cond [(xml-comment? datum) (xml-make-token source prev-env end xml:comment (xml-white-space-raw datum))]
                     [(xml-new-line? datum) (xml-make-token source prev-env end xml:newline (xml-white-space-raw datum))]
                     [else (xml-make-token source prev-env end xml:whitespace (xml-white-space-raw datum))])]
@@ -62,7 +64,7 @@
              [(index? datum) (xml-make-token source prev-env end xml:char datum)]
              [(keyword? datum) (xml-make-token source prev-env end xml:pereference datum)]
              [(pair? datum) (xml-make-bad-token source prev-env end xml:bad (cons (list->string (car datum)) (cdr datum)))]
-             [else eof])]))
+             [else eof]))]))
 
 (struct xml-parser-env
   ([consume : XML-Token-Consumer]

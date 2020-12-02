@@ -18,14 +18,15 @@
 (define-syntax (define-selectors stx)
   (syntax-case stx []
     [(_ [id : S-ID rest ...] ...)
-     #'(begin (struct id rest ... #:transparent #:type-name S-ID) ...)]))
+     (syntax/loc stx (begin (struct id rest ... #:transparent #:type-name S-ID) ...))]))
 
 (define-syntax (define-exclusive-:classes stx)
   (syntax-case stx []
     [(_ id [v1 v2] ...) ; TODO: multiple exclusives
-     #'(define id : (HashTable Symbol Symbol)
+     (syntax/loc stx
+       (define id : (HashTable Symbol Symbol)
          (make-hasheq (list (cons 'v1 'v2) ...
-                            (cons 'v2 'v1) ...)))]))
+                            (cons 'v2 'v1) ...))))]))
 
 (define-type CSS-Selector-Combinator (U '>> '> '+ '~ '||))
 (define-type CSS-Namespace-Hint (U (Listof (Pairof Symbol String)) False))

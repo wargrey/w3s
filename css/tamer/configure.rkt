@@ -7,11 +7,12 @@
 (define-syntax (time-run stx)
   (syntax-case stx []
     [(_ sexp ...)
-     #'(let ([momery0 : Natural (current-memory-use)])
+     (syntax/loc stx
+       (let ([momery0 : Natural (current-memory-use)])
          (define-values (result cpu real gc) (time-apply (thunk sexp ...) null))
          (define momery : Integer (- (current-memory-use) momery0))
          (printf "memory: ~a cpu time: ~a real time: ~a gc time: ~a~n" (~size momery 'Bytes) cpu real gc)
-         (car result))]))
+         (car result)))]))
 
 (define DrRacket? : Boolean (regexp-match? #px"DrRacket$" (find-system-path 'run-file)))
 

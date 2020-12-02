@@ -26,7 +26,7 @@
 (define-syntax (define-preference stx)
   (syntax-parse stx #:literals [:]
     [(self Preference (fields ...) options ...)
-     #'(self Preference #:with [] (fields ...) options ...)]
+     (syntax/loc stx (self Preference #:with [] (fields ...) options ...))]
     [(self Preference #:with [[bindings BindTypes ...] ...] ([property : DataType info ...] ...) options ...)
      (with-syntax* ([Preference* (format-id #'Preference "~a*" (syntax-e #'Preference))]
                     [(Uv uv? uv) (list #'CSS-Wide-Keyword #'css-wide-keyword? #'css:initial)]
@@ -55,10 +55,11 @@
                                         [type (in-list (syntax->list #'(DataType ...)))])
                                (cond [(not (memq (syntax-e type) types)) properties]
                                      [else (cons (syntax-e property) properties)]))))])
-       #'(begin (struct Preference ([property : DataType] ...) options ...)
+       (syntax/loc stx
+         (begin (struct Preference ([property : DataType] ...) options ...)
                 (define (Preference* args ...) : Preference (Preference property-filter ...))
                 (define (#%property) : DataType initial-value) ...
-                (define pref:bindings : (Listof Symbol) (list 'properties ...)) ...))]))
+                (define pref:bindings : (Listof Symbol) (list 'properties ...)) ...)))]))
   
 (define-syntax (define-token-interface stx)
   (syntax-case stx [:]
@@ -66,7 +67,8 @@
      (with-syntax ([<id> (format-id #'symbolic-prefix "<~a>" (syntax-e #'symbolic-prefix))]
                    [id=<-? (format-id #'symbolic-prefix "~a=<-?" (syntax-e #'symbolic-prefix))]
                    [id=:=? (format-id #'symbolic-prefix "~a=:=?" (syntax-e #'symbolic-prefix))])
-       #'(begin (define id=<-? : (All (a) (case-> [Any (-> Type Boolean : #:+ a) -> (Option a) : #:+ CSS:ID]
+       (syntax/loc stx
+         (begin (define id=<-? : (All (a) (case-> [Any (-> Type Boolean : #:+ a) -> (Option a) : #:+ CSS:ID]
                                                   [Any (U (-> Type Boolean) (Listof Type)) -> (Option Type) : #:+ CSS:ID]))
                   (lambda [token range?]
                     (and (id? token)
@@ -99,11 +101,12 @@
                   (lambda [t v]
                     (and (id? t)
                          (let ([d : Type (id-datum t)])
-                           (and (type=? d v) d)))))))]
+                           (and (type=? d v) d))))))))]
     [(_ numeric-prefix : Type id? id-datum #:+ CSS:ID #:= type=?)
      (with-syntax ([<id> (format-id #'numeric-prefix "<~a>" (syntax-e #'numeric-prefix))]
                    [id=<-? (format-id #'numeric-prefix "~a=<-?" (syntax-e #'numeric-prefix))])
-       #'(begin (define id=<-? : (All (a) (case-> [Any (-> Type Boolean : #:+ a) -> (Option a) : #:+ CSS:ID]
+       (syntax/loc stx
+         (begin (define id=<-? : (All (a) (case-> [Any (-> Type Boolean : #:+ a) -> (Option a) : #:+ CSS:ID]
                                                   [Any (-> Type Type Boolean) Type -> (Option Type) : #:+ CSS:ID]
                                                   [Any Type (-> Type Type Boolean) Type -> (Option Type) : #:+ CSS:ID]
                                                   [Any (Listof Type) -> (Option Type) : #:+ CSS:ID]))
@@ -136,30 +139,33 @@
                                        (or (cond [(procedure? range?) (and (range? d) d)]
                                                  [(list? range?) (and (member d range? type=?) d)]
                                                  [else (and (type=? d range?) d)])
-                                           (make-exn:css:range t)))))]))))]))
+                                           (make-exn:css:range t)))))])))))]))
 
 (define-syntax (define-token stx)
   (syntax-parse stx #:literals [: Symbol Keyword]
     [(_ id : Number parent #:as Type #:=? type=? #:with id? id-datum)
      (with-syntax ([id=? (format-id #'id "~a=?" (syntax-e #'id))])
-       #'(begin (struct id parent ([datum : Type]) #:transparent #:type-name Number)
+       (syntax/loc stx
+         (begin (struct id parent ([datum : Type]) #:transparent #:type-name Number)
                 (define (id=? [t1 : Number] [t2 : Number]) : Boolean (type=? (id-datum t1) (id-datum t2)))
-                (define-token-interface id : Type id? id-datum #:+ Number #:= type=?)))]
+                (define-token-interface id : Type id? id-datum #:+ Number #:= type=?))))]
     [(_ id : Identifier parent ((~and (~or Symbol Keyword) Type) #:ci rest ...) #:with id? id-datum)
      (with-syntax ([id=? (format-id #'id "~a=?" (syntax-e #'id))]
                    [id-norm=? (format-id #'id "~a-norm=?" (syntax-e #'id))]
                    [id-norm (format-id #'id "~a-norm" (syntax-e #'id))])
-       #'(begin (struct id parent ([datum : Type] [norm : Type] rest ...) #:transparent #:type-name Identifier)
+       (syntax/loc stx
+         (begin (struct id parent ([datum : Type] [norm : Type] rest ...) #:transparent #:type-name Identifier)
                 (define (id=? [t1 : Identifier] [t2 : Identifier]) : Boolean (eq? (id-datum t1) (id-datum t2)))
                 (define (id-norm=? [t1 : Identifier] [t2 : Identifier]) : Boolean (eq? (id-norm t1) (id-norm t2)))
                 (define-token-interface id : Type id? id-datum #:+ Identifier #:eq? eq?)
-                (define-token-interface id-norm : Type id? id-norm  #:+ Identifier #:eq? eq?)))]
+                (define-token-interface id-norm : Type id? id-norm  #:+ Identifier #:eq? eq?))))]
     [(_ id : Otherwise parent (Type rest ...) #:with id? id-datum)
      (with-syntax ([type=? (case (syntax-e #'Type) [(String) #'string=?] [(Char) #'char=?] [else #'equal?])]
                    [id=? (format-id #'id "~a=?" (syntax-e #'id))])
-       #'(begin (struct id parent ([datum : Type] rest ...) #:transparent #:type-name Otherwise)
+       (syntax/loc stx
+         (begin (struct id parent ([datum : Type] rest ...) #:transparent #:type-name Otherwise)
                 (define (id=? [t1 : Otherwise] [t2 : Otherwise]) : Boolean (type=? (id-datum t1) (id-datum t2)))
-                (define-token-interface id : Type id? id-datum #:+ Otherwise #:eq? type=?)))]))
+                (define-token-interface id : Type id? id-datum #:+ Otherwise #:eq? type=?))))]))
 
 (define-syntax (define-symbolic-tokens stx)
   (syntax-parse stx
@@ -170,10 +176,11 @@
                     (for/list ([<id> (in-list (syntax->list #'(id ...)))])
                       (list (format-id <id> "~a?" (syntax-e <id>))
                             (format-id <id> "~a-datum" (syntax-e <id>))))])
-       #'(begin (struct token css-token () #:transparent #:type-name Token)
+       (syntax/loc stx
+         (begin (struct token css-token () #:transparent #:type-name Token)
                 (define-token id : ID token (Type rest ...) #:with id? id-datum) ...
                 (define-type Token-Datum (U Type ...))
-                (define (token->datum [t : Token]) : (Option Token-Datum) (cond [(id? t) (id-datum t)] ... [else #false]))))]))
+                (define (token->datum [t : Token]) : (Option Token-Datum) (cond [(id? t) (id-datum t)] ... [else #false])))))]))
 
 (define-syntax (define-lazy-tokens stx)
   (syntax-parse stx
@@ -183,12 +190,13 @@
                       (list (format-id <id> "~a?" (syntax-e <id>))
                             (format-id <id> "~a-copy" (syntax-e <id>))
                             (if (eq? (syntax-e <id>) 'css:url) #'CSS-URL-Modifier #'CSS-Token)))])
-       #'(begin (define-symbolic-tokens token #:+ Token [id #:+ ID #:as Type ... [components : (Listof Component)] [lazy? : Boolean]] ...)
+       (syntax/loc stx
+         (begin (define-symbolic-tokens token #:+ Token [id #:+ ID #:as Type ... [components : (Listof Component)] [lazy? : Boolean]] ...)
 
                 (define id-copy : (-> ID (Listof Component) Boolean ID)
                   (lambda [instance subcoms ?]
                     (struct-copy id instance [components (if (css-pair? subcoms) subcoms null)] [lazy? ?])))
-                ...))]))
+                ...)))]))
 
 (define-syntax (define-numeric-tokens stx)
   (syntax-case stx []
@@ -204,9 +212,10 @@
                               (cond [(string-contains? type-name "Flonum") #'fl=]
                                     [(string-contains? type-name "Fixnum") #'fx=]
                                     [else #'=]))))])
-       #'(begin (struct token css-numeric () #:transparent #:type-name Token)
+       (syntax/loc stx
+         (begin (struct token css-numeric () #:transparent #:type-name Token)
                 (define-token id : ID token #:as Type #:=? type=? #:with id? id-datum) ...
-                (define (token->datum [t : Token]) : (U Type ...) (cond [(id? t) (id-datum t)] ... [else nan]))))]))
+                (define (token->datum [t : Token]) : (U Type ...) (cond [(id? t) (id-datum t)] ... [else nan])))))]))
   
 (define-syntax (define-tokens stx)
   (syntax-case stx []
@@ -226,7 +235,8 @@
                                [<Type> (in-list (syntax->list #'(Group ...)))]
                                #:when (eq? (syntax-e <define>) 'define-symbolic-tokens))
                       (format-id <Type> "~a-Datum" (syntax-e <Type>)))])
-       #'(begin (struct token header () #:transparent #:type-name Token)
+       (syntax/loc stx
+         (begin (struct token header () #:transparent #:type-name Token)
                 (struct ptoken pparent pfields #:transparent #:type-name PToken) ...
                 (define-typical-tokens group #:+ Group rest ...) ...
                 (struct ctoken cparent () #:transparent #:type-name CToken) ...
@@ -236,7 +246,7 @@
                   (lambda [instance]
                     (cond [(css:dimension? instance) (cons (css:dimension-datum instance) (css:dimension-unit instance))]
                           [(type? instance) (type->datum instance)] ...
-                          [else (assert (object-name instance) symbol?)])))))]))
+                          [else (assert (object-name instance) symbol?)]))))))]))
 
 ;;; https://drafts.csswg.org/css-syntax/#tokenization
 ;; https://drafts.csswg.org/css-syntax/#component-value
@@ -426,9 +436,9 @@
 (define-syntax (define-css-value stx)
   (syntax-case stx [:]
     [(_ datum #:as Datum (fields ...) options ...)
-     #'(struct datum (fields ...) #:type-name Datum #:transparent options ...)]
+     (syntax/loc stx (struct datum (fields ...) #:type-name Datum #:transparent options ...))]
     [(_ datum #:as Datum #:=> parent (fields ...) options ...)
-     #'(struct datum parent (fields ...) #:type-name Datum #:transparent options ...)]))
+     (syntax/loc stx (struct datum parent (fields ...) #:type-name Datum #:transparent options ...))]))
 
 (define-syntax (define-prefab-keyword stx)
   (syntax-case stx [:]
@@ -438,7 +448,8 @@
                            (format-id #'css-wide-keyword "~as-filter-map" (syntax-e #'css-wide-keyword))
                            (for/list ([kwd (in-list (syntax->list #'(keyword ...)))])
                              (format-id kwd "css:~a" (syntax-e kwd))))])
-       #'(begin (define-css-value css-wide-keyword #:as CSS-Wide-Keyword ([datum : Symbol]))
+       (syntax/loc stx
+         (begin (define-css-value css-wide-keyword #:as CSS-Wide-Keyword ([datum : Symbol]))
                 (define css:symbol : CSS-Wide-Keyword (css-wide-keyword 'keyword)) ...
                 
                 (define <keywords> : (-> (CSS:Filter CSS-Wide-Keyword))
@@ -453,7 +464,7 @@
                   (lambda [key]
                     (cond [(not (symbol? key)) key]
                           [(eq? key 'keyword) css:symbol] ...
-                          [else key])))))]))
+                          [else key]))))))]))
 
 ; https://drafts.csswg.org/css-cascade/#all-shorthand
 ; https://drafts.csswg.org/css-values/#relative-lengths

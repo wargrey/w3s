@@ -28,16 +28,18 @@
 (define-syntax (css-make-token stx)
   (syntax-case stx []
     [(_ src make-css:token datum ...)
-     #'(let-values ([(line column here-position) (port-next-location (css-srcloc-in src))])
+     (syntax/loc stx
+       (let-values ([(line column here-position) (port-next-location (css-srcloc-in src))])
          (make-css:token (css-srcloc-source src) (css-srcloc-line src) (css-srcloc-column src)
-                         (css-srcloc-position src) here-position datum ...))]))
+                         (css-srcloc-position src) here-position datum ...)))]))
   
 (define-syntax (css-make-bad-token stx)
   (syntax-case stx []
     [(_ src css:bad:sub token datum)
-     #'(let ([bad (css-make-token src css:bad:sub (~s (cons (object-name token) datum)))])
+     (syntax/loc stx
+       (let ([bad (css-make-token src css:bad:sub (~s (cons (object-name token) datum)))])
          (css-log-read-error (css-token->string bad))
-         bad)]))
+         bad))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define css-consume-token : (-> Input-Port (U String Symbol) (U EOF CSS-Token))

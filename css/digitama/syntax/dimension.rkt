@@ -33,7 +33,8 @@
                              (format-id <id> "~a->scalar" (string-replace varname ":" "-"))
                              (format-id <id> "<~a>" (syntax-e <id>))
                              (format-id <id> "<~a>" (string-replace varname "css:" "css+"))))])
-       #'(begin (struct id parent () #:transparent) ... (define-type ID id) ...
+       (syntax/loc stx
+         (begin (struct id parent () #:transparent) ... (define-type ID id) ...
                 (struct ctoken cparent () #:transparent) ... (define-type CToken ctoken) ...
 
                 (define css-id->scalar : (case-> [Nonnegative-Flonum Symbol -> Nonnegative-Flonum]
@@ -82,7 +83,7 @@
                   (lambda [instance]
                     (cond [(id? instance) (css-id->scalar (css:dimension-datum instance) (css:dimension-unit instance))] ...
                           [(css-zero? instance) 0.0]
-                          [else +nan.0])))))]))
+                          [else +nan.0]))))))]))
 
 (define-dimensional-tokens css:dimension
   ([css:length         #:+ CSS:Length          #:=> px

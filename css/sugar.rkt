@@ -18,7 +18,7 @@
 (define-syntax (define-preference* stx)
   (syntax-parse stx #:literals [:]
     [(self Preference (fields ...) options ...)
-     #'(self Preference #:with [] (fields ...) options ...)]
+     (syntax/loc stx (self Preference #:with [] (fields ...) options ...))]
     [(_ Preference #:with extra-bindings (field-info ...) options ...)
      (with-syntax* ([(property-definitions ...)
                      (for/list ([<field-info> (in-list (syntax->list #'(field-info ...)))])
@@ -29,26 +29,28 @@
                                                         (λ [[v : (U Nonnegative-Flonum Negative-Single-Flonum)]]
                                                           (select-size v nv))]]
                          [_ <field-info>]))])
-       #'(define-preference Preference #:with extra-bindings (property-definitions ...) options ...))]))
+       (syntax/loc stx (define-preference Preference #:with extra-bindings (property-definitions ...) options ...)))]))
 
 (define-syntax (call-with-css-box stx)
   (syntax-parse stx
     [(_ declared-values inherited-values #:with [box-size size-ref color-ref local-ref] sexp ...)
      (with-syntax ([___ (datum->syntax #'local-ref '...)])
-       #'(parameterize ([current-css-element-color (css-rgba-ref declared-values inherited-values)])
+       (syntax/loc stx
+         (parameterize ([current-css-element-color (css-rgba-ref declared-values inherited-values)])
            (css-extract-font declared-values inherited-values)
            (define-values (box-size size-ref color-ref icon-ref) (css-property-accessors declared-values inherited-values))
-           (define-syntax (local-ref stx) (syntax-case stx [] [(_ argl ___) #'(css-ref declared-values inherited-values argl ___)]))
-           sexp ...))]
+           (define-syntax (local-ref stx) (syntax-case stx [] [(_ argl ___) (syntax/loc stx (css-ref declared-values inherited-values argl ___))]))
+           sexp ...)))]
     [(_ declared-values inherited-values (~optional normal-icon-height) #:with [box-size size-ref color-ref icon-ref local-ref] sexp ...)
      (with-syntax ([___ (datum->syntax #'local-ref '...)]
                    [nih (if (attribute normal-icon-height) #'(real->double-flonum normal-icon-height) #'(css-normal-line-height))])
-       #'(parameterize ([current-css-element-color (css-rgba-ref declared-values inherited-values)])
+       (syntax/loc stx
+         (parameterize ([current-css-element-color (css-rgba-ref declared-values inherited-values)])
            (css-extract-font declared-values inherited-values)
            (define-values (box-size size-ref color-ref icon-ref) (css-property-accessors declared-values inherited-values))
            (define-syntax (local-ref stx) (syntax-case stx [] [(_ argl ___) #'(css-ref declared-values inherited-values argl ___)]))
            (parameterize ([default-bitmap-icon-height (select-size (local-ref 'icon-height css->line-height) nih)])
-             sexp ...)))]))
+             sexp ...))))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define css-box-size : (->* (CSS-Values (Option CSS-Values) Nonnegative-Flonum Nonnegative-Flonum)

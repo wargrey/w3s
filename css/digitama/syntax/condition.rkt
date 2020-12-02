@@ -21,9 +21,10 @@
                               ([argument (in-list (syntax->list #'([feature : DataType defval] ...)))])
                       (cons (datum->syntax argument (string->keyword (symbol->string (car (syntax->datum argument)))))
                             (cons argument args)))])
-       #'(define (make-immutable-features args ...) : CSS-Media-Features
+       (syntax/loc stx
+         (define (make-immutable-features args ...) : CSS-Media-Features
            (make-immutable-hasheq
-            (list (cons 'feature feature) ...))))]))
+            (list (cons 'feature feature) ...)))))]))
 
 ;; https://drafts.csswg.org/css-conditional/#at-supports
 ;; https://drafts.csswg.org/mediaqueries/#media-types

@@ -19,7 +19,7 @@
 (define-syntax (xml-white-space-remake stx)
   (syntax-case stx []
     [(_ src type datum)
-     #'(xml-white-space datum)]))
+     (syntax/loc stx (xml-white-space datum))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-xml:space=preserve xml:space=preserve #:=> XML-White-Space

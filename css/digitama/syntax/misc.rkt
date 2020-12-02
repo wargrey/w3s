@@ -13,28 +13,31 @@
 (define-syntax (define-css-parameter stx)
   (syntax-case stx [:]
     [(_ id : Type #:= defval)
-     #'(define id : (case-> [(U Type (Promise (-> Type))) -> Void] [-> Type])
+     (syntax/loc stx
+       (define id : (case-> [(U Type (Promise (-> Type))) -> Void] [-> Type])
          (let ([&storage : (Boxof (-> Type)) (box (λ [] defval))])
            (case-lambda
              [(v) (set-box! &storage (if (promise? v) (force v) (λ [] v)))]
-             [() ((unbox &storage))])))]
+             [() ((unbox &storage))]))))]
     [(_ id : Type #:guard [guard : TypeIn] #:= defval)
-     #'(define id : (case-> [TypeIn -> Void] [-> Type])
+     (syntax/loc stx
+       (define id : (case-> [TypeIn -> Void] [-> Type])
          (let ([&storage : (Boxof Type) (box (guard defval))])
            (case-lambda
              [(v) (set-box! &storage (guard v))]
-             [() (unbox &storage)])))]))
+             [() (unbox &storage)]))))]))
 
 (define-syntax (define-css-parameters stx)
   (syntax-case stx [:]
     [(_ parameters [name ...] : Type #:= defval)
      (with-syntax ([(p-name ...) (for/list ([<u> (in-list (syntax->list #'(name ...)))]) (format-id <u> "css-~a" (syntax-e <u>)))])
-       #'(begin (define-css-parameter p-name : Type #:= defval) ... 
+       (syntax/loc stx
+         (begin (define-css-parameter p-name : Type #:= defval) ... 
                 (define parameters : (case-> [-> (Listof (Pairof Symbol (U Type (Promise (-> Type)))))]
                                              [(Listof (Pairof Symbol Type)) -> Void])
                   (case-lambda
                     [(db) (let ([pv (assq 'name db)]) (when pv (p-name (cdr pv)))) ...]
-                    [() (list (cons 'name (p-name)) ...)]))))]))
+                    [() (list (cons 'name (p-name)) ...)])))))]))
 
 (define-type (Listof+ css) (Pairof css (Listof css)))
 

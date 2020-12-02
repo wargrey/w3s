@@ -25,25 +25,28 @@
     [(_ symbolic-prefix : Type id? id-datum #:+ XML:ID #:eq? type=?)
      (with-syntax ([id=<-? (format-id #'symbolic-prefix "~a=<-?" (syntax-e #'symbolic-prefix))]
                    [id=:=? (format-id #'symbolic-prefix "~a=:=?" (syntax-e #'symbolic-prefix))])
-       #'(begin (define id=:=? : (-> Any Type (Option Type) : #:+ XML:ID) #| for performance |#
+       (syntax/loc stx
+         (begin (define id=:=? : (-> Any Type (Option Type) : #:+ XML:ID) #| for performance |#
                   (lambda [t v]
                     (and (id? t)
                          (let ([d : Type (id-datum t)])
-                           (and (type=? d v) d)))))))]))
+                           (and (type=? d v) d))))))))]))
 
 (define-syntax (define-token stx)
   (syntax-parse stx #:literals [: Symbol Keyword]
     [(_ id : Identifier parent ((~and (~or Symbol Keyword) Type) #:ci rest ...) #:with id? id-datum)
      (with-syntax ([id=? (format-id #'id "~a=?" (syntax-e #'id))])
-       #'(begin (struct id parent ([datum : Type] [norm : Type] rest ...) #:transparent #:type-name Identifier)
+       (syntax/loc stx
+         (begin (struct id parent ([datum : Type] [norm : Type] rest ...) #:transparent #:type-name Identifier)
                 (define (id=? [t1 : Identifier] [t2 : Identifier]) : Boolean (eq? (id-datum t1) (id-datum t2)))
-                (define-token-interface id : Type id? id-datum #:+ Identifier #:eq? eq?)))]
+                (define-token-interface id : Type id? id-datum #:+ Identifier #:eq? eq?))))]
     [(_ id : Otherwise parent (Type rest ...) #:with id? id-datum)
      (with-syntax ([type=? (case (syntax-e #'Type) [(String) #'string=?] [(Char) #'char=?] [else #'equal?])]
                    [id=? (format-id #'id "~a=?" (syntax-e #'id))])
-       #'(begin (struct id parent ([datum : Type] rest ...) #:transparent #:type-name Otherwise)
+       (syntax/loc stx
+         (begin (struct id parent ([datum : Type] rest ...) #:transparent #:type-name Otherwise)
                 (define (id=? [t1 : Otherwise] [t2 : Otherwise]) : Boolean (type=? (id-datum t1) (id-datum t2)))
-                (define-token-interface id : Type id? id-datum #:+ Otherwise #:eq? type=?)))]))
+                (define-token-interface id : Type id? id-datum #:+ Otherwise #:eq? type=?))))]))
 
 (define-syntax (define-symbolic-tokens stx)
   (syntax-parse stx
@@ -54,11 +57,12 @@
                     (for/list ([<id> (in-list (syntax->list #'(id ...)))])
                       (list (format-id <id> "~a?" (syntax-e <id>))
                             (format-id <id> "~a-datum" (syntax-e <id>))))])
-       #'(begin (struct token xml-token () #:transparent #:type-name Token)
+       (syntax/loc stx
+         (begin (struct token xml-token () #:transparent #:type-name Token)
                 (define-token id : ID token (Type rest ...) #:with id? id-datum) ...
                 (define-type Token-Datum (U Type ...))
                 (define (token->datum [t : Token]) : (Option Token-Datum)
-                  (cond [(id? t) (id-datum t)] ... [else #false]))))]))
+                  (cond [(id? t) (id-datum t)] ... [else #false])))))]))
   
 (define-syntax (define-tokens stx)
   (syntax-case stx []
@@ -77,7 +81,8 @@
                                [<Type> (in-list (syntax->list #'(Group ...)))]
                                #:when (eq? (syntax-e <define>) 'define-symbolic-tokens))
                       (format-id <Type> "~a-Datum" (syntax-e <Type>)))])
-       #'(begin (struct token header () #:transparent #:type-name Token)
+       (syntax/loc stx
+         (begin (struct token header () #:transparent #:type-name Token)
                 (define-typical-tokens group #:+ Group rest ...) ...
                 (struct ctoken cparent () #:transparent #:type-name CToken) ...
 
@@ -85,7 +90,7 @@
                 (define token->datum : (-> Token Token-Datum)
                   (lambda [instance]
                     (cond [(type? instance) (type->datum instance)] ...
-                          [else (assert (object-name instance) symbol?)])))))]))
+                          [else (assert (object-name instance) symbol?)]))))))]))
 
 (define-syntax (define-xml stx)
   (syntax-case stx []
@@ -94,7 +99,7 @@
                     (for/list ([<token> (in-list (syntax->list #'(token ...)))])
                       (list (datum->syntax <token> (syntax-line <token>))
                             (datum->syntax <token> (syntax-column <token>))))])
-     #'(begin (list 'token line col) ...))]))
+     (syntax/loc stx (begin (list 'token line col) ...)))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-tokens xml-token w3s-token #:+ XML-Token

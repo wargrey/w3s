@@ -15,19 +15,20 @@
 (define-syntax (define-css-disjoint-filter stx)
   (syntax-case stx [:]
     [(_ compound-filter #:-> RangeType #:with [[dom : DomType defval ...] ...] atom-filters ...)
-     #'(define (compound-filter [dom : DomType defval ...] ...) : (CSS:Filter RangeType) (CSS:<+> atom-filters ...))]
+     (syntax/loc stx (define (compound-filter [dom : DomType defval ...] ...) : (CSS:Filter RangeType) (CSS:<+> atom-filters ...)))]
     [(_ compound-filter #:-> RangeType atom-filters ...)
-     #'(define (compound-filter) : (CSS:Filter RangeType) (CSS:<+> atom-filters ...))]))
+     (syntax/loc stx (define (compound-filter) : (CSS:Filter RangeType) (CSS:<+> atom-filters ...)))]))
   
 (define-syntax (define-css-atomic-filter stx)
   (syntax-case stx [:]
     [(_ atom-filter #:-> RangeType #:with [[token : css:token?] [dom : DomType defval ...] ...] atom-body ... #:where [defaux ...])
-     #'(define (atom-filter [dom : DomType defval ...] ...) : (CSS:Filter RangeType) defaux ...
+     (syntax/loc stx
+       (define (atom-filter [dom : DomType defval ...] ...) : (CSS:Filter RangeType) defaux ...
          (λ [[token : CSS-Syntax-Any]] : (CSS-Option RangeType)
            (cond [(css:token? token) atom-body ...]
-                 [else #false])))]
+                 [else #false]))))]
     [(defilter atom-filter #:-> RangeType #:with [[token : css:token?] [dom : DomType defval ...] ...] atom-body ...)
-     #'(defilter atom-filter #:-> RangeType #:with [[token : css:token?] [dom : DomType defval ...] ...] atom-body ... #:where [])]))
+     (syntax/loc stx (defilter atom-filter #:-> RangeType #:with [[token : css:token?] [dom : DomType defval ...] ...] atom-body ... #:where []))]))
 
 (define-syntax (define-css-function-filter stx)
   (define (parse-pattern <constructor> <matches>)
@@ -59,7 +60,8 @@
                               [(null? transform) (raise-syntax-error (syntax-e #'self) "missing value constructor" <transform>)]
                               [else (let ([? (datum->syntax <transform> (gensym))])
                                       (list (list #'? #'list? ?) (list #'values ?)))])))])
-       #'(define (func-filter) : (CSS:Filter RangeType) defines
+       (syntax/loc stx
+         (define (func-filter) : (CSS:Filter RangeType) defines
            (define do-parse : (-> Symbol (CSS-Parser (Listof Any)) (Listof CSS-Token) (U (Listof Any) CSS-Syntax-Error))
              (lambda [func-name func-parse func-argl]
                (define-values (fargs --tokens) (func-parse (list func-name) func-argl))
@@ -77,7 +79,7 @@
                          [(? exn? e) e]
                          [_ (make-exn:css:arity token)])]
                       ...
-                      [else (make-exn:css:range token)]))))))]))
+                      [else (make-exn:css:range token)])))))))]))
 
 (define-syntax (define-css-prefab-filter stx)
   (syntax-parse stx
@@ -85,32 +87,33 @@
      (with-syntax ([(current ... current-last)
                     (for/list ([<p> (in-list (syntax->list #'(css ... otherwise)))])
                       (format-id <p> (syntax-e #'fmt) (syntax-e <p>)))])
-       #'(begin (define-css-parameter current : RangeType #:= default-racket) ...
+       (syntax/loc stx
+         (begin (define-css-parameter current : RangeType #:= default-racket) ...
                 (define-css-parameter current-last : RangeType #:= last-one)
                 (define-css-disjoint-filter <id> #:-> RangeType
                   (CSS:<~> (<css:ident-norm> (list 'css ... 'otherwise))
                            (λ [[id : Symbol]] : RangeType
-                             (case id [(css) (current)] ... [else (current-last)]))))))]))
+                             (case id [(css) (current)] ... [else (current-last)])))))))]))
 
 (define-syntax (CSS<?> stx)
   (syntax-case stx [else]
     [(_) #'values]
-    [(_ [else <else> ...]) #'(CSS<&> <else> ...)]
-    [(_ [<if> <then> ...]) #'(css:if <if> (CSS<&> <then> ...) #false)]
-    [(_ [<if> <then> ...] [else <else> ...]) #'(css:if <if> (CSS<&> <then> ...) (CSS<&> <else> ...))]
-    [(_ [<if> <then> ...] ... [else <else> ...]) #'(css:if (list (cons <if> (CSS<&> <then> ...)) ...) (CSS<&> <else> ...))]
-    [(_ [<if> <then> ...] ...) #'(css:if (list (cons <if> (CSS<&> <then> ...)) ...) #false)]))
+    [(_ [else <else> ...]) (syntax/loc stx (CSS<&> <else> ...))]
+    [(_ [<if> <then> ...]) (syntax/loc stx (css:if <if> (CSS<&> <then> ...) #false))]
+    [(_ [<if> <then> ...] [else <else> ...]) (syntax/loc stx (css:if <if> (CSS<&> <then> ...) (CSS<&> <else> ...)))]
+    [(_ [<if> <then> ...] ... [else <else> ...]) (syntax/loc stx (css:if (list (cons <if> (CSS<&> <then> ...)) ...) (CSS<&> <else> ...)))]
+    [(_ [<if> <then> ...] ...) (syntax/loc stx (css:if (list (cons <if> (CSS<&> <then> ...)) ...) #false))]))
   
 (define-syntax (CSS:<+> stx)
   (syntax-case stx []
     [(_ css-filter) #'css-filter]
-    [(_ css-filter css-filters ...) #'(css:disjoin css-filter (CSS:<+> css-filters ...))]))
+    [(_ css-filter css-filters ...) (syntax/loc stx (css:disjoin css-filter (CSS:<+> css-filters ...)))]))
   
 (define-syntax (CSS:<~> stx)
   (syntax-case stx []
-    [(_ css-filter f) #'(css:compose css-filter f)]
-    [(_ css-filter f g) #'(css:compose (css:compose css-filter g) f)]
-    [(_ css-filter f g h ...) #'(css:compose css-filter (compose f g h ...))]))
+    [(_ css-filter f) (syntax/loc stx (css:compose css-filter f))]
+    [(_ css-filter f g) (syntax/loc stx (css:compose (css:compose css-filter g) f))]
+    [(_ css-filter f g h ...) (syntax/loc stx (css:compose css-filter (compose f g h ...)))]))
 
 (define CSS:<=> : (All (a b) (-> (CSS:Filter a) b (CSS:Filter b)))
   (lambda [css-filter const]
