@@ -6,6 +6,8 @@
 (require bitmap/digitama/color)
 (require bitmap/color)
 
+(require racket/symbol)
+
 (require "digitama/syntax/digicore.rkt")
 (require "digitama/color.rkt")
 (require "recognizer.rkt")
@@ -20,7 +22,7 @@
   (lambda [name [px.names #px"-color$"]]
     (or (and (eq? name 'color) (<css-color> '#:inherit-currentcolor))
         (and (or (and (list? px.names) (memq name px.names))
-                 (and (regexp? px.names) (regexp-match? px.names (symbol->string name))))
+                 (and (regexp? px.names) (regexp-match? px.names (symbol->immutable-string name))))
              (<css-color>)))))
 
 (define css->color : (CSS->Racket (U FlColor CSS-Wide-Keyword 'currentcolor))

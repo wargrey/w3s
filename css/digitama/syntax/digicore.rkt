@@ -13,6 +13,7 @@
 (require racket/list)
 (require racket/bool)
 (require racket/format)
+(require racket/symbol)
 (require racket/match)
 
 (require "misc.rkt")
@@ -20,6 +21,7 @@
 
 (require (for-syntax racket/base))
 (require (for-syntax racket/string))
+(require (for-syntax racket/symbol))
 (require (for-syntax racket/syntax))
 (require (for-syntax syntax/parse))
 
@@ -43,7 +45,7 @@
                     [(args ...)
                      (for/fold ([args null])
                                ([argument (in-list (syntax->list #'([property : ArgumentType defval ...] ...)))])
-                       (cons (datum->syntax argument (string->keyword (symbol->string (car (syntax->datum argument)))))
+                       (cons (datum->syntax argument (string->keyword (symbol->immutable-string (car (syntax->datum argument)))))
                              (cons argument args)))]
                     [([pref:bindings properties ...] ...)
                      (for/list ([binding (in-list (syntax->list #'(bindings ...)))]
@@ -208,7 +210,7 @@
                       (list (format-id <id> "~a?" (syntax-e <id>))
                             (format-id <id> "~a=?" (syntax-e <id>))
                             (format-id <id> "~a-datum" (syntax-e <id>))
-                            (let ([type-name (symbol->string (syntax-e <type>))])
+                            (let ([type-name (symbol->immutable-string (syntax-e <type>))])
                               (cond [(string-contains? type-name "Flonum") #'fl=]
                                     [(string-contains? type-name "Fixnum") #'fx=]
                                     [else #'=]))))])
@@ -364,7 +366,7 @@
 
 (define css-token-datum->string : (-> CSS-Token String)
   (lambda [instance]
-    (cond [(css:ident? instance) (symbol->string (css:ident-datum instance))]
+    (cond [(css:ident? instance) (symbol->immutable-string (css:ident-datum instance))]
           [(css-numeric? instance) (css-numeric-representation instance)]
           [(css:@keyword? instance) (keyword->string (css:@keyword-datum instance))]
           [(css:hash? instance) (~a "#" (keyword->string (css:hash-datum instance)))]

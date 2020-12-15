@@ -3,6 +3,8 @@
 (provide (all-defined-out) <css-image>)
 (provide (all-from-out bitmap/base))
 
+(require racket/symbol)
+
 (require bitmap/base)
 (require bitmap/constructor)
 (require bitmap/color)
@@ -24,7 +26,7 @@
       [(image-resolution) (CSS<*> (CSS:<^> (CSS:<+> (<css-keyword> '(from-image snap)) (<css+resolution>))) '+)]
       [(image-rendering) (<css-keyword> css-image-rendering-option)]
       [else (and (or (and (list? px.names) (memq name px.names))
-                     (and (regexp? px.names) (regexp-match? px.names (symbol->string name))))
+                     (and (regexp? px.names) (regexp-match? px.names (symbol->immutable-string name))))
                  (<css-image>))])))
 
 (define make-css->bitmap : (All (racket) (case-> [(-> (CSS-Maybe Bitmap) racket) -> (CSS->Racket racket)]

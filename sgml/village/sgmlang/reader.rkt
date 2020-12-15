@@ -4,6 +4,7 @@
 
 (require racket/path)
 (require racket/port)
+(require racket/symbol)
 
 (require syntax/strip-context)
 
@@ -56,7 +57,7 @@
     (define lang*.sgml
       (string->symbol
        (format "~a*~a"
-         (path-replace-extension (symbol->string lang.sgml) #"")
+         (path-replace-extension (symbol->immutable-string lang.sgml) #"")
          .ext)))
 
     (values lang.sgml lang*.sgml)))

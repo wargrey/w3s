@@ -5,6 +5,7 @@
 (provide (all-defined-out))
 
 (require racket/string)
+(require racket/symbol)
 
 (require "digicore.rkt")
 (require "condition.rkt")
@@ -228,7 +229,7 @@
                                           (if (css:string? href) (css:string-datum href) "")
                                           (css-url-modifiers-filter func modifiers)
                                           #false))
-                      (let ([freadable (string->symbol (symbol->string fname))])
+                      (let ([freadable (string->symbol (symbol->immutable-string fname))])
                         (w3s-remake-token [func end-token] css:function freadable fnorm
                                           (cond [(eq? fnorm 'var) components] ; whitespaces are meaningful in var() 
                                                 [else (filter-not css:whitespace? components)])
@@ -434,7 +435,7 @@
   ;;; https://drafts.csswg.org/mediaqueries/#mq-min-max
   (lambda [desc-name ?value ophint ?op]
     (define errobj : (Listof CSS-Token) (filter css-token? (list desc-name ?op ?value)))
-    (define name : String (symbol->string (css:ident-norm desc-name)))
+    (define name : String (symbol->immutable-string (css:ident-norm desc-name)))
     (define-values (downcased-name op min/max?)
       (cond [(string-prefix? name "min-") (values (string->symbol (substring name 4)) #\≥ #true)]
             [(string-prefix? name "max-") (values (string->symbol (substring name 4)) #\≤ #true)]

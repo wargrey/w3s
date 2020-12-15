@@ -6,6 +6,7 @@
 (require (for-syntax racket/base))
 
 (require racket/string)
+(require racket/symbol)
 
 (require "grammar.rkt")
 
@@ -67,8 +68,8 @@
     (define this:space : String
       (cond [(string? attval) attval]
             [(box? attval) (unbox attval)]
-            [(symbol? attval) (symbol->string attval)]
-            [else (string-join (map symbol->string attval))]))
+            [(symbol? attval) (symbol->immutable-string attval)]
+            [else (string-join (map symbol->immutable-string attval))]))
     
     (cond [(string-ci=? this:space "preserve") 'preserve]
           [(string-ci=? this:space "default") (default-xml:space-signal)]

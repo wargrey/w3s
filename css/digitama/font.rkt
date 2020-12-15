@@ -6,6 +6,7 @@
 (provide (all-defined-out))
 
 (require racket/string)
+(require racket/symbol)
 
 (require bitmap/font)
 (require bitmap/digitama/font)
@@ -91,7 +92,7 @@
             [else (let ([family (car families)])
                     (or (and (css-font-generic-family? family) family)
                         (and (string? family) (face-filter family))
-                        (and (list? family) (face-filter (string-join (map symbol->string (filter symbol? family)))))
+                        (and (list? family) (face-filter (string-join (map symbol->immutable-string (filter symbol? family)))))
                         (select (cdr families))))]))))
 
 (define css->font-size : (CSS->Racket Nonnegative-Real)

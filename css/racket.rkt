@@ -10,7 +10,9 @@
 (require "recognizer.rkt")
 
 (require (for-syntax racket/base))
+(require (for-syntax racket/symbol))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (begin-for-syntax
   (require racket/list)
 
@@ -34,7 +36,7 @@
         (with-handlers ([exn? void])
           (define λid (eval id))
           (when (and (procedure? λid)
-                     (let ([strid (symbol->string id)])
+                     (let ([strid (symbol->immutable-string id)])
                        (ormap (λ [regexp] (regexp-match? regexp strid)) regexps)))
             (λpool-set! the-pool id λid)))))
     (datum->syntax <the-@λ-pool> the-pool)))

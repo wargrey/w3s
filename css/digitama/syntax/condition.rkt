@@ -12,6 +12,7 @@
 
 (require (for-syntax racket/base))
 (require (for-syntax racket/syntax))
+(require (for-syntax racket/symbol))
 
 (define-syntax (define-make-media-features stx)
   (syntax-case stx [:]
@@ -19,7 +20,7 @@
      (with-syntax ([(args ...)
                     (for/fold ([args null])
                               ([argument (in-list (syntax->list #'([feature : DataType defval] ...)))])
-                      (cons (datum->syntax argument (string->keyword (symbol->string (car (syntax->datum argument)))))
+                      (cons (datum->syntax argument (string->keyword (symbol->immutable-string (car (syntax->datum argument)))))
                             (cons argument args)))])
        (syntax/loc stx
          (define (make-immutable-features args ...) : CSS-Media-Features

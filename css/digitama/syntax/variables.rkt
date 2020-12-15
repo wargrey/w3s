@@ -4,9 +4,12 @@
 
 (provide (all-defined-out))
 
+(require racket/symbol)
+
 (require "misc.rkt")
 (require "digicore.rkt")
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define css-any->declaration-value : (-> CSS-Token (Listof CSS-Token) Boolean
                                          (Values (U (Listof+ CSS-Token) CSS-Syntax-Error) Boolean Boolean))
   ;;; https://drafts.csswg.org/css-syntax/#typedef-declaration-value
@@ -177,7 +180,7 @@
              (define-values (kw-value others) (css-car/cdr value+rest))
              (cond [(or (eof-object? ?:) (not (css:colon? ?:))) (rearrange swk (cons head lgra) rest)]
                    [(or (eof-object? ?kw) (not (css:ident? ?kw))) (rearrange swk (list* ?: head lgra) :kw+rest)]
-                   [else (let* ([:kw (string->keyword (symbol->string (css:ident-datum ?kw)))]
+                   [else (let* ([:kw (string->keyword (symbol->immutable-string (css:ident-datum ?kw)))]
                                 [<#:kw> (w3s-remake-token [head ?kw] css:#:keyword :kw)])
                            (cond [(eof-object? kw-value) (make+exn:css:missing-value <#:kw>)]
                                  [else (rearrange (cons kw-value (cons <#:kw> swk)) lgra others)]))])]

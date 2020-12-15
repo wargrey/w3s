@@ -14,6 +14,7 @@
 
 (require (for-syntax racket/base))
 (require (for-syntax racket/string))
+(require (for-syntax racket/symbol))
 (require (for-syntax racket/syntax))
 (require (for-syntax syntax/parse))
 
@@ -26,7 +27,7 @@
                     [token-filter (format-id #'parent "~a-filter" (syntax-e #'parent))]
                     [([id? +id? css:id->scalar css-id->scalar <id> <+id>] ...)
                      (for/list ([<id> (in-list (syntax->list #'(id ...)))])
-                       (define varname (symbol->string (syntax-e <id>)))
+                       (define varname (symbol->immutable-string (syntax-e <id>)))
                        (list (format-id <id> "~a?" (syntax-e <id>))
                              (format-id <id> "~a?" (string-replace varname ":" "+"))
                              (format-id <id> "~a->scalar" (syntax-e <id>))

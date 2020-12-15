@@ -8,6 +8,7 @@
 
 (require racket/list)
 (require racket/format)
+(require racket/symbol)
 (require racket/match)
 
 (require css/digitama/syntax/w3s)
@@ -195,7 +196,7 @@
 
 (define xml-token-datum->string : (-> XML-Token String)
   (lambda [instance]
-    (cond [(xml:name? instance) (symbol->string (xml:name-datum instance))]
+    (cond [(xml:name? instance) (symbol->immutable-string (xml:name-datum instance))]
           [(xml:string? instance) (~s (xml:string-datum instance))]
           [(xml:bad? instance) (~s (car (xml:bad-datum instance)))]
           [else (~a (xml-token->datum instance))])))

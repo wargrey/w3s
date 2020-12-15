@@ -4,8 +4,7 @@
 
 (require racket/path)
 (require racket/port)
-(require racket/pretty)
-(require racket/list)
+(require racket/symbol)
 
 (require syntax/strip-context)
 
@@ -26,7 +25,7 @@
     (define all-namespaces (css-stylesheet-namespaces all-rules))
     (define lang.css
       (cond [(and (pair? all-namespaces) (not (eq? (caar all-namespaces) '||)))
-             (string->symbol (string-append (symbol->string (caar all-namespaces)) ".css"))]
+             (string->symbol (string-append (symbol->immutable-string (caar all-namespaces)) ".css"))]
             [(path? src)
              (define src.css (path-replace-extension (file-name-from-path src) ""))
              (define path.css (if (regexp-match? #px"\\.css$" src.css) src.css (path-replace-extension src.css ".css")))
