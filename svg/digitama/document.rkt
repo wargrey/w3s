@@ -4,7 +4,7 @@
 
 (require sgml/xml)
 
-;(require "../village/hashlang/svg11.dtd")
+;(require "../village/hashlang/svg11.tdtd")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define svg-load-external-dtd : Open-Input-XML-XXE

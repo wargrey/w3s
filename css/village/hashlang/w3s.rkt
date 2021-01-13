@@ -32,7 +32,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define w3s-memory-difference : (-> Natural Real)
   (lambda [memory0]
-    (/ (- (current-memory-use) memory0)
+    (/ (- (current-memory-use 'cumulative) memory0)
        1024.0 1024.0)))
 
 (define w3s-read-doc
@@ -41,12 +41,12 @@
                                -> (Values Doc Real Nonnegative-Integer Nonnegative-Integer Nonnegative-Integer)]))
   (case-lambda
     [(/dev/docin read-doc)
-     (let-values ([(memory0) (current-memory-use)]
+     (let-values ([(memory0) (current-memory-use 'cumulative)]
                   [(&doc.xml cpu real gc) (time-apply read-doc (list /dev/docin))])
        (values (car &doc.xml) (w3s-memory-difference memory0) cpu real gc))]
     [(src bs line column position read-doc)
      (let ([/dev/docin (open-input-bytes bs src)]
-           [mem0 (current-memory-use)])    
+           [mem0 (current-memory-use 'cumulative)])
        (port-count-lines! /dev/docin)
        (set-port-next-location! /dev/docin line column position)
      
