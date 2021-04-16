@@ -25,11 +25,27 @@
 (require (for-syntax racket/syntax))
 (require (for-syntax syntax/parse))
 
+(begin-for-syntax
+  (define-splicing-syntax-class opt
+    #:attributes (mutable? transparent? prefab? cname ecname type [prop 1] [prop-val 1])
+    (pattern (~seq (~or (~optional (~seq (~and #:mutable mutable?)))
+                        (~optional (~seq (~and #:transparent transparent?)))
+                        (~optional (~seq (~and #:prefab prefab?)))
+                        (~optional (~or (~and (~seq #:constructor-name cname)
+                                              (~bind [ecname #f]))
+                                        (~and (~seq #:extra-constructor-name ecname)
+                                              (~bind [cname #f]))))
+                        (~optional (~seq #:type-name type:id))
+                        
+                        (~optional (~seq #:guard guard:expr))
+                        (~seq #:property prop:expr prop-val:expr))
+                   ...))))
+
 (define-syntax (define-preference stx)
   (syntax-parse stx #:literals [:]
     [(self Preference (fields ...) options ...)
      (syntax/loc stx (self Preference #:with [] (fields ...) options ...))]
-    [(self Preference #:with [[bindings BindTypes ...] ...] ([property : DataType info ...] ...) options ...)
+    [(self Preference #:with [[bindings BindTypes ...] ...] ([property : DataType info ...] ...) options:opt)
      (with-syntax* ([Preference* (format-id #'Preference "~a*" (syntax-e #'Preference))]
                     [(Uv uv? uv) (list #'CSS-Wide-Keyword #'css-wide-keyword? #'css:initial)]
                     [([initial-value property-filter ArgumentType defval ...] ...)
@@ -57,11 +73,12 @@
                                         [type (in-list (syntax->list #'(DataType ...)))])
                                (cond [(not (memq (syntax-e type) types)) properties]
                                      [else (cons (syntax-e property) properties)]))))])
-       (syntax/loc stx
-         (begin (struct Preference ([property : DataType] ...) options ...)
-                (define (Preference* args ...) : Preference (Preference property-filter ...))
-                (define (#%property) : DataType initial-value) ...
-                (define pref:bindings : (Listof Symbol) (list 'properties ...)) ...)))]))
+       (with-syntax ([type (or (attribute options.type) #'Preference)])
+         (quasisyntax/loc stx
+           (begin (struct Preference ([property : DataType] ...) . options)
+                  (define (Preference* args ...) : type (Preference property-filter ...))
+                  (define (#%property) : DataType initial-value) ...
+                  (define pref:bindings : (Listof Symbol) (list 'properties ...)) ...))))]))
   
 (define-syntax (define-token-interface stx)
   (syntax-case stx [:]
