@@ -12,11 +12,11 @@
 (require "syntax/dimension.rkt")
 (require "../recognizer.rkt")
 
-(define-css-atomic-filter <css#color> #:-> hexa #:with [[color-value : css:hash?]]
+(define-css-atomic-filter <css#color> #:-> Hexa #:with [[color-value : css:hash?]]
   (or (css-hex-color->rgba (css:hash-datum color-value))
       (make-exn:css:range color-value))
   #:where
-  [(define (css-hex-color->rgba [hash-color : Keyword]) : (Option hexa)
+  [(define (css-hex-color->rgba [hash-color : Keyword]) : (Option Hexa)
      ;;; https://drafts.csswg.org/css-color/#numeric-rgb
      (define color : String (keyword->string hash-color))
      (define digits : Index (string-length color))
