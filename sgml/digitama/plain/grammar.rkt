@@ -2,8 +2,6 @@
 
 (provide (all-defined-out))
 
-(require racket/list)
-
 (require "../tokenizer/port.rkt")
 (require "../tokenizer/delimiter.rkt")
 

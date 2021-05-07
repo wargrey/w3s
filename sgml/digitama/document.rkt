@@ -4,9 +4,6 @@
 
 (provide (all-defined-out))
 
-(require racket/path)
-(require racket/string)
-
 (require "dtd.rkt")
 (require "schema.rkt")
 (require "validity.rkt")
