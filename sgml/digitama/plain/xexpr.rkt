@@ -20,8 +20,14 @@
     (or (xexpr-datum? v)
         (xexpr-element? v))))
 
-(define write-xexpr : (->* (Xexpr) (Output-Port) Void)
-  (lambda [x [/dev/xmlout (current-output-port)]]
+(define write-xexpr : (->* (Xexpr) (Output-Port #:prolog? Boolean) Void)
+  (lambda [x [/dev/xmlout (current-output-port)] #:prolog? [prolog? #false]]
+    (unless (not prolog?)
+      (write-bytes #"<?xml" /dev/xmlout)
+      (write-xexpr-attrlist '([version "1.0"] [encoding "UTF-8"] [standalone "yes"]) /dev/xmlout)
+      (write-bytes #"?>" /dev/xmlout)
+      (newline /dev/xmlout))
+    
     (cond [(xexpr-empty-element? x)
            (write-char #\< /dev/xmlout)
            (write (car x) /dev/xmlout)
@@ -49,16 +55,16 @@
            (write-bytes #"]]>" /dev/xmlout)])
     (void)))
 
-(define xexpr->bytes : (-> Xexpr Bytes)
-  (lambda [x]
+(define xexpr->bytes : (-> Xexpr [#:prolog? Boolean] Bytes)
+  (lambda [x #:prolog? [prolog? #false]]
     (define /dev/xmlout (open-output-bytes '/dev/xmlout))
 
-    (write-xexpr x /dev/xmlout)
+    (write-xexpr x /dev/xmlout #:prolog? prolog?)
     (get-output-bytes /dev/xmlout)))
 
-(define xexpr->string : (-> Xexpr String)
-  (lambda [x]
-    (bytes->string/utf-8 (xexpr->bytes x))))
+(define xexpr->string : (-> Xexpr [#:prolog? Boolean] String)
+  (lambda [x #:prolog? [prolog? #false]]
+    (bytes->string/utf-8 (xexpr->bytes x #:prolog? prolog?))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define write-xexpr-element : (->* (Symbol Xexpr-Attrlist (Listof Xexpr)) (Output-Port) Void)
@@ -85,7 +91,8 @@
 (define write-xexpr-children : (->* ((Listof Xexpr)) (Output-Port) Void)
   (lambda [children [/dev/xmlout (current-output-port)]]
     (for ([child (in-list children)])
-      (write-xexpr child /dev/xmlout))))
+      (write-xexpr #:prolog? #false
+                   child /dev/xmlout))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xexpr-datum? : (-> Any Boolean : Xexpr-Datum)
