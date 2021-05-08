@@ -33,12 +33,12 @@
            (write (car x) /dev/xmlout)
            (let ([maybe-attrs (cdr x)])
              (when (pair? maybe-attrs)
-               (write-xexpr-attrlist (car maybe-attrs))))
+               (write-xexpr-attrlist (car maybe-attrs) /dev/xmlout)))
            (write-bytes #" \\>" /dev/xmlout)]
-          [(xexpr-children-element? x)
-           (write-xexpr-element (car x) null (cadr x) /dev/xmlout)]
           [(xexpr-full-element? x)
            (write-xexpr-element (car x) (cadr x) (caddr x) /dev/xmlout)]
+          [(xexpr-children-element? x)
+           (write-xexpr-element (car x) null (cadr x) /dev/xmlout)]
           [(string? x)
            (write-string x /dev/xmlout)]
           [(symbol? x)
@@ -71,7 +71,7 @@
   (lambda [tagname attrlist children [/dev/xmlout (current-output-port)]]
     (write-char #\< /dev/xmlout)
     (write tagname /dev/xmlout)
-    (write-xexpr-attrlist attrlist)
+    (write-xexpr-attrlist attrlist /dev/xmlout)
     (write-char #\> /dev/xmlout)
     (write-xexpr-children children /dev/xmlout)
     (write-bytes #"</" /dev/xmlout)
