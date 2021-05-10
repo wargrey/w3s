@@ -4,15 +4,15 @@
 ;;; https://www.w3.org/TR/xml/                                                                  ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(provide (all-defined-out) (all-from-out "dtd.rkt"))
+(provide (all-defined-out) (all-from-out "dtd.rkt" "xexpr.rkt"))
 (provide (all-from-out "digitama/namespace.rkt" "digitama/whitespace.rkt"))
 (provide XML-DTD XML-External-Doctype-Entity xml-load-relative-system-entity)
 (provide (struct-out XML-Document) read-xml-document xml-document-normalize xml-document*->document)
 (provide (struct-out XML-Document*) read-xml-document* xml-document*-normalize xml-document*-valid?)
 (provide XML-DTD-Guard XML-XXE-Guard make-xml-dtd-guard xml-dtd-guard? xml-xxe-guard?)
-(provide xexpr? Xexpr write-xexpr xexpr->bytes xexpr->string)
 
 (require "dtd.rkt")
+(require "xexpr.rkt")
 
 (require "digitama/dtd.rkt")
 (require "digitama/doctype.rkt")
@@ -22,8 +22,6 @@
 (require "digitama/digicore.rkt")
 (require "digitama/namespace.rkt")
 (require "digitama/whitespace.rkt")
-
-(require "digitama/plain/xexpr.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-doc-location : (-> (U XML-Document XML-Document*) (U String Symbol))
