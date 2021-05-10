@@ -21,12 +21,12 @@
 (define-type SAX-Attribute-Value (U String (Boxof String)))
 (define-type SAX-Attributes (Listof (Pairof Symbol SAX-Attribute-Value)))
 
-;;; NOTE: KISS
+;;; NOTE: K.I.S.S.
 (define-type (XML-Prolog-Handler seed) (-> (U String Symbol) Nonnegative-Flonum (Option String) Boolean Boolean seed seed))
 (define-type (XML-Doctype-Handler seed) (-> (Option Symbol) (Option String) (Option String) seed seed))
 (define-type (XML-PI-Handler seed) (-> (Option Symbol) Symbol (Option String) seed seed))
-(define-type (XML-Element-Handler seed) (-> Symbol Index (Option SAX-Attributes) Boolean seed seed))
-(define-type (XML-PCData-Handler seed) (-> Symbol Index String Boolean seed seed))
+(define-type (XML-Element-Handler seed) (-> Symbol Index (Option SAX-Attributes #| `False` implies ETag|#) Boolean seed seed))
+(define-type (XML-PCData-Handler seed) (-> Symbol Index String Boolean #| indicator of `<![CDATA[]]>` |# seed seed))
 (define-type (XML-GEReference-Handler seed) (-> (U Symbol Index) (Option Char) seed seed))
 (define-type (XML-Comment-Handler seed) (-> (Option Symbol) String seed seed))
 
@@ -50,13 +50,13 @@
                          #:gereference [geref : (U (XML-GEReference-Handler seed) False Void) (void)]
                          #:comment [comment : (U (XML-Comment-Handler seed) False Void) (void)]
                          [src : (Option (XML-Event-Handlerof seed)) #false]) : (XML-Event-Handlerof seed)
-  (xml-event-handler (or (if (void? document) (and src (xml-event-handler-prolog src)) document) sax-arity6-identity)
-                     (or (if (void? doctype) (and src (xml-event-handler-doctype src)) doctype) sax-arity4-identity)
-                     (or (if (void? pi) (and src (xml-event-handler-pi src)) pi) sax-arity4-identity)
-                     (or (if (void? element) (and src (xml-event-handler-element src)) element) sax-arity5-identity)
-                     (or (if (void? pcdata) (and src (xml-event-handler-pcdata src)) pcdata) sax-arity5-identity)
-                     (or (if (void? geref) (and src (xml-event-handler-geref src)) geref) sax-arity3-identity)
-                     (or (if (void? comment) (and src (xml-event-handler-comment src)) comment) sax-arity3-identity)))
+  (xml-event-handler (or (if (void? document) (and src (xml-event-handler-prolog src)) document) sax-identity/6)
+                     (or (if (void? doctype) (and src (xml-event-handler-doctype src)) doctype) sax-identity/4)
+                     (or (if (void? pi) (and src (xml-event-handler-pi src)) pi) sax-identity/4)
+                     (or (if (void? element) (and src (xml-event-handler-element src)) element) sax-identity/5)
+                     (or (if (void? pcdata) (and src (xml-event-handler-pcdata src)) pcdata) sax-identity/5)
+                     (or (if (void? geref) (and src (xml-event-handler-geref src)) geref) sax-identity/3)
+                     (or (if (void? comment) (and src (xml-event-handler-comment src)) comment) sax-identity/3)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define #:forall (seed) load-xml-datum : (->* (SGML-StdIn (XML-Event-Handlerof (U Void seed)))
@@ -279,18 +279,18 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-whitespaces/0 : (Listof XML-White-Space) (list xml-whitespace/0))
 
-(define sax-arity3-identity : (All (seed) (-> Any Any seed seed))
+(define sax-identity/3 : (All (seed) (-> Any Any seed seed))
   (lambda [a1 a2 datum]
     datum))
 
-(define sax-arity4-identity : (All (seed) (-> Any Any Any seed seed))
+(define sax-identity/4 : (All (seed) (-> Any Any Any seed seed))
   (lambda [a1 a2 a3 datum]
     datum))
 
-(define sax-arity5-identity : (All (seed) (-> Any Any Any Any seed seed))
+(define sax-identity/5 : (All (seed) (-> Any Any Any Any seed seed))
   (lambda [a1 a2 a3 a4 datum]
     datum))
 
-(define sax-arity6-identity : (All (seed) (-> Any Any Any Any Any seed seed))
+(define sax-identity/6 : (All (seed) (-> Any Any Any Any Any seed seed))
   (lambda [a1 a2 a3 a4 a5 datum]
     datum))
