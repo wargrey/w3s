@@ -20,8 +20,8 @@
     (or (xexpr-datum? v)
         (xexpr-element? v))))
 
-(define write-xexpr : (->* (Xexpr) (Output-Port #:prolog? Boolean) Void)
-  (lambda [x [/dev/xmlout (current-output-port)] #:prolog? [prolog? #false]]
+(define write-xexpr : (->* (Xexpr) (Output-Port #:prolog? Boolean #:newline-at-end? Boolean) Void)
+  (lambda [x [/dev/xmlout (current-output-port)] #:prolog? [prolog? #false] #:newline-at-end? [blank? #true]]
     (unless (not prolog?)
       (write-bytes #"<?xml" /dev/xmlout)
       (write-xexpr-attrlist '([version "1.0"] [encoding "UTF-8"] [standalone "yes"]) /dev/xmlout)
@@ -53,18 +53,20 @@
            (write-bytes #"<![CDATA[" /dev/xmlout)
            (write-bytes x /dev/xmlout)
            (write-bytes #"]]>" /dev/xmlout)])
-    (void)))
 
-(define xexpr->bytes : (-> Xexpr [#:prolog? Boolean] Bytes)
-  (lambda [x #:prolog? [prolog? #false]]
+    (unless (not blank?)
+      (newline /dev/xmlout))))
+
+(define xexpr->bytes : (-> Xexpr [#:prolog? Boolean] [#:newline-at-end? Boolean] Bytes)
+  (lambda [x #:prolog? [prolog? #false] #:newline-at-end? [blank? #true]]
     (define /dev/xmlout (open-output-bytes '/dev/xmlout))
 
-    (write-xexpr x /dev/xmlout #:prolog? prolog?)
+    (write-xexpr x /dev/xmlout #:prolog? prolog? #:newline-at-end? blank?)
     (get-output-bytes /dev/xmlout)))
 
-(define xexpr->string : (-> Xexpr [#:prolog? Boolean] String)
-  (lambda [x #:prolog? [prolog? #false]]
-    (bytes->string/utf-8 (xexpr->bytes x #:prolog? prolog?))))
+(define xexpr->string : (-> Xexpr [#:prolog? Boolean] [#:newline-at-end? Boolean] String)
+  (lambda [x #:prolog? [prolog? #false] #:newline-at-end? [blank? #true]]
+    (bytes->string/utf-8 (xexpr->bytes x #:prolog? prolog? #:newline-at-end? blank?))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define write-xexpr-element : (->* (Symbol Xexpr-Attrlist (Listof Xexpr)) (Output-Port) Void)
@@ -91,7 +93,7 @@
 (define write-xexpr-children : (->* ((Listof Xexpr)) (Output-Port) Void)
   (lambda [children [/dev/xmlout (current-output-port)]]
     (for ([child (in-list children)])
-      (write-xexpr #:prolog? #false
+      (write-xexpr #:prolog? #false #:newline-at-end? #false
                    child /dev/xmlout))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
