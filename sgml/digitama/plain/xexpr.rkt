@@ -34,7 +34,7 @@
            (let ([maybe-attrs (cdr x)])
              (when (pair? maybe-attrs)
                (write-xexpr-attrlist (car maybe-attrs) /dev/xmlout)))
-           (write-bytes #" \\>" /dev/xmlout)]
+           (write-bytes #" />" /dev/xmlout)]
           [(xexpr-full-element? x)
            (write-xexpr-element (car x) (cadr x) (caddr x) /dev/xmlout)]
           [(xexpr-children-element? x)
