@@ -4,10 +4,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type Xexpr-Attribute (U (Pairof Symbol String) (List Symbol String)))
-(define-type Xexpr-Attrlist (Listof Xexpr-Attribute))
+(define-type Xexpr-AttList (Listof Xexpr-Attribute))
 (define-type Xexpr-Datum (U String Index Symbol Bytes))
 
-(define-type Xexpr-Full-Element (Rec elem (U (List Symbol Xexpr-Attrlist (Listof (U Xexpr-Datum Xexpr-Element elem))))))
+(define-type Xexpr-Full-Element (Rec elem (U (List Symbol Xexpr-AttList (Listof (U Xexpr-Datum Xexpr-Element elem))))))
 (define-type Xexpr-Children-Element (Rec elem (List Symbol (Listof (U Xexpr-Datum Xexpr-Element elem)))))
 (define-type Xexpr-Empty-Element (U (List Symbol) (List Symbol (Listof Xexpr-Attribute))))
 
@@ -34,7 +34,7 @@
            (let ([maybe-attrs (cdr x)])
              (when (pair? maybe-attrs)
                (write-xexpr-attrlist (car maybe-attrs) /dev/xmlout)))
-           (write-bytes #" />" /dev/xmlout)]
+           (write-bytes #"/>" /dev/xmlout)]
           [(xexpr-full-element? x)
            (write-xexpr-element (car x) (cadr x) (caddr x) /dev/xmlout)]
           [(xexpr-children-element? x)
@@ -69,7 +69,7 @@
     (bytes->string/utf-8 (xexpr->bytes x #:prolog? prolog? #:newline-at-end? blank?))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define write-xexpr-element : (->* (Symbol Xexpr-Attrlist (Listof Xexpr)) (Output-Port) Void)
+(define write-xexpr-element : (->* (Symbol Xexpr-AttList (Listof Xexpr)) (Output-Port) Void)
   (lambda [tagname attrlist children [/dev/xmlout (current-output-port)]]
     (write-char #\< /dev/xmlout)
     (write tagname /dev/xmlout)
@@ -80,7 +80,7 @@
     (write tagname /dev/xmlout)
     (write-char #\> /dev/xmlout)))
 
-(define write-xexpr-attrlist : (->* (Xexpr-Attrlist) (Output-Port) Void)
+(define write-xexpr-attrlist : (->* (Xexpr-AttList) (Output-Port) Void)
   (lambda [attrlist [/dev/xmlout (current-output-port)]]
     (for ([attr (in-list attrlist)])
       (write-char #\space /dev/xmlout)
@@ -113,7 +113,7 @@
                   (string? (cadr e))
                   (null? (cddr e)))))))
 
-(define xexpr-attrlist? : (-> Any Boolean : Xexpr-Attrlist)
+(define xexpr-attrlist? : (-> Any Boolean : Xexpr-AttList)
   (lambda [a]
     (and (list? a)
          (andmap xexpr-attribute? a))))
