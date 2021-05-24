@@ -20,3 +20,8 @@
           [else (let ([parts : (Listof String) (string-split sqname ":")])
                   (cond [(or (null? parts) (null? (cdr parts)) (pair? (cddr parts))) (values qname qname)]
                         [else (values (string->symbol (car parts)) (string->symbol (cadr parts)))]))])))
+
+(define xml-qname-xmlns? : (-> Symbol Boolean)
+  (lambda [qname]
+    (or (eq? qname 'xmlns)
+        (string-prefix? (symbol->immutable-string qname) "xmlns:"))))

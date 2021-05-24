@@ -23,6 +23,8 @@
 (require "digitama/namespace.rkt")
 (require "digitama/whitespace.rkt")
 
+(require "digitama/plain/grammar.rkt")
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-doc-location : (-> (U XML-Document XML-Document*) (U String Symbol))
   (lambda [xml]
@@ -58,6 +60,24 @@
   (lambda [xml]
     (cond [(xml-document? xml) (xml-doctype-external (xml-document-doctype xml))]
           [else (xml-external-id->datum (xml-doctype*-external (xml-document*-doctype xml)))])))
+
+(define xml-doc-namespaces : (-> (U XML-Document XML-Document*) (Listof (Pairof Symbol String)))
+  (lambda [xml]
+    (define root-attlist : (Listof XML-Element-Attribute)
+      (if (xml-document? xml)
+          (let ([?root (xml-document-root-element xml)])
+            (if (not ?root) null (cadr ?root)))
+          (let ([?root (xml-document*-root-element xml)])
+            (if (not ?root) null (map xml-attribute->datum (cadr ?root))))))
+    
+    (let filter-namespace ([as : (Listof XML-Element-Attribute) root-attlist]
+                           [sn : (Listof (Pairof Symbol String)) null])
+      (cond [(null? as) (reverse sn)]
+            [else (let-values ([(self rest) (values (car as) (cdr as))])
+                    (filter-namespace rest
+                                      (if (and (xml-qname-xmlns? (car self)) (string? (cdr self)))
+                                          (cons self sn)
+                                          sn)))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-blank : (->* () (Symbol) XML-Document)

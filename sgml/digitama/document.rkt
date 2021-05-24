@@ -29,7 +29,7 @@
 (struct xml-document
   ([prolog : XML-Prolog]
    [doctype : XML-DocType]
-   [elements : (Listof XML-Content)])
+   [contents : (Listof XML-Content)])
   #:transparent
   #:type-name XML-Document)
 
@@ -70,7 +70,7 @@
   (lambda [#:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false]
            doc]
     (xml-document (xml-document-prolog doc) (xml-document-doctype doc)
-                  (xml-normalize (xml-document-elements doc) xml:lang xml:space xml:space-filter))))
+                  (xml-normalize (xml-document-contents doc) xml:lang xml:space xml:space-filter))))
 
 (define read-xml-document* : (-> SGML-StdIn XML-Document*)
   (lambda [/dev/rawin]
@@ -164,6 +164,23 @@
                   (map xml-content->datum (xml-document*-contents doc.xml)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define xml-document-root-element : (-> XML-Document (Option XML-Element))
+  (lambda [doc.xml]
+    (let seek-root ([es : (Listof XML-Content) (xml-document-contents doc.xml)])
+      (and (pair? es)
+           (let-values ([(self rest) (values (car es) (cdr es))])
+             (cond [(mpair? self) (seek-root rest)]
+                   [else self]))))))
+
+(define xml-document*-root-element : (-> XML-Document* (Option XML-Element*))
+  (lambda [doc.xml]
+    (let seek-root ([es : (Listof XML-Content*) (xml-document*-contents doc.xml)])
+      (and (pair? es)
+           (let-values ([(self rest) (values (car es) (cdr es))])
+             (cond [(mpair? self) (seek-root rest)]
+                   [else self]))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-content->datum : (-> XML-Content* XML-Content)
   (lambda [g]
     (cond [(list? g) (xml-element->datum g)]
@@ -179,7 +196,7 @@
 (define xml-element->datum : (-> XML-Element* XML-Element)
   (lambda [e]
     (list (xml:name-datum (car e))
-          (map xml-pair->datum (cadr e))
+          (map xml-attribute->datum (cadr e))
           (map (λ [[child : (U XML-Subdatum* XML-Element*)]]
                  (cond [(list? child) (xml-element->datum child)]
                        [(xml:string? child) (xml:string-datum child)]
@@ -203,7 +220,7 @@
                   (cons (and public (xml:string-datum public))
                         (and system (xml:string-datum system))))])))
 
-(define xml-pair->datum : (-> XML-Element-Attribute* XML-Element-Attribute)
+(define xml-attribute->datum : (-> XML-Element-Attribute* XML-Element-Attribute)
   (lambda [p]
     (cons (xml:name-datum (car p))
           (let ([v (cdr p)])
@@ -211,6 +228,7 @@
                   [(xml:name? v) (xml:name-datum v)]
                   [else (map xml:name-datum v)])))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-load-external-dtd : (-> (Option Open-Input-XML-XXE) (Option XML:Name) XML-External-ID* XML-XXE-Guard (Option XML-DTD))
   (lambda [ext-dtd name external xxeg]
     (define topsize (xml-xxe-guard-topsize xxeg))
