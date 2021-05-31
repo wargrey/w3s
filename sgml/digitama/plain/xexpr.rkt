@@ -86,9 +86,18 @@
       (write-char #\space /dev/xmlout)
       (write (car attr) /dev/xmlout)
       (write-char #\= /dev/xmlout)
+      
+      (write-char #\" /dev/xmlout)
       (let ([v (cdr attr)])
-        (cond [(pair? v) (write (car v) /dev/xmlout)]
-              [else (write v /dev/xmlout)])))))
+        (for ([ch (in-string (if (pair? v) (car v) v))])
+          (case ch
+            [(#\") (display "&quot;" /dev/xmlout)]
+            [(#\') (display "&apos;" /dev/xmlout)]
+            [(#\&) (display "&amp;" /dev/xmlout)]
+            [(#\<) (display "&lt;" /dev/xmlout)]
+            [(#\>) (display "&gt;" /dev/xmlout)]
+            [else (write-char ch /dev/xmlout)])))
+      (write-char #\" /dev/xmlout))))
 
 (define write-xexpr-children : (->* ((Listof Xexpr)) (Output-Port) Void)
   (lambda [children [/dev/xmlout (current-output-port)]]
