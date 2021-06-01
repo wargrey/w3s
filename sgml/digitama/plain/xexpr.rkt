@@ -40,7 +40,7 @@
           [(xexpr-children-element? x)
            (write-xexpr-element (car x) null (cadr x) /dev/xmlout)]
           [(string? x)
-           (write-string x /dev/xmlout)]
+           (write-xexpr-string x /dev/xmlout)]
           [(symbol? x)
            (write-char #\& /dev/xmlout)
            (write x /dev/xmlout)
@@ -89,14 +89,7 @@
       
       (write-char #\" /dev/xmlout)
       (let ([v (cdr attr)])
-        (for ([ch (in-string (if (pair? v) (car v) v))])
-          (case ch
-            [(#\") (display "&quot;" /dev/xmlout)]
-            [(#\') (display "&apos;" /dev/xmlout)]
-            [(#\&) (display "&amp;" /dev/xmlout)]
-            [(#\<) (display "&lt;" /dev/xmlout)]
-            [(#\>) (display "&gt;" /dev/xmlout)]
-            [else (write-char ch /dev/xmlout)])))
+        (write-xexpr-string (if (pair? v) (car v) v) /dev/xmlout))
       (write-char #\" /dev/xmlout))))
 
 (define write-xexpr-children : (->* ((Listof Xexpr)) (Output-Port) Void)
@@ -104,6 +97,17 @@
     (for ([child (in-list children)])
       (write-xexpr #:prolog? #false #:newline-at-end? #false
                    child /dev/xmlout))))
+
+(define write-xexpr-string : (->* (String) (Output-Port) Void)
+  (lambda [s [/dev/xmlout (current-output-port)]]
+    (for ([ch (in-string s)])
+      (case ch
+        [(#\") (display "&quot;" /dev/xmlout)]
+        [(#\') (display "&apos;" /dev/xmlout)]
+        [(#\&) (display "&amp;" /dev/xmlout)]
+        [(#\<) (display "&lt;" /dev/xmlout)]
+        [(#\>) (display "&gt;" /dev/xmlout)]
+        [else (write-char ch /dev/xmlout)]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xexpr-datum? : (-> Any Boolean : Xexpr-Datum)
