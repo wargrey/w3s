@@ -2,23 +2,52 @@
 
 (provide (all-defined-out))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-type Xexpr-Attribute (U (Pairof Symbol String) (List Symbol String)))
-(define-type Xexpr-AttList (Listof Xexpr-Attribute))
-(define-type Xexpr-Datum (U String Index Symbol Bytes))
+(require digimon/symbol)
 
-(define-type Xexpr-Full-Element (Rec elem (U (List Symbol Xexpr-AttList (Listof (U Xexpr-Datum Xexpr-Element elem))))))
-(define-type Xexpr-Children-Element (Rec elem (List Symbol (Listof (U Xexpr-Datum Xexpr-Element elem)))))
+(require "../tokenizer/port.rkt")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define-type Xexpr-Attribute-Value (U String (Boxof String) Symbol (Listof Symbol)))
+(define-type Xexpr-Attribute (U (Pairof Symbol Xexpr-Attribute-Value) (List Symbol Xexpr-Attribute-Value)))
+(define-type Xexpr-AttList (Listof Xexpr-Attribute))
+(define-type Xexpr-Datum (U String Index Symbol Bytes XML-White-Space))
+(define-type Xexpr-PI (MPairof Symbol (Option String)))
+
+(define-type Xexpr-Full-Element (Rec elem (U (List Symbol Xexpr-AttList (Listof (U Xexpr-PI Xexpr-Datum Xexpr-Element elem))))))
+(define-type Xexpr-Children-Element (Rec elem (List Symbol (Listof (U Xexpr-PI Xexpr-Datum Xexpr-Element elem)))))
 (define-type Xexpr-Empty-Element (U (List Symbol) (List Symbol (Listof Xexpr-Attribute))))
 
 (define-type Xexpr-Element (U Xexpr-Full-Element Xexpr-Children-Element Xexpr-Empty-Element))
-(define-type Xexpr (U Xexpr-Datum Xexpr-Element))
+(define-type Xexpr (U Xexpr-PI Xexpr-Datum Xexpr-Element))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(module unsafe racket/base
+  (provide (all-defined-out))
+
+  (define xexpr-&value?
+    (lambda [v]
+      (and (box? v)
+           (string? (unbox v)))))
+
+  (define xexpr-pi?
+    (lambda [v]
+      (and (mpair? v)
+           (symbol? (mcar v))
+           (or (not (mcdr v))
+               (string? (mcdr v)))))))
+
+(require typed/racket/unsafe)
+(unsafe-require/typed
+ (submod "." unsafe)
+ [xexpr-&value? (-> Any Boolean : (Boxof String))]
+ [xexpr-pi? (-> Any Boolean : Xexpr-PI)])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xexpr? : (-> Any Boolean : Xexpr)
   (lambda [v]
     (or (xexpr-datum? v)
-        (xexpr-element? v))))
+        (xexpr-element? v)
+        (xexpr-pi? v))))
 
 (define write-xexpr : (->* (Xexpr) (Output-Port #:prolog? Boolean #:newline-at-end? Boolean) Void)
   (lambda [x [/dev/xmlout (current-output-port)] #:prolog? [prolog? #false] #:newline-at-end? [blank? #true]]
@@ -52,7 +81,15 @@
           [(bytes? x)
            (write-bytes #"<![CDATA[" /dev/xmlout)
            (write-bytes x /dev/xmlout)
-           (write-bytes #"]]>" /dev/xmlout)])
+           (write-bytes #"]]>" /dev/xmlout)]
+          [(mpair? x)
+           (write-bytes #"<?" /dev/xmlout)
+           (write (mcar x) /dev/xmlout)
+           (let ([c (mcdr x)])
+             (when (string? c)
+               (write-char #\space /dev/xmlout)
+               (write-string c /dev/xmlout)))
+           (write-bytes #"?>" /dev/xmlout)])
 
     (unless (not blank?)
       (newline /dev/xmlout))))
@@ -88,8 +125,7 @@
       (write-char #\= /dev/xmlout)
       
       (write-char #\" /dev/xmlout)
-      (let ([v (cdr attr)])
-        (write-xexpr-string (if (pair? v) (car v) v) /dev/xmlout))
+      (write-xexpr-attribute-value (cdr attr) /dev/xmlout)
       (write-char #\" /dev/xmlout))))
 
 (define write-xexpr-children : (->* ((Listof Xexpr)) (Output-Port) Void)
@@ -97,6 +133,14 @@
     (for ([child (in-list children)])
       (write-xexpr #:prolog? #false #:newline-at-end? #false
                    child /dev/xmlout))))
+
+(define write-xexpr-attribute-value : (->* ((U Xexpr-Attribute-Value (List Xexpr-Attribute-Value))) (Output-Port) Void)
+  (lambda [v [/dev/xmlout (current-output-port)]]
+    (cond [(string? v) (write-xexpr-string v /dev/xmlout)]
+          [(symbol? v) (write-xexpr-string (symbol->immutable-string v) /dev/xmlout)]
+          [(box? v) (write-xexpr-string (unbox v) /dev/xmlout)]
+          [(symbol-list? v) (write-xexpr-string (symbol-join v) /dev/xmlout)]
+          [else (write-xexpr-attribute-value (car v) /dev/xmlout)])))
 
 (define write-xexpr-string : (->* (String) (Output-Port) Void)
   (lambda [s [/dev/xmlout (current-output-port)]]
@@ -115,15 +159,23 @@
     (or (string? v)
         (symbol? v)
         (index? v)
-        (bytes? v))))
+        (bytes? v)
+        (xml-white-space? v))))
+
+(define xexpr-attribute-value? : (-> Any Boolean : Xexpr-Attribute-Value)
+  (lambda [v]
+    (or (string? v)
+        (symbol? v)
+        (xexpr-&value? v)
+        (symbol-list? v))))
 
 (define xexpr-attribute? : (-> Any Boolean : Xexpr-Attribute)
   (lambda [e]
     (and (pair? e)
          (symbol? (car e))
-         (or (string? (cdr e))
+         (or (xexpr-attribute-value? (cdr e))
              (and (pair? (cdr e))
-                  (string? (cadr e))
+                  (xexpr-attribute-value? (cadr e))
                   (null? (cddr e)))))))
 
 (define xexpr-attrlist? : (-> Any Boolean : Xexpr-AttList)
