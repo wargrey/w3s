@@ -15,7 +15,7 @@
 (css-configure-@media)
 (collect-garbage)
 
-(define tamer-sheet : CSS-Stylesheet (time-run (read-css-stylesheet tamer/tamer.css))) ; (require "tamer.css") is much faster
+(define tamer-sheet : CSS-Stylesheet (time* (read-css-stylesheet tamer/tamer.css))) ; (require "tamer.css") is much faster
 (define tamer-root : CSS-Subject (css-subject* #:type 'body #:id '#:header #::classes '(root)))
 (define tamer-syntax : CSS-Subject (css-subject* #:type 'syntax #:id '#:syntax #:classes '(error maybe-error)))
 (define tamer-reborn : CSS-Subject (css-subject* #:type 'reborn #:id '#:reborn))
@@ -40,31 +40,31 @@
       (cons desc-name (box (css-ref declared-values inherited-values desc-name))))))
 
 (match-define (list $root *root)
-  (time-run (let-values ([(root:values for-children)
-                          (css-cascade (list tamer-sheet) (list tamer-root)
-                                       css-all-parsers css-all-filter
-                                       #false ':root)])
-              (list root:values for-children))))
+  (time* (let-values ([(root:values for-children)
+                       (css-cascade (list tamer-sheet) (list tamer-root)
+                                    css-all-parsers css-all-filter
+                                    #false ':root)])
+           (list root:values for-children))))
 (cons tamer-root $root)
 
 (match-define (list $syntax *syntax)
-  (time-run ((inst with-logging-to-port (List Any CSS-Values))
-             (current-output-port)
-             (thunk (let-values ([($syntax *syntax)
-                                  (css-cascade (list tamer-sheet) (list tamer-syntax tamer-root)
-                                               css-maybe-error-parsers css-all-filter
-                                               *root 'syntax)])
-                      (list $syntax *syntax)))
-             'debug)))
+  (time* ((inst with-logging-to-port (List Any CSS-Values))
+          (current-output-port)
+          (thunk (let-values ([($syntax *syntax)
+                               (css-cascade (list tamer-sheet) (list tamer-syntax tamer-root)
+                                            css-maybe-error-parsers css-all-filter
+                                            *root 'syntax)])
+                   (list $syntax *syntax)))
+          'debug)))
 (cons tamer-syntax $syntax)
 
 (define $reborn
-  (time-run ((inst with-logging-to-port Any)
-             (current-output-port)
-             (thunk (let-values ([($reborn *reborn)
-                                  (css-cascade (list tamer-sheet) (list tamer-reborn tamer-syntax tamer-root)
-                                               css-all-parsers css-all-filter
-                                               *syntax 'reborn)])
-                      $reborn))
-             'debug)))
+  (time* ((inst with-logging-to-port Any)
+          (current-output-port)
+          (thunk (let-values ([($reborn *reborn)
+                               (css-cascade (list tamer-sheet) (list tamer-reborn tamer-syntax tamer-root)
+                                            css-all-parsers css-all-filter
+                                            *syntax 'reborn)])
+                   $reborn))
+          'debug)))
 (cons tamer-reborn $reborn)

@@ -73,10 +73,10 @@
 
 (define *root : CSS-Values (make-css-values))
 (define $root : Btest
-  (time-run 'tamer-main
-            (let-values ([(toplevel topvalues) (css-cascade (list bitmap.css) (list ~module) btest-parsers btest-filter #false)])
-              (set! *root topvalues)
-              toplevel)))
+  (time* 'tamer-main
+         (let-values ([(toplevel topvalues) (css-cascade (list bitmap.css) (list ~module) btest-parsers btest-filter #false)])
+           (set! *root topvalues)
+           toplevel)))
 
 (define-values (bitmap-descs testcases)
   (let-values ([($btests _) (css-cascade* (list bitmap.css) (list ~btest ~module) btest-parsers btest-filter *root)])
