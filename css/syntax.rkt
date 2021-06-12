@@ -2,7 +2,7 @@
 
 ;;; https://drafts.csswg.org/css-syntax
 
-(provide (all-defined-out))
+(provide (all-defined-out) CSS-StdIn)
 (provide (struct-out CSS-Subject) make-css-subject)
 
 (provide (except-out (all-from-out "digitama/syntax/digicore.rkt") css-log-syntax-error))
@@ -25,6 +25,7 @@
 
 (require "digitama/syntax/digicore.rkt")
 (require "digitama/syntax/parser.rkt")
+(require "digitama/syntax/stdin.rkt")
 (require "digitama/syntax/grammar.rkt")
 (require "digitama/syntax/condition.rkt")
 (require "digitama/syntax/cascade.rkt")
