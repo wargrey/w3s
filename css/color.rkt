@@ -10,14 +10,12 @@
 
 (require "digitama/syntax/digicore.rkt")
 (require "digitama/color.rkt")
-(require "recognizer.rkt")
 
-(require (for-syntax racket/syntax))
-(require (for-syntax syntax/parse))
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define current-css-element-color : (Parameterof Color FlRGBA) (make-parameter (rgb* #x000000) rgb*))
 (default-make-currentcolor current-css-element-color)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define css-color-property-parsers : (->* (Symbol) ((U Regexp (Listof Symbol))) (Option CSS-Declaration-Parser))
   (lambda [name [px.names #px"-color$"]]
     (or (and (eq? name 'color) (<css-color> '#:inherit-currentcolor))
@@ -25,6 +23,7 @@
                  (and (regexp? px.names) (regexp-match? px.names (symbol->immutable-string name))))
              (<css-color>)))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define css->color : (CSS->Racket (U FlColor CSS-Wide-Keyword 'currentcolor))
   (lambda [desc-name color]
     (cond [(flcolor? color) color]
