@@ -3,7 +3,7 @@
 ;;; https://drafts.csswg.org/css-syntax
 
 (provide (all-defined-out))
-(provide (struct-out CSS-Subject) css-subject*)
+(provide (struct-out CSS-Subject) make-css-subject)
 
 (provide (except-out (all-from-out "digitama/syntax/digicore.rkt") css-log-syntax-error))
 (provide (except-out (all-from-out "digitama/syntax/grammar.rkt") css-stylesheet-placeholder))

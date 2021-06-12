@@ -17,7 +17,7 @@
              (not (eq? (system-type)
                        'macosx)))))
 
-(define-preference* Box
+(define-preference* box : Box
   ([width : Nonnegative-Flonum             #:= (css-vw)]
    [height : Nonnegative-Flonum            #:= (css-vh)]
    [vertical-margin : Nonnegative-Flonum   #:= 3.0]
@@ -46,30 +46,30 @@
   (lambda [declared-values inherited-values]
     (call-with-css-box declared-values inherited-values 1.4
       #:with [css-box-size css-box-size-ref css-box-color-ref css-box-icon-ref css-box-ref]
-      (define-values (width height) (css-box-size (#%Box-width) (#%Box-height)))
-      (Box* #:width width #:height height
-            #:vertical-inset (css-box-size-ref 'padding-top height)
-            #:horizontal-inset (css-box-size-ref 'padding-right width)
-            #:vertical-margin (css-box-size-ref 'margin-top height)
-            #:horizontal-margin (css-box-size-ref 'margin-right width)
-            #:border (css-extract-border declared-values inherited-values 'border-top)
-            #:brush (css-extract-background declared-values inherited-values)))))
+      (define-values (width height) (css-box-size (#%box-width) (#%box-height)))
+      (make-box #:width width #:height height
+                #:vertical-inset (css-box-size-ref 'padding-top height)
+                #:horizontal-inset (css-box-size-ref 'padding-right width)
+                #:vertical-margin (css-box-size-ref 'margin-top height)
+                #:horizontal-margin (css-box-size-ref 'margin-right width)
+                #:border (css-extract-border declared-values inherited-values 'border-top)
+                #:brush (css-extract-background declared-values inherited-values)))))
 
-(define ~root:n : CSS-Subject (css-subject* #::classes '(root)))
-(define ~root:s : CSS-Subject (css-subject* #::classes '(selected)))
+(define ~root:n : CSS-Subject (make-css-subject #::classes '(root)))
+(define ~root:s : CSS-Subject (make-css-subject #::classes '(selected)))
 (define-values ($root:n *root:n) (css-cascade (list media.css) (list ~root:n) box-parsers box-filter #false))
 (define-values ($root:s *root:s) (css-cascade (list media.css) (list ~root:s) box-parsers box-filter #false))
 
 media.css
 (default-css-media-features)
-(bitmap-hb-append #:gapsize (+ (Box-vertical-margin $root:n) (Box-vertical-margin $root:s))
+(bitmap-hb-append #:gapsize (+ (box-vertical-margin $root:n) (box-vertical-margin $root:s))
                   (bitmap-frame #:border (desc-border #:color (current-css-element-color) #:width 1 #:style 'dotted)
-                                (bitmap-frame #:margin (Box-vertical-margin $root:n) #:padding (Box-vertical-inset $root:n)
-                                              #:border (Box-border $root:n) #:fill (Box-brush $root:n)
-                                              (bitmap-paragraph #:color (Box-color $root:n) #:max-width (Box-width $root:n)
-                                                                (pretty-format $root:n) (Box-font $root:n))))
+                                (bitmap-frame #:margin (box-vertical-margin $root:n) #:padding (box-vertical-inset $root:n)
+                                              #:border (box-border $root:n) #:fill (box-brush $root:n)
+                                              (bitmap-paragraph #:color (box-color $root:n) #:max-width (box-width $root:n)
+                                                                (pretty-format $root:n) (box-font $root:n))))
                   (bitmap-frame #:border (desc-border #:color (current-css-element-color) #:width 1 #:style 'dotted)
-                                (bitmap-frame #:margin (Box-vertical-margin $root:s) #:padding (Box-vertical-inset $root:s)
-                                              #:border (Box-border $root:s) #:fill (Box-brush $root:s)
-                                              (bitmap-paragraph #:color (Box-color $root:s) #:max-width (Box-width $root:s) 
-                                                                (pretty-format $root:s) (Box-font $root:s)))))
+                                (bitmap-frame #:margin (box-vertical-margin $root:s) #:padding (box-vertical-inset $root:s)
+                                              #:border (box-border $root:s) #:fill (box-brush $root:s)
+                                              (bitmap-paragraph #:color (box-color $root:s) #:max-width (box-width $root:s) 
+                                                                (pretty-format $root:s) (box-font $root:s)))))

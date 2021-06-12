@@ -49,7 +49,7 @@
   #:transparent
   #:type-name CSS-Style-Rule)
 
-(define-preference css-stylesheet
+(define-preference css-stylesheet : CSS-Stylesheet
   ([location : (U String Symbol)                    #:= '/dev/null]
    [namespaces : (Listof (Pairof Symbol String))    #:= null]
    [imports : (Listof CSS-@Import-Rule)             #:= null]
@@ -58,10 +58,9 @@
    [timestamp : Integer                             #:= 0]
    [viewports : (Vectorof (Listof CSS-Declaration)) #:= (vector)]
    [modules : (Listof CSS-@Racket-Rule)             #:= null])
-  #:transparent
-  #:type-name CSS-Stylesheet)
+  #:transparent)
 
-(define css-stylesheet-placeholder : CSS-Stylesheet (css-stylesheet*))
+(define css-stylesheet-placeholder : CSS-Stylesheet (make-css-stylesheet))
 
 (define-css-parser-entry read-css-stylesheet #:-> CSS-Stylesheet
   ;;; https://drafts.csswg.org/css-syntax/#parse-a-css-stylesheet
@@ -84,8 +83,8 @@
           (define-values (namespaces viewports imports grammars modules) (css-syntax-rules->grammar-rules location rules #true #true pool))
           (define timestamp : Integer (if (string? location) (file-or-directory-modify-seconds location) (current-seconds)))
           (define stylesheet : CSS-Stylesheet
-            (css-stylesheet* #:location location #:namespaces namespaces #:imports imports #:grammars grammars
-                             #:pool pool #:timestamp timestamp #:viewports viewports #:modules modules))
+            (make-css-stylesheet #:location location #:namespaces namespaces #:imports imports #:grammars grammars
+                                 #:pool pool #:timestamp timestamp #:viewports viewports #:modules modules))
           (when (positive? identity) (hash-set! pool identity stylesheet))
           stylesheet))))
 

@@ -34,7 +34,7 @@
 (define-type CSS-Attribute-Value (U (U String Symbol (Listof (U String Symbol)))
                                     (Vector Symbol (U String Symbol (Listof (U String Symbol))))))
 
-(define-preference css-subject
+(define-preference css-subject : CSS-Subject
   ([combinator : CSS-Selector-Combinator                #:= '>]
    [type : Symbol                                       #:= (css-root-element-type)]
    [id : (U Keyword (Listof+ Keyword))                  #:= (css-root-element-id)]
@@ -43,8 +43,7 @@
    [attributes : (HashTable Symbol CSS-Attribute-Value) #:= (make-hasheq)]
    [:classes : (Listof Symbol)                          #:= null]
    [lang : (U Symbol String)                            #:= ""])
-  #:transparent
-  #:type-name CSS-Subject)
+  #:transparent)
 
 (define-selectors
   [css-attribute-selector : CSS-Attribute-Selector ([name : Symbol] [quirk : Symbol] [namespace : (U Symbol Boolean)])]

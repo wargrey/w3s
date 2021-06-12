@@ -16,9 +16,9 @@
 (collect-garbage)
 
 (define tamer-sheet : CSS-Stylesheet (time* (read-css-stylesheet tamer/tamer.css))) ; (require "tamer.css") is much faster
-(define tamer-root : CSS-Subject (css-subject* #:type 'body #:id '#:header #::classes '(root)))
-(define tamer-syntax : CSS-Subject (css-subject* #:type 'syntax #:id '#:syntax #:classes '(error maybe-error)))
-(define tamer-reborn : CSS-Subject (css-subject* #:type 'reborn #:id '#:reborn))
+(define tamer-root : CSS-Subject (make-css-subject #:type 'body #:id '#:header #::classes '(root)))
+(define tamer-syntax : CSS-Subject (make-css-subject #:type 'syntax #:id '#:syntax #:classes '(error maybe-error)))
+(define tamer-reborn : CSS-Subject (make-css-subject #:type 'reborn #:id '#:reborn))
 
 (define css-all-parsers : CSS-Declaration-Parsers
   (lambda [suitcased-name !]
