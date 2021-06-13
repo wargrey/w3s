@@ -57,8 +57,8 @@
 
 (define ~root:n : CSS-Subject (make-css-subject #::classes '(root)))
 (define ~root:s : CSS-Subject (make-css-subject #::classes '(selected)))
-(define-values ($root:n *root:n) (css-cascade (list media.css) (list ~root:n) box-parsers box-filter #false))
-(define-values ($root:s *root:s) (css-cascade (list media.css) (list ~root:s) box-parsers box-filter #false))
+(define-values ($root:n *root:n) (css-cascade media.css ~root:n box-parsers box-filter #false))
+(define-values ($root:s *root:s) (css-cascade media.css ~root:s box-parsers box-filter #false))
 
 media.css
 (default-css-media-features)

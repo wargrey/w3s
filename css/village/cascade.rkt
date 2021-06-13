@@ -12,27 +12,28 @@
 (require "../digitama/syntax/grammar.rkt")
 (require "../digitama/syntax/misc.rkt")
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define css-cascade*
   : (All (Preference Env)
-         (case-> [-> (Listof+ CSS-Stylesheet) (Listof+ CSS-Subject) CSS-Declaration-Parsers
+         (case-> [-> (ListofU+ CSS-Stylesheet) (ListofU+ CSS-Subject) CSS-Declaration-Parsers
                      (CSS-Cascaded-Value-Filter Preference) (Option CSS-Values)
                      (Values (Listof Preference) (Listof CSS-Values))]
-                 [-> (Listof+ CSS-Stylesheet) (Listof+ CSS-Subject) CSS-Declaration-Parsers
+                 [-> (ListofU+ CSS-Stylesheet) (ListofU+ CSS-Subject) CSS-Declaration-Parsers
                      (CSS-Cascaded-Value+Filter Preference Env) (Option CSS-Values) Env
                      (Values (Listof Preference) (Listof CSS-Values))]))
   (let ()
-    (define do-cascade* : (All (Preference) (-> (Listof+ CSS-Stylesheet) (Listof+ CSS-Subject) CSS-Declaration-Parsers
+    (define do-cascade* : (All (Preference) (-> (ListofU+ CSS-Stylesheet) (ListofU+ CSS-Subject) CSS-Declaration-Parsers
                                                 (Option CSS-Values) (-> CSS-Values Preference)
                                                 (Values (Listof Preference) (Listof CSS-Values))))
       (lambda [stylesheets stcejbus desc-parsers inherited-values do-value-filter]
         (hash-clear! !importants) ; TODO: if it is placed correctly, perhaps a specification for custom cascading process is required.
         (define-values (rotpircsed seulav)
           (let cascade-stylesheets* : (values (Listof Preference) (Listof CSS-Values))
-            ([batch : (Listof CSS-Stylesheet) stylesheets]
+            ([batch : (U CSS-Stylesheet (Listof CSS-Stylesheet)) stylesheets]
              [all-rotpircsed : (Listof Preference) null]
              [all-seulav : (Listof CSS-Values) null])
             (for/fold ([descriptors++ : (Listof Preference) all-rotpircsed] [values++ : (Listof CSS-Values) all-seulav])
-                      ([this-sheet (in-list batch)])
+                      ([this-sheet (if (list? batch) (in-list batch) (in-value batch))])
               (define-values (sub-rotpircsed sub-seulav)
                 (cascade-stylesheets* (css-select-children this-sheet desc-parsers) descriptors++ values++))
               (define this-values : (Listof CSS-Values)
@@ -54,7 +55,7 @@
        (do-cascade* stylesheets stcejbus desc-parsers inherited-values
                     (λ [[declared-values : CSS-Values]] (value-filter declared-values inherited-values env)))])))
 
-(define css-cascade-rules* : (->* ((Listof CSS-Grammar-Rule) (Listof+ CSS-Subject) CSS-Declaration-Parsers)
+(define css-cascade-rules* : (->* ((Listof CSS-Grammar-Rule) (ListofU+ CSS-Subject) CSS-Declaration-Parsers)
                                   (CSS-Media-Features) (Listof CSS-Values))
   ;;; https://drafts.csswg.org/css-cascade/#filtering
   ;;; https://drafts.csswg.org/css-cascade/#cascading

@@ -40,6 +40,7 @@
                     [() (list (cons 'name (p-name)) ...)])))))]))
 
 (define-type (Listof+ css) (Pairof css (Listof css)))
+(define-type (ListofU+ css) (U css (Listof+ css)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;  
 (define css-log-read-error : (->* ((U exn String)) (Any Log-Level) Void)

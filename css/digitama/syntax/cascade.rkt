@@ -45,22 +45,22 @@
 
 (define css-cascade
   : (All (Preference Env)
-         (case-> [-> (Listof+ CSS-Stylesheet) (Listof+ CSS-Subject) CSS-Declaration-Parsers
+         (case-> [-> (ListofU+ CSS-Stylesheet) (ListofU+ CSS-Subject) CSS-Declaration-Parsers
                      (CSS-Cascaded-Value-Filter Preference) (Option CSS-Values)
                      (Values Preference CSS-Values)]
-                 [-> (Listof+ CSS-Stylesheet) (Listof+ CSS-Subject) CSS-Declaration-Parsers
+                 [-> (ListofU+ CSS-Stylesheet) (ListofU+ CSS-Subject) CSS-Declaration-Parsers
                      (CSS-Cascaded-Value+Filter Preference Env) (Option CSS-Values) Env
                      (Values Preference CSS-Values)]))
   ;;; https://drafts.csswg.org/css-cascade/#filtering
   ;;; https://drafts.csswg.org/css-cascade/#cascading
   ;;; https://drafts.csswg.org/css-cascade/#at-import
   (let ()
-    (define do-cascade : (-> (Listof+ CSS-Stylesheet) (Listof+ CSS-Subject) CSS-Declaration-Parsers (Option CSS-Values) CSS-Values)
+    (define do-cascade : (-> (ListofU+ CSS-Stylesheet) (ListofU+ CSS-Subject) CSS-Declaration-Parsers (Option CSS-Values) CSS-Values)
       (lambda [stylesheets stcejbus desc-parsers inherited-values]
         (define declared-values : CSS-Values (make-css-values))
         (hash-clear! !importants)
-        (let cascade-stylesheets ([batch : (Listof CSS-Stylesheet) stylesheets])
-          (for ([this-sheet (in-list batch)])
+        (let cascade-stylesheets ([batch : (U CSS-Stylesheet (Listof CSS-Stylesheet)) stylesheets])
+          (for ([this-sheet (if (list? batch) (in-list batch) (in-value batch))])
             (cascade-stylesheets (css-select-children this-sheet desc-parsers))
             (css-cascade-rules (css-stylesheet-grammars this-sheet) stcejbus desc-parsers declared-values
                                (css-cascade-viewport (default-css-media-features) (css-stylesheet-viewports this-sheet)))))
@@ -74,7 +74,7 @@
        (define declared-values : CSS-Values (do-cascade stylesheets stcejbus desc-parsers inherited-values))
        (values (value-filter declared-values inherited-values env) declared-values)])))
 
-(define css-cascade-rules : (->* ((Listof CSS-Grammar-Rule) (Listof+ CSS-Subject) CSS-Declaration-Parsers)
+(define css-cascade-rules : (->* ((Listof CSS-Grammar-Rule) (ListofU+ CSS-Subject) CSS-Declaration-Parsers)
                                  (CSS-Values CSS-Media-Features) CSS-Values)
   ;;; https://drafts.csswg.org/css-cascade/#filtering
   ;;; https://drafts.csswg.org/css-cascade/#cascading
@@ -177,7 +177,7 @@
                   (viewport-filter (css-cascade-declarations viewport-parser (in-vector descriptors) css:ident-norm)
                                    #false init-viewport))])))
 
-(define css-select-styles : (->* ((Listof CSS-Grammar-Rule) (Listof+ CSS-Subject) CSS-Declaration-Parsers) (CSS-Media-Features)
+(define css-select-styles : (->* ((Listof CSS-Grammar-Rule) (ListofU+ CSS-Subject) CSS-Declaration-Parsers) (CSS-Media-Features)
                                  (Values (Listof CSS-Style-Metadata) Boolean))
   ;;; https://drafts.csswg.org/selectors/#subject-of-a-selector
   ;;; https://drafts.csswg.org/selectors/#data-model

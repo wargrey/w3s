@@ -12,6 +12,7 @@
 
 (require (for-syntax racket/base))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; https://drafts.csswg.org/selectors/#grammar
 ;; https://drafts.csswg.org/selectors/#structure
 ;; https://drafts.csswg.org/selectors/#data-model
@@ -28,6 +29,8 @@
          (make-hasheq (list (cons 'v1 'v2) ...
                             (cons 'v2 'v1) ...))))]))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type CSS-Selector-Combinator (U '>> '> '+ '~ '||))
 (define-type CSS-Namespace-Hint (U (Listof (Pairof Symbol String)) False))
 (define-type CSS-Complex-Selector (Listof+ CSS-Compound-Selector))
@@ -63,19 +66,24 @@
                           [::element : (Option CSS-::Element-Selector)])])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define css-selector-match : (-> CSS-Complex-Selector (Listof+ CSS-Subject) (Option Natural))
+(define css-selector-match : (-> CSS-Complex-Selector (ListofU+ CSS-Subject) (Option Natural))
   ;;; https://drafts.csswg.org/selectors/#evaluating-selectors
   ;;; https://github.com/w3c/csswg-drafts/issues/720
   (lambda [srotceles stnemele]
     ; TODO: define a better object model
     (define root : Symbol (css-root-element-type))
+    (define-values (head-element tail-elements)
+      (cond [(list? stnemele) (values (car stnemele) (cdr stnemele))]
+            [else (values stnemele null)]))
+    
     (let evaluate ([selector : CSS-Compound-Selector (car srotceles)]
-                   [element : CSS-Subject (car stnemele)]
+                   [element : CSS-Subject head-element]
                    [srotceles : (Listof CSS-Compound-Selector) (cdr srotceles)]
-                   [stcejbus : (Listof CSS-Subject) (cdr stnemele)]
+                   [stcejbus : (Listof CSS-Subject) tail-elements]
                    [specificity : Natural 0])
       (define root? : Boolean (eq? (css-subject-type element) root))
       (define specificity++ : (Option Natural) (css-compound-selector-match selector element root?))
+
       (and specificity++
            (cond [(null? stcejbus) (and (null? srotceles) (fx+ specificity specificity++))]
                  [(null? srotceles) (fx+ specificity specificity++)]

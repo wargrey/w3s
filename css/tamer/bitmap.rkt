@@ -74,12 +74,12 @@
 (define *root : CSS-Values (make-css-values))
 (define $root : Btest
   (time* 'tamer-main
-         (let-values ([(toplevel topvalues) (css-cascade (list bitmap.css) (list ~module) btest-parsers btest-filter #false)])
+         (let-values ([(toplevel topvalues) (css-cascade bitmap.css ~module btest-parsers btest-filter #false)])
            (set! *root topvalues)
            toplevel)))
 
 (define-values (bitmap-descs testcases)
-  (let-values ([($btests _) (css-cascade* (list bitmap.css) (list ~btest ~module) btest-parsers btest-filter *root)])
+  (let-values ([($btests _) (css-cascade* bitmap.css (list ~btest ~module) btest-parsers btest-filter *root)])
     (for/fold ([bitmap-descs : (Listof Bitmap) null] [testcases : (Listof Btest) null])
               ([$bt (in-list $btests)])
       (define-values (fgcolor rcolor) (values (btest-foreground-color $bt) (btest-output-color $bt)))

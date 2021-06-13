@@ -1,7 +1,7 @@
 #lang typed/racket
 
-;;; Parser Combinators and Syntax Sugars of dealing with declarations for client applications
-;;; WARNING: Notations are not following the CSS Specifications https://drafts.csswg.org/css-values/#component-combinators
+;;; Parser Combinators and Syntax Sugars of dealing with declarations are designed for client applications
+;;; WARNING: Notations are not following the CSS Specification(https://drafts.csswg.org/css-values/#component-combinators)
 
 (provide (all-defined-out))
 
@@ -12,6 +12,7 @@
 (require (for-syntax racket/syntax))
 (require (for-syntax syntax/parse))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-syntax (define-css-disjoint-filter stx)
   (syntax-case stx [:]
     [(_ compound-filter #:-> RangeType #:with [[dom : DomType defval ...] ...] atom-filters ...)
