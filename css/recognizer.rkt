@@ -113,7 +113,8 @@
 (define-syntax (CSS:<+> stx)
   (syntax-case stx []
     [(_ css-filter) #'css-filter]
-    [(_ css-filter css-filters ...) (syntax/loc stx (css:disjoin css-filter (CSS:<+> css-filters ...)))]))
+    [(_ css-filter css-filter2) (syntax/loc stx (css:disjoin css-filter css-filter2))]
+    [(_ css-filter css-filter2 css-filters ...) (syntax/loc stx (css:disjoin css-filter css-filter2 (CSS:<+> css-filters ...)))]))
   
 (define-syntax (CSS:<~> stx)
   (syntax-case stx []
@@ -240,29 +241,32 @@
 
 (define CSS<+> : (All (a) (-> (CSS-Parser a) (CSS-Parser a) * (CSS-Parser a)))
   ;;; https://drafts.csswg.org/css-values/#comb-one
-  (lambda [head-branch . tail-branches]
-    (λ [[data : a] [tokens : (Listof CSS-Token)]]
-      (let switch ([head-parser : (CSS-Parser a) head-branch]
-                   [tail-parsers : (Listof (CSS-Parser a)) tail-branches])
-        (define-values (++data --tokens) (head-parser data tokens))
-        (cond [(nor (false? ++data) (exn:css? ++data)) (values ++data --tokens)]
-              [(pair? tail-parsers) (switch (car tail-parsers) (cdr tail-parsers))]
-              [else (values ++data --tokens)])))))
+  (case-lambda
+    [(head-branch) head-branch]
+    [(head-branch . tail-branches)
+     (λ [[data : a] [tokens : (Listof CSS-Token)]]
+       (let switch ([head-parser : (CSS-Parser a) head-branch]
+                    [tail-parsers : (Listof (CSS-Parser a)) tail-branches])
+         (define-values (++data --tokens) (head-parser data tokens))
+         (cond [(nor (false? ++data) (exn:css? ++data)) (values ++data --tokens)]
+               [(pair? tail-parsers) (switch (car tail-parsers) (cdr tail-parsers))]
+               [else (values ++data --tokens)])))]))
 
 (define CSS<&> : (All (a) (-> (CSS-Parser a) * (CSS-Parser a)))
   ;;; TODO: https://drafts.csswg.org/css-values/#comb-all
   (case-lambda
     [() values]
     [(css-parser) css-parser]
-    [css-parsers (λ [[data : a] [tokens : (Listof CSS-Token)]]
-                   (let datum-fold ([data++ : a data]
-                                    [tokens-- : (Listof CSS-Token) tokens]
-                                    [parsers : (Listof (CSS-Parser a)) css-parsers])
-                     (cond [(null? parsers) (values data++ tokens--)]
-                           [else (let ([css-parser (car parsers)])
-                                   (define-values (++data --tokens) (css-parser data++ tokens--))
-                                   (cond [(or (false? ++data) (exn:css? ++data)) (values ++data --tokens)]
-                                         [else (datum-fold ++data --tokens (cdr parsers))]))])))]))
+    [css-parsers
+     (λ [[data : a] [tokens : (Listof CSS-Token)]]
+       (let datum-fold ([data++ : a data]
+                        [tokens-- : (Listof CSS-Token) tokens]
+                        [parsers : (Listof (CSS-Parser a)) css-parsers])
+         (cond [(null? parsers) (values data++ tokens--)]
+               [else (let ([css-parser (car parsers)])
+                       (define-values (++data --tokens) (css-parser data++ tokens--))
+                       (cond [(nor (false? ++data) (exn:css? ++data)) (datum-fold ++data --tokens (cdr parsers))]
+                             [else (values ++data --tokens)]))])))]))
   
 (define CSS<*> : (All (a) (->* ((CSS-Parser a)) ((U (CSS-Multiplier Index) '+ '? '*)) (CSS-Parser a)))
   ;;; https://drafts.csswg.org/css-values/#mult-zero-plus
@@ -311,12 +315,21 @@
             (cond [(= n+1 most) (values (cons (reverse subdata) data) --tokens)]
                   [else (seq subdata --tokens (add1 n+1))]))))))
 
-(define css:disjoin : (All (a b) (-> (CSS:Filter a) (CSS:Filter b) (CSS:Filter (U a b))))
-  (lambda [css-filter1 css-filter2]
-    (λ [[token : CSS-Syntax-Any]]
-      (define datum : (CSS-Option a) (css-filter1 token))
-      (cond [(nor (false? datum) (exn:css? datum)) datum]
-            [else (css-filter2 token)]))))
+(define css:disjoin : (All (a b c) (case-> [(CSS:Filter a) (CSS:Filter b) -> (CSS:Filter (U a b))]
+                                           [(CSS:Filter a) (CSS:Filter b) (CSS:Filter c) -> (CSS:Filter (U a b c))]))
+  (case-lambda
+    [(css-filter1 css-filter2)
+     (λ [[token : CSS-Syntax-Any]]
+       (define datum : (CSS-Option a) (css-filter1 token))
+       (cond [(nor (false? datum) (exn:css? datum)) datum]
+             [else (css-filter2 token)]))]
+    [(css-filter1 css-filter2 css-filter3)
+     (λ [[token : CSS-Syntax-Any]]
+       (define datum : (CSS-Option a) (css-filter1 token))
+       (cond [(nor (false? datum) (exn:css? datum)) datum]
+             [else (let ([datum2 (css-filter2 token)])
+                     (cond [(nor (false? datum2) (exn:css? datum2)) datum2]
+                           [else (css-filter3 token)]))]))]))
   
 (define css:compose : (All (a b) (-> (CSS:Filter a) (-> a b) (CSS:Filter b)))
   (lambda [css-filter css->racket]

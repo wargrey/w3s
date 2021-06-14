@@ -356,6 +356,7 @@
   [exn:css:type:variable      #:-> exn:css:type:identifier]
   [exn:css:range              #:-> exn:css:unrecognized]
   [exn:css:unit               #:-> exn:css:range]
+  [exn:css:digit              #:-> exn:css:range]
   [exn:css:overconsumption    #:-> exn:css:unrecognized]
   [exn:css:enclosed           #:-> exn:css:overconsumption]
   [exn:css:malformed          #:-> exn:css]
