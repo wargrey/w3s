@@ -51,11 +51,11 @@
            options:opt)
      (with-syntax* ([make-preference (format-id #'preference "make-~a" (syntax-e #'preference))]
                     [(Uv uv? uv) (list #'CSS-Wide-Keyword #'css-wide-keyword? #'css:initial)]
-                    [([initial-value property-filter ArgumentType defval ...] ...)
+                    [([initial-value property-filter ArgumentType defval] ...)
                      (for/list ([field-info (in-list (syntax->list #'([property DataType info ...] ...)))])
                        (syntax-parse field-info
                          [(p T #:= dv #:~> Super fltr) #'[(fltr dv) (if (uv? p) (fltr dv) (fltr p)) (U Super Uv) uv]]
-                         [(p T #:= dv #:~> fltr) #'[(fltr dv) (if (uv? p) (fltr initial) (fltr p)) Any uv]]
+                         [(p T #:= dv #:~> fltr) #'[(fltr dv) (if (uv? p) (fltr dv) (fltr p)) Any uv]]
                          [(p T #:= dv) #'[dv (if (uv? p) dv p) (U T Uv) uv]]
                          [(p rest ...) (raise-syntax-error (syntax-e #'self) "property requires an initial value" #'p)]))]
                     [(#%property ...)
@@ -63,7 +63,7 @@
                        (format-id property "#%~a-~a" (syntax-e #'preference) (syntax-e property)))]
                     [(args ...)
                      (for/fold ([args null])
-                               ([argument (in-list (syntax->list #'([property : ArgumentType defval ...] ...)))])
+                               ([argument (in-list (syntax->list #'([property : ArgumentType defval] ...)))])
                        (cons (datum->syntax argument (string->keyword (symbol->immutable-string (car (syntax->datum argument)))))
                              (cons argument args)))]
                     [([pref:bindings properties ...] ...)
@@ -533,10 +533,10 @@
     (define specified-value : Any
       ;;; NOTE
       ;; when the `inherited-values` is #true, it means this property is inheritable
-      ;; but the value is not stored with the property, clients will deal this on their on.
-      ;; For example, the font consists of several separate properties, and some of them value types between Racket
-      ;; and CSS are not stay the same, it is therefore more convenient to store it with the shorthand property 'font'
-      ;; as a Racket object than reset all relevent properties every time after making a new font object.
+      ;; but the value is not stored with the property, clients will deal this on their own.
+      ;; For example, the font consists of several separate properties, and some of their value types between Racket
+      ;; and CSS are not stay the same, it is therefore more convenient to store them with the shorthand property 'font'
+      ;; as a Racket object than resetting all relevent properties every time after making a new font object.
       (cond [(not (css-wide-keyword? cascaded-value)) cascaded-value]
             [(eq? cascaded-value css:initial) css:initial]
             [(hash? inherited-values) (let-values ([(_ sv) (css-ref-raw inherited-values #true desc-name)]) sv)]
