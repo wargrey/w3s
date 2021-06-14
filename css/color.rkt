@@ -1,6 +1,6 @@
 #lang typed/racket/base
 
-(provide (all-defined-out) <css-color>)
+(provide (all-defined-out) <css-color> <css#color>)
 (provide (all-from-out bitmap/color))
 
 (require bitmap/digitama/color)

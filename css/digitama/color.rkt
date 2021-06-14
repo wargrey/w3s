@@ -8,34 +8,44 @@
 (require bitmap/digitama/color)
 (require colorspace/misc)
 
+(require racket/keyword)
+
 (require "syntax/digicore.rkt")
 (require "syntax/dimension.rkt")
 (require "../recognizer.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-css-atomic-filter <css#color> #:-> Hexa #:with [[color-value : css:hash?]]
+(define-css-atomic-filter <css#color> #:-> Hexa #:with [[color-value : css:hash?] [no-alpha? : (Option '#:no-alpha) #false]]
   (or (css-hex-color->rgba (css:hash-datum color-value))
       (make-exn:css:range color-value))
   #:where
-  [(define (css-hex-color->rgba [hash-color : Keyword]) : (Option Hexa)
+  [(define (short-color->number [color : String]) : (Option Nonnegative-Fixnum)
+     (for/fold ([hexcolor : (Option Nonnegative-Fixnum) 0])
+               ([ch : Char (in-string color)])
+       (define digit : (U Integer Void)
+         (cond [(char-numeric? ch)   (fx- (char->integer ch) #x30)]
+               [(char<=? #\a ch #\f) (fx- (char->integer ch) #x37)]
+               [(char<=? #\A ch #\F) (fx- (char->integer ch) #x57)]))
+       (and hexcolor (byte? digit)
+            (fxior (fxlshift hexcolor 8)
+                   (fxior (fxlshift digit 4)
+                          digit)))))
+   
+   (define (css-hex-color->rgba [hash-color : Keyword]) : (Option Hexa)
      ;;; https://drafts.csswg.org/css-color/#numeric-rgb
-     (define color : String (keyword->string hash-color))
+     (define color : String (keyword->immutable-string hash-color))
      (define digits : Index (string-length color))
      (define ?hexcolor : (Option Number)
-       (case digits
-         [(6 8) (string->number color 16)]
-         [(3 4) (for/fold ([hexcolor : (Option Nonnegative-Fixnum) 0])
-                          ([ch : Char (in-string color)])
-                  (define digit : (U Integer Void)
-                    (cond [(char-numeric? ch)   (fx- (char->integer ch) #x30)]
-                          [(char<=? #\a ch #\f) (fx- (char->integer ch) #x37)]
-                          [(char<=? #\A ch #\F) (fx- (char->integer ch) #x57)]))
-                  (and hexcolor (byte? digit)
-                       (fxior (fxlshift hexcolor 8)
-                              (fxior (fxlshift digit 4)
-                                     digit))))]
-         [else #false]))
-     (if (or (fx= digits 3) (fx= digits 6))
+       (if (not no-alpha?)
+           (case digits
+             [(6 8) (string->number color 16)]
+             [(3 4) (short-color->number color)]
+             [else #false])
+           (case digits
+             [(6) (string->number color 16)]
+             [(3) (short-color->number color)]
+             [else #false])))
+     (if (or no-alpha? (fx= digits 3) (fx= digits 6))
          (and (index? ?hexcolor)
               (hexa ?hexcolor 1.0))
          (and (exact-integer? ?hexcolor)

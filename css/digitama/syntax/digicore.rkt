@@ -14,6 +14,7 @@
 (require racket/bool)
 (require racket/format)
 (require racket/symbol)
+(require racket/keyword)
 (require racket/match)
 
 (require "misc.rkt")
@@ -386,8 +387,8 @@
   (lambda [instance]
     (cond [(css:ident? instance) (symbol->immutable-string (css:ident-datum instance))]
           [(css-numeric? instance) (css-numeric-representation instance)]
-          [(css:@keyword? instance) (keyword->string (css:@keyword-datum instance))]
-          [(css:hash? instance) (~a "#" (keyword->string (css:hash-datum instance)))]
+          [(css:@keyword? instance) (keyword->immutable-string (css:@keyword-datum instance))]
+          [(css:hash? instance) (~a "#" (keyword->immutable-string (css:hash-datum instance)))]
           [(css:match? instance) (~a (css:match-datum instance) '=)]
           [(css:delim=:=? instance #\tab) "||"]
           [(css:string? instance) (~s (css:string-datum instance))]

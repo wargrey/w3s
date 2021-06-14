@@ -5,6 +5,7 @@
 (provide (all-defined-out))
 
 (require racket/symbol)
+(require racket/keyword)
 
 (require "misc.rkt")
 (require "digicore.rkt")
@@ -120,7 +121,7 @@
            (values func (not (eq? token func)) candidates)]
           [(css:@keyword? token)
            (define-values (next rest) (css-car/cdr candidates))
-           (define binding : Symbol (string->symbol (substring (keyword->string (css:@keyword-datum token)) 1)))
+           (define binding : Symbol (string->symbol (substring (keyword->immutable-string (css:@keyword-datum token)) 1)))
            (if (or (eof-object? next) (not (css:block? next)))
                (values (w3s-remake-token token css:racket binding) #false candidates)
                (let-values ([(argl lazy?) (css-lazy-subtokens-map (filter-not css:whitespace? (css:block-components next)))])

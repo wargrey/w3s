@@ -4,6 +4,11 @@
 ;;; WARNING: Notations are not following the CSS Specification(https://drafts.csswg.org/css-values/#component-combinators)
 
 (provide (all-defined-out))
+(provide nonnegative-flonum? nonnegative-fixnum? positive-flonum? positive-fixnum? positive-index? positive-byte?)
+
+(require racket/keyword)
+
+(require digimon/number)
 
 (require "digitama/syntax/misc.rkt")
 (require "digitama/syntax/digicore.rkt")
@@ -355,20 +360,11 @@
                                 [else (values n n)]))])])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(struct css-unitless ([value : Flonum]) #:type-name CSS-Unitless) ; for properties which computed value are not their used value
+(struct css-unitless ([value : Flonum]) #:type-name CSS-Unitless) ; for properties whoes computed values are not their used value
 (struct css+unitless css-unitless ([value : Nonnegative-Flonum]) #:type-name CSS+Unitless)
 
 (struct css-% ([value : Flonum]) #:type-name CSS-%)
 (struct css+% css-% ([value : Nonnegative-Flonum]) #:type-name CSS+%)
-
-(define positive-fixnum? : (-> Any Boolean : #:+ Positive-Fixnum) (λ [v] (and (fixnum? v) (fx> v 0))))
-(define nonnegative-fixnum? : (-> Any Boolean : #:+ Nonnegative-Fixnum) (λ [v] (and (fixnum? v) (fx>= v 0))))
-
-(define positive-flonum? : (-> Any Boolean : #:+ Positive-Flonum) (λ [v] (and (flonum? v) (fl> v 0.0))))
-(define nonnegative-flonum? : (-> Any Boolean : #:+ Nonnegative-Flonum) (λ [v] (and (flonum? v) (fl>= v 0.0))))
-
-(define positive-byte? : (-> Any Boolean : #:+ Positive-Byte) (λ [v] (and (byte? v) (fx> v 0))))
-(define positive-index? : (-> Any Boolean : #:+ Positive-Index) (λ [v] (and (index? v) (fx> v 0))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-css-disjoint-filter <css-boolean> #:-> (U Zero One)
@@ -378,7 +374,41 @@
 (define-css-disjoint-filter <css-keyword> #:-> Symbol
   #:with [[options : (U (-> Symbol Boolean) (Listof Symbol) Symbol)]]
   (<css:ident-norm> options))
-  
+
+
+(define <css-hexadecimal> : (All (a) (case-> [(-> Any Boolean : #:+ a) -> (CSS:Filter a)]
+                                             [(-> Natural Natural Boolean) Natural -> (CSS:Filter Natural)]
+                                             [Natural (-> Natural Natural Boolean) Natural -> (CSS:Filter Natural)]
+                                             [(Listof a) -> (CSS:Filter a)]
+                                             [-> (CSS:Filter Natural)]))
+  (case-lambda
+    [()
+     (λ [[t : CSS-Syntax-Any]]
+       (cond [(not (css:hash? t)) (make-exn:css:type t)]
+             [else (let ([n (string->number (keyword->immutable-string (css:hash-datum t)))])
+                     (cond [(natural? n) n]
+                           [else (make-exn:css:range t)]))]))]
+    [(op n)
+     (λ [[t : CSS-Syntax-Any]]
+       (cond [(not (css:hash? t)) (make-exn:css:type t)]
+             [else (let ([N (string->number (keyword->immutable-string (css:hash-datum t)))])
+                     (cond [(and (natural? N) (op N n)) N]
+                           [else (make-exn:css:range t)]))]))]
+    [(l op r)
+     (λ [[t : CSS-Syntax-Any]]
+       (cond [(not (css:hash? t)) (make-exn:css:type t)]
+             [else (let ([N (string->number (keyword->immutable-string (css:hash-datum t)))])
+                     (cond [(and (natural? N) (op l N) (op N r)) N]
+                           [else (make-exn:css:range t)]))]))]
+    [(range?)
+     (λ [[t : CSS-Syntax-Any]]
+       (cond [(not (css:hash? t)) (make-exn:css:type t)]
+             [else (let ([N (string->number (keyword->immutable-string (css:hash-datum t)))])
+                     (or (cond [(procedure? range?) (and (range? N) N)]
+                               [(list? range?) (let ([ns (member N range?)]) (and ns (car ns)))]
+                               [else (and (equal? N range?) N)])
+                         (make-exn:css:range t)))]))]))
+
 (define-css-disjoint-filter <css-natural> #:-> Natural
   #:with [[nonzero : (Option '#:nonzero) #false]]
   (cond [nonzero (<css:integer> exact-positive-integer?)]
