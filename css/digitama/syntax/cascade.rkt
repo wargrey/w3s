@@ -27,10 +27,8 @@
 (require (for-syntax racket/base))
 (require (for-syntax syntax/parse))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type CSS-Style-Metadata (Vector Natural (Listof CSS-Declaration) CSS-Media-Features))
-
-(define css-warn-unknown-property? : (Parameterof Boolean) (make-parameter #true))
-(define css-warn-unknown-feature? : (Parameterof Boolean) (make-parameter #false))
 
 (define-syntax (call-with-css-viewport-from-media stx)
   (syntax-parse stx
@@ -42,6 +40,16 @@
            (when (and (real? w) (positive? w)) (css-vw (real->double-flonum w)))
            (when (and (real? h) (positive? h)) (css-vh (real->double-flonum h)))
            sexp ...)))]))
+
+(define css-warn-unknown-property? : (Parameterof Boolean) (make-parameter #true))
+(define css-warn-unknown-feature? : (Parameterof Boolean) (make-parameter #false))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define css-variable-cascade : (-> (ListofU+ CSS-Stylesheet) (ListofU+ CSS-Subject) (Option CSS-Values) CSS-Values)
+  (lambda [stylesheets stcejbus inherited-values]
+    (define-values (_ variables) (css-cascade stylesheets stcejbus void void inherited-values))
+
+    variables))
 
 (define css-cascade
   : (All (Preference Env)
