@@ -52,7 +52,7 @@
     (list (list* #'list #'_ (reverse snerttap)) (cons <constructor> (reverse stnemugra))))
   (syntax-parse stx
     [(self func-filter #:-> RangeType
-           [(fname aliases ...) #:=> [transforms ...] fparser ...] ...
+           [(fname aliases ...) #:=> [transforms ...] (~optional #:<+>) fparser ...] ...
            (~optional (~seq #:where [defaux ...])))
      (with-syntax ([defines (if (attribute defaux) #'(begin defaux ...) #'(void))]
                    [((([pattern ...] [transform ...]) ...) ...)
@@ -376,8 +376,8 @@
 (struct css-unitless ([value : Flonum]) #:type-name CSS-Unitless) ; for properties whoes computed values are not their used value
 (struct css+unitless css-unitless ([value : Nonnegative-Flonum]) #:type-name CSS+Unitless)
 
-(struct css-% ([value : Flonum]) #:type-name CSS-%)
-(struct css+% css-% ([value : Nonnegative-Flonum]) #:type-name CSS+%)
+(struct css-% ([value : Flonum]) #:type-name CSS-% #:transparent)
+(struct css+% css-% ([value : Nonnegative-Flonum]) #:type-name CSS+% #:transparent)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-css-disjoint-filter <css-boolean> #:-> (U Zero One)
