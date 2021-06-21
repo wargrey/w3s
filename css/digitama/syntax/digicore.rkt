@@ -417,7 +417,7 @@
 
 (define css-log-syntax-error : (->* (CSS-Syntax-Error) ((Option CSS-Token) (Option Log-Level)) Void)
   (lambda [errobj [property #false] [level #false]]
-    (w3s-log-syntax-error 'exn:xml:syntax css-token->string css-token->datum
+    (w3s-log-syntax-error 'exn:css:syntax css-token->string css-token->datum
                           errobj property (or level 'warning))))
 
 ;;; https://drafts.csswg.org/css-syntax/#parsing

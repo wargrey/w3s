@@ -156,21 +156,8 @@
   (case-lambda
     [(atom-filter)
      (if (pair? atom-filter)
-         (λ [[data : (Listof Any)] [tokens : (Listof CSS-Token)]]
-           (let datum-fold ([data++ : (Listof Any) data]
-                            [tokens-- : (Listof CSS-Token) tokens]
-                            [filters : (Listof (CSS:Filter Any)) atom-filter])
-             (cond [(null? filters) (values data++ tokens--)]
-                   [else (let ([css-filter (car filters)])
-                           (define-values (token --tokens) (css-car/cdr tokens--))
-                           (define datum : (CSS-Option Any) (css-filter token))
-                           (cond [(or (false? datum) (exn:css? datum)) (values datum tokens--)]
-                                 [else (datum-fold (cons datum data++) --tokens (cdr filters))]))])))
-         (λ [[data : (Listof Any)] [tokens : (Listof CSS-Token)]]
-           (define-values (head tail) (css-car/cdr tokens))
-           (define datum : (CSS-Option Any) (atom-filter head))
-           (cond [(or (false? datum) (exn:css? datum)) (values datum tokens)]
-                 [else (values (cons datum data) tail)])))]
+         (apply CSS:<&> atom-filter)
+         (CSS:<&> atom-filter))]
     [(atom-filter tag)
      (if (procedure? tag)
          (λ [[data : (HashTable Symbol Any)] [tokens : (Listof CSS-Token)]]
@@ -185,25 +172,97 @@
                  [(symbol? tag) (values (hash-set data tag datum) --tokens)]
                  [else (values (hash-set++ data tag datum) --tokens)])))]
     [(atom-filter tag updater)
-       (λ [[data : (HashTable Symbol Any)] [tokens : (Listof CSS-Token)]]
-         (define-values (token --tokens) (css-car/cdr tokens))
-         (define datum : (CSS-Option Any) (atom-filter token))
-         (cond [(or (false? datum) (exn:css? datum)) (values datum tokens)]
-               [(symbol? tag) (values (hash-update data tag (λ [[v : Any]] (updater tag v datum)) (thunk #false)) --tokens)]
-               [else (values (hash-update++ data tag datum updater) --tokens)]))]))
+     (λ [[data : (HashTable Symbol Any)] [tokens : (Listof CSS-Token)]]
+       (define-values (token --tokens) (css-car/cdr tokens))
+       (define datum : (CSS-Option Any) (atom-filter token))
+       (cond [(or (false? datum) (exn:css? datum)) (values datum tokens)]
+             [(symbol? tag) (values (hash-update data tag (λ [[v : Any]] (updater tag v datum)) (thunk #false)) --tokens)]
+             [else (values (hash-update++ data tag datum updater) --tokens)]))]))
 
+(define CSS:<&> : (-> (CSS:Filter Any) * (CSS-Parser (Listof Any)))
+  (case-lambda
+    [() values]
+    [(atom-filter)
+     (λ [[data : (Listof Any)] [tokens : (Listof CSS-Token)]]
+       (define-values (head tail) (css-car/cdr tokens))
+       (define datum : (CSS-Option Any) (atom-filter head))
+       (cond [(or (false? datum) (exn:css? datum)) (values datum tokens)]
+             [else (values (cons datum data) tail)]))]
+    [atom-filters
+     (λ [[data : (Listof Any)] [tokens : (Listof CSS-Token)]]
+       (let datum-fold ([data++ : (Listof Any) data]
+                        [tokens-- : (Listof CSS-Token) tokens]
+                        [filters : (Listof (CSS:Filter Any)) atom-filters])
+         (cond [(null? filters) (values data++ tokens--)]
+               [else (let ([css-filter (car filters)])
+                       (define-values (token --tokens) (css-car/cdr tokens--))
+                       (define datum : (CSS-Option Any) (css-filter token))
+                       (cond [(or (false? datum) (exn:css? datum)) (values datum tokens--)]
+                             [else (datum-fold (cons datum data++) --tokens (cdr filters))]))])))]))
+
+(define CSS:<*> : (All (a) (->* ((CSS:Filter Any)) ((U (CSS-Multiplier Index) '+ '? '*)) (CSS-Parser (Listof Any))))
+  ;;; https://drafts.csswg.org/css-values/#mult-zero-plus
+  ;;; https://drafts.csswg.org/css-values/#comb-any
+  (lambda [atom-filter [multiplier '*]]
+    (define-values (least most) (css:multiplier-range multiplier 0))
+    (cond [(zero? most) values]
+          [else (λ [[data : (Listof Any)] [tokens : (Listof CSS-Token)]]
+                  (let seq ([data++ : (Listof Any) data]
+                            [tokens-- : (Listof CSS-Token) tokens]
+                            [n+1 : Natural 1])
+                    (define-values (token --tokens) (css-car/cdr tokens--))
+                    (define datum : (CSS-Option Any) (atom-filter token))
+                    (cond [(or (false? datum) (exn:css? datum)) (values (if (< least n+1) data++ datum) tokens--)]
+                          [(= n+1 most) (values (cons datum data++) --tokens)] ; (= n +inf.0) also does not make much sense
+                          [else (seq (cons datum data++) --tokens (add1 n+1))])))])))
+
+(define CSS:<#> : (->* ((CSS:Filter Any)) ((U (CSS-Multiplier Positive-Index) '+)) (CSS-Parser (Listof Any)))
+  ;;; https://drafts.csswg.org/css-values/#mult-comma
+  (lambda [atom-filter [multiplier '+]]
+    (define-values (least most) (css:multiplier-range multiplier 1))
+    (λ [[data : (Listof Any)] [tokens : (Listof CSS-Token)]]
+      (let seq ([data++ : (Listof Any) data]
+                [tokens-- : (Listof CSS-Token) tokens]
+                [n+1 : Natural 1])
+        (define-values (token tail) (css-car/cdr tokens--))
+        (define datum : (CSS-Option Any) (atom-filter token))
+        (cond [(or (false? datum) (exn:css? datum)) (values (if (< least n+1) data++ datum) tail)]
+              [(= n+1 most) (values (cons datum data++) tail)]
+              [else (let-values ([(?comma --tokens) (css-car/cdr tail)])
+                      (cond [(eof-object? ?comma) (seq (cons datum data++) --tokens (add1 n+1))] ; to check least boundry
+                            [(not (css:comma? ?comma)) (values (make-exn:css:missing-comma ?comma) --tokens)]
+                            [(null? --tokens) (values (make-exn:css:missing-value ?comma) --tokens)]
+                            [else (seq (cons datum data++) --tokens (add1 n+1))]))])))))
+
+(define CSS:<!> : (->* ((CSS:Filter Any)) ((U (CSS-Multiplier Positive-Index) '+)) (CSS-Parser (Listof Any)))
+  ;;; (WARNING: this is *not*) https://drafts.csswg.org/css-values/#mult-req
+  (lambda [atom-filter [multiplier '+]]
+    (define-values (least most) (css:multiplier-range multiplier 1))
+    (λ [[data : (Listof Any)] [tokens : (Listof CSS-Token)]]
+      (let seq ([sub++ : (Listof Any) null]
+                [tokens-- : (Listof CSS-Token) tokens]
+                [n+1 : Natural 1])
+        (define-values (token --tokens) (css-car/cdr tokens--))
+        (define datum : (CSS-Option Any) (atom-filter token))
+        (if (or (false? datum) (exn:css? datum))
+            (cond [(< least n+1) (values (cons (reverse sub++) data) tokens--)]
+                  [else (values datum --tokens)])
+            (cond [(= n+1 most) (values (cons (reverse (cons datum sub++)) data) --tokens)]
+                  [else (seq (cons datum sub++) --tokens (add1 n+1))]))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define CSS<^> : (case-> [(CSS-Parser (Listof Any)) (U Symbol (Listof+ Symbol)) -> CSS-Shorthand-Parser]
                          [(CSS-Parser (Listof Any)) (U Symbol (Listof+ Symbol)) CSS-Longhand-Update -> CSS-Shorthand-Parser])
   (case-lambda
     [(atom-parser tag)
      (λ [[data : (HashTable Symbol Any)] [tokens : (Listof CSS-Token)]]
-       (define-values (subdata --tokens) ((cast atom-parser (CSS-Parser (Listof Any))) null tokens))
+       (define-values (subdata --tokens) (atom-parser null tokens))
        (cond [(or (false? subdata) (exn:css? subdata)) (values subdata --tokens)]
              [(symbol? tag) (values (hash-set data tag (reverse subdata)) --tokens)]
              [else (values (hash-set++ data tag (reverse subdata)) --tokens)]))]
     [(atom-parser tag updater)
      (λ [[data : (HashTable Symbol Any)] [tokens : (Listof CSS-Token)]]
-       (define-values (subdata --tokens) ((cast atom-parser (CSS-Parser (Listof Any))) null tokens))
+       (define-values (subdata --tokens) (atom-parser null tokens))
        (cond [(or (false? subdata) (exn:css? subdata)) (values subdata --tokens)]
              [(list? tag) (values (hash-update++ data tag (reverse subdata) updater) --tokens)]
              [else (values (hash-update data tag (λ [[v : Any]] (updater tag v (reverse subdata))) (thunk #false)) --tokens)]))]))
@@ -305,16 +364,17 @@
   (lambda [css-parser [multiplier '+]]
     (define-values (least most) (css:multiplier-range multiplier 1))
     (λ [[data : (Listof Any)] [tokens : (Listof CSS-Token)]]
-      (let seq ([sub++ : (Listof Any) null]
+      (let seq ([subdata++ : (Listof Any) null]
                 [tokens-- : (Listof CSS-Token) tokens]
                 [n+1 : Natural 1])
-        (define-values (subdata --tokens) (css-parser sub++ tokens--))
+        (define-values (subdata --tokens) (css-parser subdata++ tokens--))
         (if (or (false? subdata) (exn:css? subdata))
-            (cond [(< least n+1) (values (cons (reverse sub++) data) tokens--)]
+            (cond [(< least n+1) (values (cons (reverse subdata++) data) tokens--)]
                   [else (values subdata --tokens)])
             (cond [(= n+1 most) (values (cons (reverse subdata) data) --tokens)]
                   [else (seq subdata --tokens (add1 n+1))]))))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define css:disjoin : (All (a b c) (case-> [(CSS:Filter a) (CSS:Filter b) -> (CSS:Filter (U a b))]
                                            [(CSS:Filter a) (CSS:Filter b) (CSS:Filter c) -> (CSS:Filter (U a b c))]))
   (case-lambda

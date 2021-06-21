@@ -5,8 +5,6 @@
 
 (provide (except-out (all-defined-out) desc-more-important? do-filter do-parse))
 
-(require typed/racket/unsafe)
-
 (require racket/sequence)
 
 (require "misc.rkt")
@@ -18,11 +16,7 @@
 
 (require "../device-adapt.rkt")
 (require "../../recognizer.rkt")
-
-(unsafe-require/typed
- "unsafe/cascade.rkt"
- [css-filter? (-> Any Boolean : (CSS:Filter Any))]
- [css-parser? (-> Any Boolean : (CSS-Parser (Listof Any)))])
+(require "unsafe/cascade.rkt")
 
 (require (for-syntax racket/base))
 (require (for-syntax syntax/parse))
