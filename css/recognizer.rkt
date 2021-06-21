@@ -528,6 +528,11 @@
 (define (<css-percentage>) : (CSS:Filter CSS-%) (CSS:<~> (<css:percentage>) (λ [[v : Flonum]] (css-% v))))
 (define (<css+percentage>) : (CSS:Filter CSS+%) (CSS:<~> (<css:percentage> nonnegative-flonum?) (λ [[v : Nonnegative-Flonum]] (css+% v v))))
 
+(define css-comma-parser : (All (a) (-> (CSS-Parser a) (CSS-Parser a)))
+  (lambda [atom-parser]
+    (CSS<?> [(<css-comma>) atom-parser]
+            [else          atom-parser])))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-css-disjoint-filter <css-size> #:-> (U Nonnegative-Inexact-Real CSS:Length:Font)
   (<css+length:font>)
