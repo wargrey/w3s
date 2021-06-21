@@ -448,6 +448,9 @@
   #:with [[options : (U (-> Symbol Boolean) (Listof Symbol) Symbol)]]
   (<css:ident-norm> options))
 
+(define-css-disjoint-filter <css-keyword/cs> #:-> Symbol
+  #:with [[options : (U (-> Symbol Boolean) (Listof Symbol) Symbol)]]
+  (<css:ident> options))
 
 (define <css-hexadecimal> : (All (a) (case-> [(-> Any Boolean : #:+ a) -> (CSS:Filter a)]
                                              [(-> Natural Natural Boolean) Natural -> (CSS:Filter Natural)]
