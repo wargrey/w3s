@@ -85,7 +85,7 @@
                           [else          (CSS<*> c2 '(2)) (make-alpha-parser <css-slash>)]))))
 
    (define <:rgb:> (CSS:<^> (<rgb-gamut>)))
-   (define <:hue:> (CSS:<^> (CSS:<+> (<css:integer>) (<css:flonum>) (<css:angle>))))])
+   (define <:hue:> (CSS:<^> (<css-angle>)))])
 
 (define-css-disjoint-filter <css-color> #:-> (U Symbol FlColor CSS-Wide-Keyword)
   ;;; https://drafts.csswg.org/css-color/#color-type

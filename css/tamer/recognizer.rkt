@@ -35,6 +35,20 @@
     #:it ["should return a ~a-length list, and whose values are '~a, fed with {~s}" size (take expected-values size) com.css] #:do
     (check-juxtaposing-values vs size expected-values)))
 
+(define-behavior (it-check-<&&>-filter filters expected-values)
+  (let*-values ([(com.css) (string-join (map ~a (append expected-values (list '<&&>))))]
+                [(size) (length filters)]
+                [(vs rest) (tamer-parse com.css (apply CSS:<&&> filters))])
+    #:it ["should return a ~a-length list, and whose values might be '~a, fed with {~s}" size (take expected-values size) com.css] #:do
+    (check-no-ordered-values vs size expected-values)))
+
+(define-behavior (it-check-<&&>-parser filters expected-values)
+  (let*-values ([(com.css) (string-join (map ~a (append expected-values (list '<&&>))))]
+                [(size) (length filters)]
+                [(vs rest) (tamer-parse com.css (apply CSS<&&> (map CSS:<^> filters)))])
+    #:it ["should return a ~a-length list, and whose values might be '~a, fed with {~s}" size (take expected-values size) com.css] #:do
+    (check-no-ordered-values vs size expected-values)))
+
 (define-behavior (it-check-<*>-filter filter multiplier count expected)
   (let*-values ([(com.css) (string-join (map ~a (append (build-list count add1) (list '<*>))))]
                 [(vs rest) (tamer-parse com.css (CSS:<*> filter multiplier))]
@@ -87,7 +101,7 @@
            (let ([size (length vs)])
              (expect->= size least)
              (expect-<= size most))]
-          [else (spec-misbehave)])))
+          [else (collapse "deadcode")])))
 
 (define check-juxtaposing-values : (-> (U False CSS-Syntax-Error (Listof Any)) Index (Listof Any) Void)
   (lambda [vs size expected-values]
@@ -97,11 +111,37 @@
                  [expected (in-list expected-values)])
              (expect-equal given expected))]
           [(exn:css? vs) (raise vs)]
-          [else (spec-misbehave)])))
+          [else (collapse "deadcode")])))
+
+(define check-no-ordered-values : (-> (U False CSS-Syntax-Error (Listof Any)) Index (Listof Any) Void)
+  (lambda [vs size expected-values]
+    (cond [(list? vs)
+           (expect-= (length vs) size)
+           (for ([given (in-list vs)])
+             (expect-member given expected-values))]
+          [(exn:css? vs) (raise vs)]
+          [else (collapse "deadcode")])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-feature recognition #:do
   (context "combinators" #:do
+           (let/spec ([filters (list (<css:ident>) (<css:integer>) (<css:delim>))]
+                      [expt-values (list 'combine-all 128 #\&)])
+                     (context "juxtaposing values" #:do
+                              (context "filter" #:do
+                                       (it-check-<&>-filter filters expt-values))
+                              
+                              (context "parser" #:do
+                                       (it-check-<&>-parser filters expt-values)))
+                     
+                     (context "combin-all" #:do
+                              (context "filter" #:do
+                                       (it-check-<&&>-filter filters (shuffle expt-values)))
+                              
+                              (context "parser" #:do
+                                       (it-check-<&&>-parser filters (shuffle expt-values))))))
+           
+  (context "multipliers" #:do
            (it-check-modifier '?         0  1)
            (it-check-modifier '*         0  +inf.0)
            (it-check-modifier '+         1  +inf.0)
@@ -111,15 +151,6 @@
            (it-check-modifier '(4 . inf) 4  +inf.0)
            (it-check-modifier '(NaN . 4) 0  4)
 
-           (let ([filters (list (<css:ident>) (<css:integer>) (<css:delim>))]
-                 [expt-values (list 'juxtaposing-values 128 #\&)])
-             (context "juxtaposing values" #:do
-                      (context "filter" #:do
-                               (it-check-<&>-filter filters expt-values))
-                      
-                      (context "parser" #:do
-                               (it-check-<&>-parser filters expt-values))))
-           
            (let ([multiplier '(2 . 4)])
              (context ["given with the multiplier '~s'" multiplier] #:do
                       (context "filter" #:do
