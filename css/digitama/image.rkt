@@ -19,6 +19,7 @@
 (require "../recognizer.rkt")
 (require "../color.rkt")
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type Image-Set-Option (List CSS-Image-Datum Positive-Flonum))
 (define-type Image-Set-Options (Listof Image-Set-Option))
 (define-type CSS-Image-Datum (U CSS-Image String))
@@ -32,7 +33,21 @@
 (define css-image-rendering-option : (Listof Symbol) '(auto crisp-edges pixelated))
 (define css-image-fit-option : (Listof Symbol) '(fill contain cover none scale-down))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-css-function-filter <css-image-notation> #:-> CSS-Image
+  ;;; https://drafts.csswg.org/css-images/#image-notation
+  ;;; https://drafts.csswg.org/css-images/#image-set-notation
+  [(image) #:=> [(image "" [fallback ? index? symbol? flcolor?])
+                 (image [content ? css-image? string?] [fallback ? symbol? index? flcolor?])]
+   (CSS<+> (CSS:<^> (<css-color>)) ; NOTE: both color and url accept strings, however their domains are not intersective.
+           (CSS<&> (CSS:<^> (CSS:<+> (<css-image>) (<css:string>)))
+                   (CSS<$> (CSS<?> [(<css-comma>) (CSS:<^> (<css-color>))]) 'transparent)))]
+  [(image-set) #:=> [(image-set [options ? css-image-sets?])]
+   (CSS<!> (CSS<#> (CSS<!> (CSS:<^> (list (CSS:<+> (<css:string>) (<css-image>)) (<css+resolution>))))))]
+  #:where
+  [(define-predicate css-image-sets? Image-Set-Options)])
+
+(define-css-function-filter <css-gradient-notation> #:-> CSS-Image
   ;;; https://drafts.csswg.org/css-images/#image-notation
   ;;; https://drafts.csswg.org/css-images/#image-set-notation
   [(image) #:=> [(image "" [fallback ? index? symbol? flcolor?])

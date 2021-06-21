@@ -41,12 +41,12 @@
     (define-values (snerttap stnemugra)
       (for/fold ([snrettap null] [stnemugra null])
                 ([<pattern> (in-list <matches>)])
-        (syntax-case <pattern> [: _]
+        (syntax-case <pattern> [: ? _ quote]
           [(field ? type?) (values (cons #'(? type? field) snrettap) (cons #'field stnemugra))]
           [(field ? type? ...) (values (cons #'(? (λ [v] (or (type? v) ...)) field) snrettap) (cons #'field stnemugra))]
           [(field : Type) (values (cons #'(? (make-predicate Type) field) snrettap) (cons #'field stnemugra))]
           [(field : Type ...) (values (cons #'(? (make-predicate (U Type ...)) field) snrettap) (cons #'field stnemugra))]
-          [,field (values (cons #'field snrettap) (cons #'field stnemugra))]
+          ;[,field (values (cons #'field snrettap) (cons #'field stnemugra))]
           [_ (let ([? (datum->syntax #'_ (gensym))]) (values (cons ? snrettap) (cons ? stnemugra)))]
           [field (values snrettap (cons #'field stnemugra))])))
     (list (list* #'list #'_ (reverse snerttap)) (cons <constructor> (reverse stnemugra))))
