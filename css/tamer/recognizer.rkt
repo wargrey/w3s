@@ -6,6 +6,28 @@
 
 (require racket/string)
 
+(require (for-syntax racket/base))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define-syntax (tamer-context stx)
+  (syntax-case stx []
+    [(_ desc filters CSS:<> CSS<> #:do (it-check args ...) ...)
+     (syntax/loc stx
+       (context desc #:do
+                (for/spec ([parser (in-list (list (apply CSS:<> filters) (apply CSS<> (map CSS:<^> filters))))]
+                           [subc (in-list (list "filter" "parser"))])
+                  (context subc #:do
+                           (it-check filters parser args ...)
+                           ...))))]
+    [(_ desc filter multiplier CSS:<> CSS<> #:do (it-check args ...) ...)
+     (syntax/loc stx
+       (context [desc multiplier] #:do
+                (for/spec ([parser (in-list (list (CSS:<> filter multiplier) (CSS<> (CSS:<^> filter) multiplier)))]
+                           [subc (in-list (list "filter" "parser"))])
+                  (context subc #:do
+                           (it-check filter parser multiplier args ...)
+                           ...))))]))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define tamer-parse : (-> CSS-StdIn (CSS-Parser (Listof Any)) (Values (U CSS-Syntax-Error False (Listof Any)) (Listof CSS-Token)))
   (lambda [com.css atom-parser]
@@ -17,79 +39,71 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-behavior (it-check-modifier modifier lower upper)
   (let-values ([(least most) (css:multiplier-range modifier lower)])
-    #:it ["should accept all integers in the interval [~a, ~a] if marked with '~a" least most modifier] #:do
+    #:it
+    ["should accept all integers in the interval [~a, ~a] if marked with '~a" least most modifier] #:unless (eq? least most)
+    ["should accept exact ~a integers if marked with '~a" least modifier]
+    #:do
     (expect-= least lower)
     (expect-= most upper)))
 
-(define-behavior (it-check-<&>-filter filters expected-values)
+(define-behavior (it-check-<&> filters parser expected-values okay?)
   (let*-values ([(com.css) (string-join (map ~a (append expected-values (list '<&>))))]
                 [(size) (length filters)]
-                [(vs rest) (tamer-parse com.css (apply CSS:<&> filters))])
-    #:it ["should return a ~a-length list, and whose values are '~a, fed with {~s}" size (take expected-values size) com.css] #:do
-    (check-juxtaposing-values vs size expected-values)))
+                [(vs rest) (tamer-parse com.css parser)])
+    #:it
+    ["should return a ~a-length list, and whose values are '~a, when fed with {~s}" size (take expected-values size) com.css] #:when okay?
+    ["should fail, when fed with {~s}" com.css]
+    #:do
+    (check-juxtaposing-values vs size expected-values okay?)))
 
-(define-behavior (it-check-<&>-parser filters expected-values)
-  (let*-values ([(com.css) (string-join (map ~a (append expected-values (list '<&>))))]
-                [(size) (length filters)]
-                [(vs rest) (tamer-parse com.css (apply CSS<&> (map CSS:<^> filters)))])
-    #:it ["should return a ~a-length list, and whose values are '~a, fed with {~s}" size (take expected-values size) com.css] #:do
-    (check-juxtaposing-values vs size expected-values)))
-
-(define-behavior (it-check-<&&>-filter filters expected-values)
+(define-behavior (it-check-<&&> filters parser expected-values maybe-count)
   (let*-values ([(com.css) (string-join (map ~a (append expected-values (list '<&&>))))]
-                [(size) (length filters)]
-                [(vs rest) (tamer-parse com.css (apply CSS:<&&> filters))])
-    #:it ["should return a ~a-length list, and whose values might be '~a, fed with {~s}" size (take expected-values size) com.css] #:do
-    (check-no-ordered-values vs size expected-values)))
+                [(expt-values size) (maybe-expected-values->values filters expected-values maybe-count)]
+                [(vs rest) (tamer-parse com.css parser)])
+    #:it
+    ["should return a ~a-length list, and whose values might be '~a, when fed with {~s}" size expt-values com.css] #:when maybe-count
+    ["should fail, when fed with {~s}" com.css]
+    #:do
+    (check-no-ordered-values vs expt-values)))
 
-(define-behavior (it-check-<&&>-parser filters expected-values)
-  (let*-values ([(com.css) (string-join (map ~a (append expected-values (list '<&&>))))]
-                [(size) (length filters)]
-                [(vs rest) (tamer-parse com.css (apply CSS<&&> (map CSS:<^> filters)))])
-    #:it ["should return a ~a-length list, and whose values might be '~a, fed with {~s}" size (take expected-values size) com.css] #:do
-    (check-no-ordered-values vs size expected-values)))
+(define-behavior (it-check-<++> filters parser expected-values maybe-count)
+  (let*-values ([(com.css) (string-join (map ~a (append expected-values (list '<++>))))]
+                [(expt-values size) (maybe-expected-values->values filters expected-values maybe-count)]
+                [(vs rest) (tamer-parse com.css parser)])
+    #:it
+    ["should return a ~a-length list, and whose values might be '~a, when fed with {~s}" size expt-values com.css] #:when maybe-count
+    ["should fail, when fed with {~s}" com.css]
+    #:do
+    (check-no-ordered-values vs expt-values)))
 
-(define-behavior (it-check-<*>-filter filter multiplier count expected)
+(define-behavior (it-check-<*> filter parser multiplier count expected)
   (let*-values ([(com.css) (string-join (map ~a (append (build-list count add1) (list '<*>))))]
-                [(vs rest) (tamer-parse com.css (CSS:<*> filter multiplier))]
+                [(vs rest) (tamer-parse com.css parser)]
                 [(least most) (css:multiplier-range multiplier 0)])
-    #:it ["should return a list of integers, whose size is ~a, fed with {~s} where number count is ~a" expected com.css count] #:do
+    #:it
+    ["should return a list of integers, whose size is ~a, when fed with {~s} where number count is ~a" expected com.css count] #:when expected
+    ["should fail, when fed with {~s} where number count is ~a" com.css count]
+    #:do
     (check-range vs expected least most)))
 
-(define-behavior (it-check-<*>-parser filter multiplier count expected)
-  (let*-values ([(com.css) (string-join (map ~a (append (build-list count add1) (list '<*>))))]
-                [(vs rest) (tamer-parse com.css (CSS<*> (CSS:<^> filter) multiplier))]
-                [(least most) (css:multiplier-range multiplier 0)])
-    #:it ["should return a list of integers, whose size is ~a, fed with {~s} where number count is ~a" expected com.css count] #:do
-    (check-range vs expected least most)))
-
-(define-behavior (it-check-<#>-filter filter multiplier count expected)
+(define-behavior (it-check-<#> filter parser multiplier count expected)
   (let*-values ([(com.css) (string-join (map ~a (append (build-list count add1) (list '<#>))) ", ")]
-                [(vs rest) (tamer-parse com.css (CSS:<#> filter multiplier))]
+                [(vs rest) (tamer-parse com.css parser)]
                 [(least most) (css:multiplier-range multiplier 0)])
-    #:it ["should return a list of integers, whose size is ~a, fed with {~s} where number count is ~a" expected com.css count] #:do
+    #:it
+    ["should return a list of integers, whose size is ~a, when fed with {~s} where number count is ~a" expected com.css count] #:when expected
+    ["should fail, when fed with {~s} where number count is ~a" com.css count]
+    #:do
     (check-range vs expected least most)))
 
-(define-behavior (it-check-<#>-parser filter multiplier count expected)
-  (let*-values ([(com.css) (string-join (map ~a (append (build-list count add1) (list '<#>))) ", ")]
-                [(vs rest) (tamer-parse com.css (CSS<#> (CSS:<^> filter) multiplier))]
-                [(least most) (css:multiplier-range multiplier 0)])
-    #:it ["should return a list of integers, whose size is ~a, fed with {~s} where number count is ~a" expected com.css count] #:do
-    (check-range vs expected least most)))
-
-(define-behavior (it-check-<!>-filter filter multiplier count expected)
+(define-behavior (it-check-<!> filter parser multiplier count expected)
   (let*-values ([(com.css) (string-join (map ~a (append (build-list count add1) (list '<!>))))]
-                [(vs rest) (tamer-parse com.css (CSS:<!> filter multiplier))]
+                [(vs rest) (tamer-parse com.css parser)]
                 [(least most) (css:multiplier-range multiplier 0)])
-    #:it ["should return a nested list of integers, whose size is ~a, fed with {~s} where number count is ~a" expected com.css count] #:do
-    (cond [(list? vs) (expect-null (cdr vs)) (check-range (car vs) expected least most)]
-          [else (check-range vs expected least most)])))
-
-(define-behavior (it-check-<!>-parser filter multiplier count expected)
-  (let*-values ([(com.css) (string-join (map ~a (append (build-list count add1) (list '<!>))))]
-                [(vs rest) (tamer-parse com.css (CSS<!> (CSS:<^> filter) multiplier))]
-                [(least most) (css:multiplier-range multiplier 0)])
-    #:it ["should return a nested list of integers, whose size is ~a, fed with {~s} where number count is ~a" expected com.css count] #:do
+    #:it
+    ["should return a nested list of integers, whose size is ~a, when fed with {~s} where number count is ~a" expected com.css count] #:when expected
+    ["should fail, when fed with {~s} where number count is ~a" com.css count]
+    #:do
     (cond [(list? vs) (expect-null (cdr vs)) (check-range (car vs) expected least most)]
           [else (check-range vs expected least most)])))
 
@@ -103,9 +117,10 @@
              (expect-<= size most))]
           [else (collapse "deadcode")])))
 
-(define check-juxtaposing-values : (-> (U False CSS-Syntax-Error (Listof Any)) Index (Listof Any) Void)
-  (lambda [vs size expected-values]
-    (cond [(list? vs)
+(define check-juxtaposing-values : (-> (U False CSS-Syntax-Error (Listof Any)) Index (Listof Any) Boolean Void)
+  (lambda [vs size expected-values okay?]
+    (cond [(not okay?) (expect-false vs)]
+          [(list? vs)
            (expect-= (length vs) size)
            (for ([given (in-list vs)]
                  [expected (in-list expected-values)])
@@ -113,80 +128,67 @@
           [(exn:css? vs) (raise vs)]
           [else (collapse "deadcode")])))
 
-(define check-no-ordered-values : (-> (U False CSS-Syntax-Error (Listof Any)) Index (Listof Any) Void)
-  (lambda [vs size expected-values]
-    (cond [(list? vs)
-           (expect-= (length vs) size)
+(define check-no-ordered-values : (-> (U False CSS-Syntax-Error (Listof Any)) (Option (Listof Any)) Void)
+  (lambda [vs expected-values]
+    (cond [(not expected-values) (expect-false vs)]
+          [(list? vs)
+           (expect-= (length vs) (length expected-values))
            (for ([given (in-list vs)])
              (expect-member given expected-values))]
           [(exn:css? vs) (raise vs)]
           [else (collapse "deadcode")])))
 
+(define maybe-expected-values->values : (-> (Listof Any) (Listof Any) (U (Listof Any) Boolean) (Values (Option (Listof Any)) Index))
+  (lambda [filters expected-values maybe-count]
+    (cond [(not maybe-count) (values #false 0)]
+          [(list? maybe-count) (values maybe-count (length maybe-count))]
+          [else (let ([size (length filters)]) (values (take expected-values size) size))])))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-feature recognition #:do
-  (context "combinators" #:do
-           (let/spec ([filters (list (<css:ident>) (<css:integer>) (<css:delim>))]
-                      [expt-values (list 'combine-all 128 #\&)])
-                     (context "juxtaposing values" #:do
-                              (context "filter" #:do
-                                       (it-check-<&>-filter filters expt-values))
-                              
-                              (context "parser" #:do
-                                       (it-check-<&>-parser filters expt-values)))
-                     
-                     (context "combin-all" #:do
-                              (context "filter" #:do
-                                       (it-check-<&&>-filter filters (shuffle expt-values)))
-                              
-                              (context "parser" #:do
-                                       (it-check-<&&>-parser filters (shuffle expt-values))))))
-           
-  (context "multipliers" #:do
-           (it-check-modifier '?         0  1)
-           (it-check-modifier '*         0  +inf.0)
-           (it-check-modifier '+         1  +inf.0)
-           (it-check-modifier +16        16 16)
-           (it-check-modifier '(8)       8  8)
-           (it-check-modifier '(3 . 8)   3  8)
-           (it-check-modifier '(4 . inf) 4  +inf.0)
-           (it-check-modifier '(NaN . 4) 0  4)
+(define-feature recognizer #:do
+  (let ([filters (list (procedure-rename (<css:ident>) '<css:ident>)
+                       (procedure-rename (<css:integer>) '<css:integer>)
+                       (procedure-rename (<css:delim>) '<css:delim>))])
+    (context "combinators" #:do
+             (tamer-context "juxtaposing values" filters CSS:<&> CSS<&> #:do
+                           (it-check-<&> (list 'juxtaposing 128 #\&) #true)
+                           (it-check-<&> (list 'juxtaposing 128.0 #\&) #false))
+                        
+             (tamer-context "combine-all" filters CSS:<&&> CSS<&&> #:do
+                           (it-check-<&&> (list 128 'combine-all #\&) #true)
+                           (it-check-<&&> (list 'combine-all #\&) #false))
+                        
+             (tamer-context "combine-any" filters CSS:<++> CSS<++> #:do
+                           (it-check-<++> (list 128.0 'combine-any #\&) #false)
+                           (it-check-<++> (list 'combine-any 128.0 #\&) '(combine-any))
+                           (it-check-<++> (list #\& 'combine-any 128.0) '(combine-any #\&)))))
 
-           (let ([multiplier '(2 . 4)])
-             (context ["given with the multiplier '~s'" multiplier] #:do
-                      (context "filter" #:do
-                               (it-check-<*>-filter (<css:integer>) multiplier 1 #false)
-                               (it-check-<*>-filter (<css:integer>) multiplier 2 2)
-                               (it-check-<*>-filter (<css:integer>) multiplier 5 4))
-                      
-                      (context "parser" #:do
-                               (it-check-<*>-parser (<css:integer>) multiplier 1 #false)
-                               (it-check-<*>-parser (<css:integer>) multiplier 2 2)
-                               (it-check-<*>-parser (<css:integer>) multiplier 5 4))))
+  (let ([filter (<css:integer>)])
+    (context "multipliers" #:do
+             (it-check-modifier '?         0  1)
+             (it-check-modifier '*         0  +inf.0)
+             (it-check-modifier '+         1  +inf.0)
+             (it-check-modifier +16        16 16)
+             (it-check-modifier '(8)       8  8)
+             (it-check-modifier '(3 . 8)   3  8)
+             (it-check-modifier '(4 . inf) 4  +inf.0)
+             (it-check-modifier '(NaN . 4) 0  4)
 
-           (let ([multiplier '(1 . 3)])
-             (context ["given with the multiplier '~s'" multiplier] #:do
-                      (context "filter" #:do
-                               (it-check-<#>-filter (<css:integer>) multiplier 0 #false)
-                               (it-check-<#>-filter (<css:integer>) multiplier 3 3)
-                               (it-check-<#>-filter (<css:integer>) multiplier 5 3))
-                      
-                      (context "parser" #:do
-                               (it-check-<#>-parser (<css:integer>) multiplier 0 #false)
-                               (it-check-<#>-parser (<css:integer>) multiplier 3 3)
-                               (it-check-<#>-parser (<css:integer>) multiplier 5 3))))
-
-           (let ([multiplier '+])
-             (context ["given with the multiplier '~s'" multiplier] #:do
-                      (context "filter" #:do
-                               (it-check-<!>-filter (<css:integer>) multiplier 0 #false)
-                               (it-check-<!>-filter (<css:integer>) multiplier 3 3)
-                               (it-check-<!>-filter (<css:integer>) multiplier 5 5))
-                      
-                      (context "parser" #:do
-                               (it-check-<!>-parser (<css:integer>) multiplier 0 #false)
-                               (it-check-<!>-parser (<css:integer>) multiplier 3 3)
-                               (it-check-<!>-parser (<css:integer>) multiplier 5 5))))))
+             (tamer-context "given with the multiplier '~s'" filter '(2 . 4) CSS:<*> CSS<*> #:do
+                            (it-check-<*> 1 #false)
+                            (it-check-<*> 2 2)
+                            (it-check-<*> 5 4))
+             
+             (tamer-context "given with the multiplier '~s'" filter '(1 . 3) CSS:<#> CSS<#> #:do
+                            (it-check-<#> 0 #false)
+                            (it-check-<#> 3 3)
+                            (it-check-<#> 5 3))
+             
+             (tamer-context "given with the multiplier '~s'" filter '+ CSS:<!> CSS<!> #:do
+                            (it-check-<!> 0 #false)
+                            (it-check-<!> 3 3)
+                            (it-check-<!> 5 5)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (module+ main
-  (void (spec-prove recognition)))
+  (void (spec-prove recognizer)))
