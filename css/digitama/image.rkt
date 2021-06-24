@@ -30,22 +30,26 @@
 (define-predicate css-image-datum? CSS-Image-Datum)
 
 (define-css-value css-image #:as CSS-Image ())
-(define-css-value image #:as Image #:=> css-image ([content : CSS-Image-Datum] [fallback : Color]))
+(define-css-value image #:as Image #:=> css-image ([tag : (Option Symbol)] [content : CSS-Image-Datum] [fallback : Color]))
 (define-css-value image-set #:as Image-Set #:=> css-image ([options : Image-Set-Options]))
 (define-css-value linear-gradient #:as Linear-Gradient #:=> css-image ([direction : Flonum] [stops : (Listof (U Linear-Color-Stop Linear-Color-Hint))]))
 
 (define css-image-rendering-option : (Listof Symbol) '(auto crisp-edges pixelated))
 (define css-image-fit-option : (Listof Symbol) '(fill contain cover none scale-down))
+(define css-image-tag : (Listof Symbol) '(ltr rtl))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-css-function-filter <css-image-notation> #:-> CSS-Image
-  ;;; https://drafts.csswg.org/css-images/#image-notation
-  ;;; https://drafts.csswg.org/css-images/#image-set-notation
-  [(image) #:=> [(image "" [fallback ? index? symbol? flcolor?])
-                 (image [content ? css-image? string?] [fallback ? symbol? index? flcolor?])]
-   (CSS<+> (CSS:<^> (<css-color>)) ; NOTE: both color and url accept strings, however their domains are not intersective.
-           (CSS<&> (CSS:<^> (CSS:<+> (<css-image>) (<css:string>)))
-                   (CSS<$> (CSS<?> [(<css-comma>) (CSS:<^> (<css-color>))]) 'transparent)))]
+  ;;; https://drafts.csswg.org/css-images-4/#image-notation
+  ;;; https://drafts.csswg.org/css-images-4/#image-set-notation
+  [(image) #:=> [(image #false "" [fallback ? index? symbol? flcolor?])
+                 (image #false [content ? css-image? string?] [fallback ? symbol? index? flcolor?])
+                 (image [tag ? symbol? false?] "" [fallback ? symbol? index? flcolor?])
+                 (image [tag ? symbol? false?] [content ? css-image? string?] [fallback ? symbol? index? flcolor?])]
+   (CSS<&> (CSS:<*> (<css-keyword> css-image-tag) '?)
+           (CSS<+> (CSS:<^> (<css-color>)) ; NOTE: both color and url accept strings, however their domains are not intersective.
+                   (CSS<&> (CSS:<^> (CSS:<+> (<css-image>) (<css:string>)))
+                           (CSS<$> (CSS<?> [(<css-comma>) (CSS:<^> (<css-color>))]) 'transparent))))]
   [(image-set) #:=> [(image-set [options ? css-image-sets?])]
    (CSS<!> (CSS<#> (CSS<!> (CSS:<^> (list (CSS:<+> (<css:string>) (<css-image>)) (<css+resolution>))))))]
   #:where

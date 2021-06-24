@@ -1,6 +1,8 @@
 #lang typed/racket/base
 
-(require css/syntax)
+(require css)
+(require css/digitama/color)
+(require css/digitama/image)
 
 (require digimon/spec)
 
@@ -51,8 +53,8 @@
                 [(size) (length filters)]
                 [(vs rest) (tamer-parse com.css parser)])
     #:it
-    ["should return a ~a-length list, and whose values are '~a, when fed with {~s}" size (take expected-values size) com.css] #:when okay?
-    ["should fail, when fed with {~s}" com.css]
+    ["should return a ~a-length list, and whose values are '~a, when fed with ~s" size (take expected-values size) com.css] #:when okay?
+    ["should fail, when fed with ~s" com.css]
     #:do
     (check-juxtaposing-values vs size expected-values okay?)))
 
@@ -61,8 +63,8 @@
                 [(expt-values size) (maybe-expected-values->values filters expected-values maybe-count)]
                 [(vs rest) (tamer-parse com.css parser)])
     #:it
-    ["should return a ~a-length list, and whose values might be '~a, when fed with {~s}" size expt-values com.css] #:when maybe-count
-    ["should fail, when fed with {~s}" com.css]
+    ["should return a ~a-length list, and whose values might be '~a, when fed with ~s" size expt-values com.css] #:when maybe-count
+    ["should fail, when fed with ~s" com.css]
     #:do
     (check-no-ordered-values vs expt-values)))
 
@@ -71,8 +73,8 @@
                 [(expt-values size) (maybe-expected-values->values filters expected-values maybe-count)]
                 [(vs rest) (tamer-parse com.css parser)])
     #:it
-    ["should return a ~a-length list, and whose values might be '~a, when fed with {~s}" size expt-values com.css] #:when maybe-count
-    ["should fail, when fed with {~s}" com.css]
+    ["should return a ~a-length list, and whose values might be '~a, when fed with ~s" size expt-values com.css] #:when maybe-count
+    ["should fail, when fed with ~s" com.css]
     #:do
     (check-no-ordered-values vs expt-values)))
 
@@ -81,8 +83,8 @@
                 [(vs rest) (tamer-parse com.css parser)]
                 [(least most) (css:multiplier-range multiplier 0)])
     #:it
-    ["should return a list of integers, whose size is ~a, when fed with {~s} where number count is ~a" expected com.css count] #:when expected
-    ["should fail, when fed with {~s} where number count is ~a" com.css count]
+    ["should return a list of integers, whose size is ~a, when fed with ~s where number count is ~a" expected com.css count] #:when expected
+    ["should fail, when fed with ~s where number count is ~a" com.css count]
     #:do
     (check-range vs expected least most)))
 
@@ -91,8 +93,8 @@
                 [(vs rest) (tamer-parse com.css parser)]
                 [(least most) (css:multiplier-range multiplier 0)])
     #:it
-    ["should return a list of integers, whose size is ~a, when fed with {~s} where number count is ~a" expected com.css count] #:when expected
-    ["should fail, when fed with {~s} where number count is ~a" com.css count]
+    ["should return a list of integers, whose size is ~a, when fed with ~s where number count is ~a" expected com.css count] #:when expected
+    ["should fail, when fed with ~s where number count is ~a" com.css count]
     #:do
     (check-range vs expected least most)))
 
@@ -101,11 +103,23 @@
                 [(vs rest) (tamer-parse com.css parser)]
                 [(least most) (css:multiplier-range multiplier 0)])
     #:it
-    ["should return a nested list of integers, whose size is ~a, when fed with {~s} where number count is ~a" expected com.css count] #:when expected
-    ["should fail, when fed with {~s} where number count is ~a" com.css count]
+    ["should return a nested list of integers, whose size is ~a, when fed with ~s where number count is ~a" expected com.css count] #:when expected
+    ["should fail, when fed with ~s where number count is ~a" com.css count]
     #:do
     (cond [(list? vs) (expect-null (cdr vs)) (check-range (car vs) expected least most)]
           [else (check-range vs expected least most)])))
+
+(define-behavior (it-check-function com.css filter expected)
+  (let-values ([(vs rest) (tamer-parse com.css (CSS:<^> filter))])
+    #:it
+    ["should return an object in sense of ~a, when fed with ~s" (object-name expected) com.css] #:when (procedure? expected)
+    ["should fail with exception `~a`, when fed with ~s" expected com.css] #:when (symbol? expected)
+    ["should fail, when fed with ~s" com.css]
+    #:do
+    (cond [(not expected) (expect-false vs)]
+          [(symbol? expected) (expect-satisfy exn:css? vs) (expect-eq (object-name vs) expected)]
+          [(list? vs) (expect-= (length vs) 1) (expect-satisfy expected (car vs))]
+          [else (tamer-deadcode vs)])))
 
 (define check-range : (-> Any (U False (-> Any Boolean) Index) Natural (U Natural +inf.0) Void)
   (lambda [vs expected least most]
@@ -115,7 +129,7 @@
            (let ([size (length vs)])
              (expect->= size least)
              (expect-<= size most))]
-          [else (collapse "deadcode")])))
+          [else (tamer-deadcode vs)])))
 
 (define check-juxtaposing-values : (-> (U False CSS-Syntax-Error (Listof Any)) Index (Listof Any) Boolean Void)
   (lambda [vs size expected-values okay?]
@@ -125,8 +139,7 @@
            (for ([given (in-list vs)]
                  [expected (in-list expected-values)])
              (expect-equal given expected))]
-          [(exn:css? vs) (raise vs)]
-          [else (collapse "deadcode")])))
+          [else (tamer-deadcode vs)])))
 
 (define check-no-ordered-values : (-> (U False CSS-Syntax-Error (Listof Any)) (Option (Listof Any)) Void)
   (lambda [vs expected-values]
@@ -135,7 +148,11 @@
            (expect-= (length vs) (length expected-values))
            (for ([given (in-list vs)])
              (expect-member given expected-values))]
-          [(exn:css? vs) (raise vs)]
+          [else (tamer-deadcode vs)])))
+
+(define tamer-deadcode : (-> Any Void)
+  (lambda [vs]
+    (cond [(exn:css? vs) (raise vs)]
           [else (collapse "deadcode")])))
 
 (define maybe-expected-values->values : (-> (Listof Any) (Listof Any) (U (Listof Any) Boolean) (Values (Option (Listof Any)) Index))
@@ -187,7 +204,21 @@
              (tamer-context "given with the multiplier '~s'" filter '+ CSS:<!> CSS<!> #:do
                             (it-check-<!> 0 #false)
                             (it-check-<!> 3 3)
-                            (it-check-<!> 5 5)))))
+                            (it-check-<!> 5 5))))
+
+  (context "functions" #:do
+           (context "color functions" #:do
+                    (it-check-function "hsl(120.0 100% 100% / 0.5)" (<css-color-notation>) flcolor?)
+                    (it-check-function "hwb(120.0, 100%, 100%, 0.5)" (<css-color-notation>) flcolor?)
+                    (it-check-function "rgb(0, 0.5, 0 / 0.618)" (<css-color-notation>) 'exn:css:missing-comma))
+           
+           (context "image functions" #:do
+                    (it-check-function "url(tamer.png)" (<css-image>) string?)
+                    (it-check-function "image(url(tamer.png))" (<css-image-notation>) css-image?)
+                    (it-check-function "image(rtl \"tamer.png\", rgb(0 0.5 0 / 0.618))" (<css-image-notation>) css-image?)
+
+                    (context "gradient functions" #:do
+                             (it-check-function "url(tamer.png)" (<css-image>) string?)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (module+ main

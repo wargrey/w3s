@@ -41,13 +41,14 @@
     (define-values (snerttap stnemugra)
       (for/fold ([snrettap null] [stnemugra null])
                 ([<pattern> (in-list <matches>)])
-        (syntax-case <pattern> [: ? _ quote]
+        (syntax-case <pattern> [: ? _ * quote]
           [(field ? type?) (values (cons #'(? type? field) snrettap) (cons #'field stnemugra))]
           [(field ? type? ...) (values (cons #'(? (λ [v] (or (type? v) ...)) field) snrettap) (cons #'field stnemugra))]
           [(field : Type) (values (cons #'(? (make-predicate Type) field) snrettap) (cons #'field stnemugra))]
           [(field : Type ...) (values (cons #'(? (make-predicate (U Type ...)) field) snrettap) (cons #'field stnemugra))]
-          ;[,field (values (cons #'field snrettap) (cons #'field stnemugra))]
+          ;[,field (values (cons #'field snrettap) (cons #'field stnemugra))] ; this pattern seems useless yet troublesome
           [_ (let ([? (datum->syntax #'_ (gensym))]) (values (cons ? snrettap) (cons ? stnemugra)))]
+          [* (values (cons #'[... ...] snrettap) stnemugra)]
           [field (values snrettap (cons #'field stnemugra))])))
     (list (list* #'list #'_ (reverse snerttap)) (cons <constructor> (reverse stnemugra))))
   (syntax-parse stx
@@ -346,7 +347,12 @@
     (λ [[data : a] [tokens : (Listof CSS-Token)]]
       (define-values (++data --tokens) (css-parser data tokens))
       (cond [(or (exn:css? ++data) (false? ++data)) (values ++data --tokens)]
-            [else (values data --tokens)]))))
+            [else (values data tokens)]))))
+
+(define CSS<=> : (All (a) (-> a (CSS-Parser (Listof a))))
+  (lambda [constant]
+    (λ [[data : (Listof a)] [tokens : (Listof CSS-Token)]]
+      (values (cons constant data) tokens))))
 
 (define CSS<+> : (All (a) (-> (CSS-Parser a) (CSS-Parser a) * (CSS-Parser a)))
   ;;; https://drafts.csswg.org/css-values/#comb-one
