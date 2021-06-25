@@ -28,6 +28,14 @@
                            [subc (in-list (list "filter" "parser"))])
                   (context subc #:do
                            (it-check filter parser multiplier args ...)
+                           ...))))]
+    [(_ com.css filter CSS:<> CSS<> #:invalid-do (it-check args ...) ...)
+     (syntax/loc stx
+       (context ["when fed with ~s" com.css] #:do
+                (for/spec ([parser (in-list (list (CSS:<> filter) (CSS<> (CSS:<^> filter))))]
+                           [subc (in-list (list "filter" "parser"))])
+                  (context subc #:do
+                           (it-check com.css parser args ...)
                            ...))))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -53,7 +61,7 @@
                 [(size) (length filters)]
                 [(vs rest) (tamer-parse com.css parser)])
     #:it
-    ["should return a ~a-length list, and whose values are '~a, when fed with ~s" size (take expected-values size) com.css] #:when okay?
+    ["should be parsed into a ~a-length list, and whose values are '~a, when fed with ~s" size (take expected-values size) com.css] #:when okay?
     ["should fail, when fed with ~s" com.css]
     #:do
     (check-juxtaposing-values vs size expected-values okay?)))
@@ -63,7 +71,7 @@
                 [(expt-values size) (maybe-expected-values->values filters expected-values maybe-count)]
                 [(vs rest) (tamer-parse com.css parser)])
     #:it
-    ["should return a ~a-length list, and whose values might be '~a, when fed with ~s" size expt-values com.css] #:when maybe-count
+    ["should be parsed into a ~a-length list, and whose values might be '~a, when fed with ~s" size expt-values com.css] #:when maybe-count
     ["should fail, when fed with ~s" com.css]
     #:do
     (check-no-ordered-values vs expt-values)))
@@ -73,7 +81,7 @@
                 [(expt-values size) (maybe-expected-values->values filters expected-values maybe-count)]
                 [(vs rest) (tamer-parse com.css parser)])
     #:it
-    ["should return a ~a-length list, and whose values might be '~a, when fed with ~s" size expt-values com.css] #:when maybe-count
+    ["should be parsed into a ~a-length list, and whose values might be '~a, when fed with ~s" size expt-values com.css] #:when maybe-count
     ["should fail, when fed with ~s" com.css]
     #:do
     (check-no-ordered-values vs expt-values)))
@@ -83,7 +91,7 @@
                 [(vs rest) (tamer-parse com.css parser)]
                 [(least most) (css:multiplier-range multiplier 0)])
     #:it
-    ["should return a list of integers, whose size is ~a, when fed with ~s where number count is ~a" expected com.css count] #:when expected
+    ["should be parsed into a list of integers, whose size is ~a, when fed with ~s where number count is ~a" expected com.css count] #:when expected
     ["should fail, when fed with ~s where number count is ~a" com.css count]
     #:do
     (check-range vs expected least most)))
@@ -93,17 +101,26 @@
                 [(vs rest) (tamer-parse com.css parser)]
                 [(least most) (css:multiplier-range multiplier 0)])
     #:it
-    ["should return a list of integers, whose size is ~a, when fed with ~s where number count is ~a" expected com.css count] #:when expected
+    ["should be parsed into a list of integers, whose size is ~a, when fed with ~s where number count is ~a" expected com.css count] #:when expected
     ["should fail, when fed with ~s where number count is ~a" com.css count]
     #:do
     (check-range vs expected least most)))
+
+(define-behavior (it-check-invalid-<#> com.css parser expected)
+  (let*-values ([(vs rest) (tamer-parse com.css parser)]
+                [(least most) (css:multiplier-range '+ 0)])
+    #:it
+    ["should fail, with exception `~a`" (object-name expected)] #:when (procedure? expected)
+    ["should be parsed into a list of integers, whose size is ~a" expected] #:when (index? expected)
+    ["should fail"]
+    #:do (check-range vs expected least most)))
 
 (define-behavior (it-check-<!> filter parser multiplier count expected)
   (let*-values ([(com.css) (string-join (map ~a (append (build-list count add1) (list '<!>))))]
                 [(vs rest) (tamer-parse com.css parser)]
                 [(least most) (css:multiplier-range multiplier 0)])
     #:it
-    ["should return a nested list of integers, whose size is ~a, when fed with ~s where number count is ~a" expected com.css count] #:when expected
+    ["should be parsed into a nested list of integers, whose size is ~a, when fed with ~s where number count is ~a" expected com.css count] #:when expected
     ["should fail, when fed with ~s where number count is ~a" com.css count]
     #:do
     (cond [(list? vs) (expect-null (cdr vs)) (check-range (car vs) expected least most)]
@@ -112,7 +129,7 @@
 (define-behavior (it-check-function com.css filter expected)
   (let-values ([(vs rest) (tamer-parse com.css (CSS:<^> filter))])
     #:it
-    ["should return an object in sense of ~a, when fed with ~s" (object-name expected) com.css] #:when (procedure? expected)
+    ["should be parsed into an object in sense of ~a, when fed with ~s" (object-name expected) com.css] #:when (procedure? expected)
     ["should fail with exception `~a`, when fed with ~s" expected com.css] #:when (symbol? expected)
     ["should fail, when fed with ~s" com.css]
     #:do
@@ -191,6 +208,11 @@
              (it-check-modifier '(4 . inf) 4  +inf.0)
              (it-check-modifier '(NaN . 4) 0  4)
 
+             (tamer-context "given with the multiplier '~s'" filter '+ CSS:<!> CSS<!> #:do
+                            (it-check-<!> 0 #false)
+                            (it-check-<!> 3 3)
+                            (it-check-<!> 5 5))
+
              (tamer-context "given with the multiplier '~s'" filter '(2 . 4) CSS:<*> CSS<*> #:do
                             (it-check-<*> 1 #false)
                             (it-check-<*> 2 2)
@@ -200,11 +222,16 @@
                             (it-check-<#> 0 #false)
                             (it-check-<#> 3 3)
                             (it-check-<#> 5 3))
-             
-             (tamer-context "given with the multiplier '~s'" filter '+ CSS:<!> CSS<!> #:do
-                            (it-check-<!> 0 #false)
-                            (it-check-<!> 3 3)
-                            (it-check-<!> 5 5))))
+
+             (context "invalid hash mark syntax" #:do
+                      (tamer-context ", 1, 2, 3" filter CSS:<#> CSS<#> #:invalid-do
+                                     (it-check-invalid-<#> #false))
+                      (tamer-context "1, , 2, 3" filter CSS:<#> CSS<#> #:invalid-do
+                                     (it-check-invalid-<#> 3))
+                      (tamer-context "1, 2, 3," filter CSS:<#> CSS<#> #:invalid-do
+                                     (it-check-invalid-<#> exn:css:missing-value?))
+                      (tamer-context "1, 2, 3, end" filter CSS:<#> CSS<#> #:invalid-do
+                                     (it-check-invalid-<#> 3)))))
 
   (context "functions" #:do
            (context "color functions" #:do

@@ -267,23 +267,28 @@
                           [(= n+1 most) (values (cons datum data++) --tokens)] ; (= n +inf.0) also does not make much sense
                           [else (mult-0+ (cons datum data++) --tokens (add1 n+1))])))])))
 
-(define CSS:<#> : (->* ((CSS:Filter Any)) ((U (CSS-Multiplier Positive-Index) '+)) (CSS-Parser (Listof Any)))
+(define CSS:<#> : (->* ((CSS:Filter Any)) ((U (CSS-Multiplier Positive-Index) '+) #:tolerate-leading-comma? Boolean) (CSS-Parser (Listof Any)))
   ;;; https://drafts.csswg.org/css-values/#mult-comma
-  (lambda [atom-filter [multiplier '+]]
+  ; It seems that, the omissible comma is said from the perspective of user instead of parser
+  (lambda [atom-filter [multiplier '+] #:tolerate-leading-comma? [allow-omissible-leading-comma? #true]]
     (define-values (least most) (css:multiplier-range multiplier 1))
     (λ [[data : (Listof Any)] [tokens : (Listof CSS-Token)]]
       (let mult-comma ([data++ : (Listof Any) data]
-                [tokens-- : (Listof CSS-Token) tokens]
-                [n+1 : Natural 1])
+                       [tokens-- : (Listof CSS-Token) tokens]
+                       [n+1 : Natural 1]
+                       [omissible? : Boolean allow-omissible-leading-comma?])
         (define-values (token tail) (css-car/cdr tokens--))
         (define datum : (CSS-Option Any) (atom-filter token))
-        (cond [(or (false? datum) (exn:css? datum)) (values (if (< least n+1) data++ datum) tail)]
+        (cond [(or (false? datum) (exn:css? datum))
+               (if (and omissible? (css:comma? token) (pair? data))
+                   (mult-comma data++ tail n+1 #false) ; preceding omittable argument is present, so sensibly ignore the first leading comma
+                   (values (if (< least n+1) data++ datum) tokens--))]
               [(= n+1 most) (values (cons datum data++) tail)]
               [else (let-values ([(?comma --tokens) (css-car/cdr tail)])
-                      (cond [(eof-object? ?comma) (mult-comma (cons datum data++) --tokens (add1 n+1))] ; to check least boundry
+                      (cond [(eof-object? ?comma) (mult-comma (cons datum data++) --tokens (add1 n+1) omissible?)] ; to check the least boundry
                             [(not (css:comma? ?comma)) (values (make-exn:css:missing-comma ?comma) --tokens)]
                             [(null? --tokens) (values (make-exn:css:missing-value ?comma) --tokens)]
-                            [else (mult-comma (cons datum data++) --tokens (add1 n+1))]))])))))
+                            [else (mult-comma (cons datum data++) --tokens (add1 n+1) omissible?)]))])))))
 
 (define CSS:<!> : (->* ((CSS:Filter Any)) ((U (CSS-Multiplier Positive-Index) '+)) (CSS-Parser (Listof Any)))
   ;;; (WARNING: this is *not*) https://drafts.csswg.org/css-values/#mult-req
@@ -445,22 +450,28 @@
                           [(= n+1 most) (values ++data --tokens)] ; (= n +inf.0) also does not make much sense
                           [else (mult-0+ ++data --tokens (add1 n+1))])))])))
 
-(define CSS<#> : (All (a) (->* ((CSS-Parser a)) ((U (CSS-Multiplier Positive-Index) '+)) (CSS-Parser a)))
+(define CSS<#> : (All (a) (->* ((CSS-Parser a)) ((U (CSS-Multiplier Positive-Index) '+) #:tolerate-leading-comma? Boolean) (CSS-Parser a)))
   ;;; https://drafts.csswg.org/css-values/#mult-comma
-  (lambda [css-parser [multiplier '+]]
+  ; It seems that, the omissible comma is said from the perspective of user instead of parser
+  (lambda [css-parser [multiplier '+] #:tolerate-leading-comma? [allow-omissible-leading-comma? #true]]
     (define-values (least most) (css:multiplier-range multiplier 1))
     (λ [[data : a] [tokens : (Listof CSS-Token)]]
       (let mult-comma ([data++ : a data]
                        [tokens-- : (Listof CSS-Token) tokens]
-                       [n+1 : Natural 1])
+                       [n+1 : Natural 1]
+                       [omissible? : Boolean allow-omissible-leading-comma?])
         (define-values (++data tail) (css-parser data++ tokens--))
-        (cond [(or (false? ++data) (exn:css? ++data)) (if (< least n+1) (values data++ tokens--) (values ++data tail))]
+        (cond [(or (false? ++data) (exn:css? ++data))
+               (let-values ([(?comma tail) (css-car/cdr tokens--)])
+                 (if (and omissible? (css:comma? ?comma) (pair? data++))
+                     (mult-comma data++ tail n+1 #false) ; preceding omittable argument is present, so sensibly ignore the first leading comma
+                     (values (if (< least n+1) data++ ++data) tokens--)))]
               [(= n+1 most) (values ++data tail)]
               [else (let-values ([(?comma --tokens) (css-car/cdr tail)])
-                      (cond [(eof-object? ?comma) (mult-comma ++data --tokens (add1 n+1))] ; to check least boundry
+                      (cond [(eof-object? ?comma) (mult-comma ++data --tokens (add1 n+1) omissible?)] ; to check least boundry
                             [(not (css:comma? ?comma)) (values (make-exn:css:missing-comma ?comma) --tokens)]
                             [(null? --tokens) (values (make-exn:css:missing-value ?comma) --tokens)]
-                            [else (mult-comma ++data --tokens (add1 n+1))]))])))))
+                            [else (mult-comma ++data --tokens (add1 n+1) omissible?)]))])))))
 
 (define CSS<!> : (->* ((CSS-Parser (Listof Any))) ((U (CSS-Multiplier Positive-Index) '+)) (CSS-Parser (Listof Any)))
   ;;; (WARNING: this is *not*) https://drafts.csswg.org/css-values/#mult-req
