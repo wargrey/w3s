@@ -129,20 +129,24 @@
       (define datum : (CSS-Option a) (css-filter token))
       (if (exn:css? datum) datum (and datum const)))))
 
-(define CSS:<?> : (All (a b c) (case-> [(CSS:Filter a) (-> (U CSS-Syntax-Any (Listof CSS-Token)) CSS-Syntax-Error) -> (CSS:Filter a)]
-                                       [(CSS:Filter a) b (-> CSS-Syntax-Error c) -> (CSS:Filter (U a b c))]))
+(define CSS:<?> : (All (a) (-> (CSS:Filter a) (-> (U CSS-Syntax-Any (Listof CSS-Token)) CSS-Syntax-Error) (CSS:Filter a)))
   (case-lambda
     [(css:filter make-exn)
      (λ [[token : CSS-Syntax-Any]]
        (define datum : (CSS-Option a) (css:filter token))
        (cond [(or (false? datum) (exn:css? datum)) (make-exn token)]
              [else datum]))]
-    [(css:filter false-value fexn-value)
+    #;[(css:filter false-value fexn-value)
+     ;;; WARNING
+     ; this filter should be used in a parser
+     ;   since parser would treat it as a successful match,
+     ;   the current token therefore is consumed inproperly.
      (λ [[token : CSS-Syntax-Any]]
        (define datum : (CSS-Option a) (css:filter token))
        (cond [(false? datum) false-value]
-             [(exn:css? datum) (or (fexn-value datum) datum)]
-             [else datum]))]))
+             [(not (exn:css? datum)) datum]
+             [(not fexn-value) false-value]
+             [else (fexn-value datum)]))]))
 
 (define CSS:<$> : (-> (CSS:Filter Any) Symbol (-> (HashTable Symbol Any) Any) CSS-Shorthand-Parser)
   (lambda [css:filter tag fdatum]
@@ -646,8 +650,27 @@
   (lambda [[multipliers '+] [string-filter (λ _ #true)]]
     (CSS<*> (CSS:<^> (<css:string> string-filter)) multipliers)))
 
-(define (<css-comma>) : (CSS:Filter Char) (CSS:<?> (<css:delim> #\,) make-exn:css:missing-comma))
-(define (<css-slash>) : (CSS:Filter Char) (CSS:<?> (<css:delim> #\/) make-exn:css:missing-slash))
+(define (<css-comma>) : (CSS:Filter Char)
+  (λ [[token : CSS-Syntax-Any]]
+    (cond [(css:comma? token) #\,]
+          [else (make-exn:css:missing-comma token)])))
+
+(define (<:css-skip-comma:> #:omissible? [omissible? #false]) : (CSS-Parser (Listof Any))
+  (λ [[data : (Listof Any)] [tokens : (Listof CSS-Token)]]
+    (define-values (?comma --tokens) (css-car/cdr tokens))
+    (cond [(css:comma? ?comma)
+           (cond [(null? data) (values (make-exn:css:missing-value ?comma) tokens)]
+                 [(null? --tokens) (values (make-exn:css:missing-value ?comma) tokens)]
+                 [else (values data --tokens)])]
+          [(or omissible?) (values data --tokens)]
+          [(not ?comma) (values data tokens)]
+          [else (values (make-exn:css:missing-comma ?comma) tokens)])))
+
+(define (<css-slash>) : (CSS:Filter Char)
+  (λ [[token : CSS-Syntax-Any]]
+    (cond [(css:slash? token) #\/]
+          [else (make-exn:css:missing-slash token)])))
+
 (define (<css-keyword:to>) : (CSS:Filter Symbol) (CSS:<?> (<css:ident> 'to) make-exn:css:missing-keyword))
 (define (<css-keyword:at>) : (CSS:Filter Symbol) (CSS:<?> (<css:ident> 'at) make-exn:css:missing-keyword))
 
@@ -660,10 +683,21 @@
 (define (<css:angle-percentage>) : (CSS:Filter (U Flonum CSS+%)) (CSS:<+> (<css:angle>) (<css:percentage>)))
 (define (<css:time-percentage>) : (CSS:Filter (U Flonum CSS+%)) (CSS:<+> (<css:time>) (<css:percentage>)))
 
-(define css-comma-parser : (All (a) (-> (CSS-Parser a) (CSS-Parser a)))
+(define css-omissible-comma-parser : (All (a) (-> (CSS-Parser a) (CSS-Parser a)))
   (lambda [atom-parser]
-    (CSS<?> [(<css-comma>) atom-parser]
-            [else          atom-parser])))
+    (λ [[data : a] [tokens : (Listof CSS-Token)]]
+      (define-values (?comma --tokens) (css-car/cdr tokens))
+      (cond [(css:comma? ?comma) (atom-parser data --tokens)]
+            [else (atom-parser data tokens)]))))
+
+(define css-comma-followed-parser : (-> (CSS-Parser (Listof Any)) [#:omissible? Boolean] (CSS-Parser (Listof Any)))
+  (lambda [atom-parser #:omissible? [omissible? #false]]
+    (define skip-comma (<:css-skip-comma:> #:omissible? omissible?))
+    (λ [[data : (Listof Any)] [tokens : (Listof CSS-Token)]]
+      (define-values (++data --tokens) (atom-parser data tokens))
+      (cond [(or (not ++data) (exn:css? ++data)) (values ++data --tokens)]
+            [(eq? ++data data) (values ++data --tokens)] ; the value is omitted, so is the comma
+            [else (skip-comma ++data --tokens)]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-css-disjoint-filter <css-size> #:-> (U Nonnegative-Inexact-Real CSS:Length:Font)

@@ -270,6 +270,7 @@
 
                     (context "gradient functions" #:do
                              (it-check-function "linear-gradient(left)" (<css-gradient-notation>) 'exn:css:type)
+                             (it-check-function "linear-gradient(red)" (<css-gradient-notation>) 'exn:css:arity)
 
                              (context "linear gradients" #:do
                                       (context "vertical gradient" #:do
@@ -278,9 +279,9 @@
                                                (it-check-function "linear-gradient(to top, blue, yellow)" (<css-gradient-notation>) linear-gradient?)
                                                (it-check-function "linear-gradient(to bottom, 0% yellow, blue 100%)" (<css-gradient-notation>) linear-gradient?))
                                       
-                                      (context "gradient with angle" #:do
-                                               (it-check-function "linear-gradient(135deg, yellow, blue)" (<css-gradient-notation>) linear-gradient?)
-                                               (it-check-function "linear-gradient(-45deg, blue, yellow)" (<css-gradient-notation>) linear-gradient?))
+                                      (context "gradient with angle and hint" #:do
+                                               (it-check-function "linear-gradient(135deg, yellow, 50%, blue)" (<css-gradient-notation>) linear-gradient?)
+                                               (it-check-function "linear-gradient(-45deg, blue, 50%, yellow)" (<css-gradient-notation>) linear-gradient?))
 
                                       (context "3-color gradient" #:do
                                                (it-check-function "linear-gradient(yellow, blue 20%, #0f0)" (<css-gradient-notation>) linear-gradient?))

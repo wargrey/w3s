@@ -24,7 +24,8 @@
 (define-type Image-Set-Option (List CSS-Image-Datum Flonum))
 (define-type Image-Set-Options (Listof Image-Set-Option))
 (define-type Linear-Color-Hint (U Flonum CSS-%)) ; <length-percentage>
-(define-type Linear-Color-Stop (U CSS-Color-Datum (Pairof CSS-Color-Datum Linear-Color-Hint)))
+(define-type Linear-Color-Stop (Pairof CSS-Color-Datum Linear-Color-Hint))
+(define-type Linear-Color-Stops (Pairof Linear-Color-Stop (Listof+ Linear-Color-Stop)))
 
 (define-type CSS-Image-Datum (U CSS-Image String))
 
@@ -33,10 +34,7 @@
 (define-css-value image-set #:as Image-Set #:=> css-image ([options : Image-Set-Options]))
 
 (define-css-value css-gradient #:as CSS-Gradient #:=> css-image ())
-(define-css-value linear-gradient #:as Linear-Gradient #:=> css-gradient
-  ([direction : Flonum]
-   [stop : Linear-Color-Stop]
-   [stops : (Listof+ (U Linear-Color-Stop Linear-Color-Hint))]))
+(define-css-value linear-gradient #:as Linear-Gradient #:=> css-gradient ([direction : Flonum] [stops : Linear-Color-Stops]))
 
 (define css-image-rendering-option : (Listof Symbol) '(auto crisp-edges pixelated))
 (define css-image-fit-option : (Listof Symbol) '(fill contain cover none scale-down))
@@ -61,24 +59,43 @@
 
 (define-css-function-filter <css-gradient-notation> #:-> CSS-Gradient
   ;;; https://drafts.csswg.org/css-images-4/#gradients
-  [(linear-gradient) #:=> [(linear-gradient [direction ? flonum?] [stop ? linear-color-stop?] [stops ? color-stop-list?])
-                           (linear-gradient (css-named-direction->degree 'bottom) [stop ? linear-color-stop?] [stops ? color-stop-list?])]
-   (CSS<&> (CSS<?> [(<css-keyword:to>) (CSS<~> (CSS:<++> (<css-keyword> css-gradient-hside-option)
-                                                                 (<css-keyword> css-gradient-vside-option))
-                                               named-directions->degrees)]
-                   [else (CSS:<*> (<css-angle>) '?)])
-           (CSS<#> (<:color-stop:>) 1)
-           (CSS<!> (CSS<#> (CSS<+> (<:color-stop:>)
-                                   (CSS<&> (<:color-hint:>) (<:color-stop:>))) '+)))]
+  [(linear-gradient) #:=> [(linear-gradient [direction ? flonum?] [stops ? color-stop-list?])
+                           (linear-gradient (css-named-direction->degree 'bottom) [stops ? color-stop-list?])]
+   (CSS<&> (css-comma-followed-parser
+            (CSS<?> [(<css-keyword:to>) (CSS<~> (CSS:<++> (<css-keyword> css-gradient-hside-option)
+                                                          (<css-keyword> css-gradient-vside-option))
+                                                named-directions->degrees)]
+                    [else (CSS:<*> (<css-angle>) '?)]))
+           (<:color-stop-list:>))]
   #:where
-  [(define (<:color-stop:>)
-     (CSS<+> (CSS<~> (CSS:<&> (<css-color>) (<css:length-percentage>)) fold-color+position)
-             (CSS:<&> (<css-color>))
-             (CSS<~> (CSS:<&> (<css:length-percentage>) (<css-color>)) fold-position+color)))
-
-   (define (<:color-hint:>)
-     (CSS:<&> (<css:length-percentage>) (<css-comma>)))
+  [(define (<:color-stop+comma:>)
+     (css-comma-followed-parser
+      ;; NOTE: it's much more efficient to parse <length-percentage> than to parse <css-color>, hence the `fold-color+maybe-position`
+      (CSS<+> (CSS<~> (CSS:<&> (<css:length-percentage>) (<css-color>)) fold-position+color)
+              (CSS<~> (CSS<&> (CSS:<^> (<css-color>)) (CSS:<*> (<css:length-percentage>) '?)) fold-color+maybe-position))))
    
+   (define (<:color-hint+comma:>)
+     (CSS<*> (CSS<&> (CSS:<^> (CSS:<~> (<css:length-percentage>) linear-hint->fake-stop)) (<:css-skip-comma:>)) '?))
+
+   (define (<:color-stop-list:>)
+     (CSS<!> (CSS<&> (<:color-stop+comma:>)
+                     (CSS<*> (CSS<&> (<:color-hint+comma:>) (<:color-stop+comma:>)) '*))))
+
+   (define (linear-hint->fake-stop [h : Linear-Color-Hint]) : Linear-Color-Stop
+     (cons 'hint-only h))
+
+   (define (fold-color+maybe-position [atad : (Listof Any)]) : (Listof Any)
+     ;; NOTE
+     ; * `atad` are data in reversed order
+     ; * all color stops have been stored as pairs
+     (cond [(null? (cdr atad)) (list (cons (car atad) +nan.0))]
+           [else (let ([maybe-color (cadr atad)])
+                   (cond [(pair? maybe-color) (cons (cons (car atad) +nan.0) (cdr atad))] ; previous color-stop, no position provided in current folding
+                         [else (cons (cons maybe-color (car atad)) (cddr atad))]))]))
+   
+   (define (fold-position+color [atad : (Listof Any)]) : (Listof Any)
+     (cons (cons (car atad) (cadr atad)) (cddr atad)))
+
    (define (named-directions->degrees [side-or-corners : (Listof Any)]) : (Listof Any)
      (define degrees : (Listof Nonnegative-Flonum) (map css-named-direction->degree side-or-corners))
      (cond [(or (null? degrees) (null? (cdr degrees))) degrees]
@@ -86,13 +103,7 @@
                                [(sum) (+ c1 c2)])
                    (list (cond [(> (* c1 c2) 0.0) (* sum 0.5)]
                                [(= sum 90.0) 45.0]
-                               [else 315.0])))]))
-
-   (define (fold-color+position [atad : (Listof Any)]) : (Listof Any)
-     (cons (cons (cadr atad) (car atad)) (cddr atad)))
-   
-   (define (fold-position+color [atad : (Listof Any)]) : (Listof Any)
-     (cons (cons (car atad) (cadr atad)) (cddr atad)))])
+                               [else 315.0])))]))])
 
 (define-css-disjoint-filter <css-image> #:-> CSS-Image-Datum
   ;;; https://drafts.csswg.org/css-images/#image-values
@@ -185,18 +196,18 @@
 
 (define linear-color-stop? : (-> Any Boolean : Linear-Color-Stop)
   (lambda [v]
-    (or (css-color-datum? v)
-        (and (pair? v)
-             (css-color-datum? (car v))
-             (linear-color-hint? (cdr v))))))
+    (and (pair? v)
+         (css-color-datum? (car v))
+         (linear-color-hint? (cdr v)))))
 
-(define linear-stop-or-hint? :  (-> Any Boolean : (U Linear-Color-Stop Linear-Color-Hint))
-  (lambda [v]
-    (or (linear-color-stop? v)
-        (linear-color-hint? v))))
+(define color-stops-or-hints? : (-> (Listof Any) Boolean : (Listof+ Linear-Color-Stop))
+  (lambda [datum]
+    (and (pair? datum)
+         (andmap linear-color-stop? datum))))
 
-(define color-stop-list? : (-> Any Boolean : (Listof+ (U Linear-Color-Stop Linear-Color-Hint)))
+(define color-stop-list? : (-> Any Boolean : Linear-Color-Stops)
   (lambda [datum]
     (and (list? datum)
          (pair? datum)
-         (andmap linear-stop-or-hint? datum))))
+         (linear-color-stop? (car datum))
+         (color-stops-or-hints? (cdr datum)))))
