@@ -42,7 +42,7 @@
          bad))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define css-consume-token : (-> Input-Port (U String Symbol) (U EOF CSS-Token))
+(define css-consume-token : (-> Input-Port (U String Symbol) (U CSS-Token EOF))
   ;;; https://drafts.csswg.org/css-syntax/#error-handling
   ;;; https://drafts.csswg.org/css-syntax/#consume-a-token
   (lambda [/dev/cssin source]

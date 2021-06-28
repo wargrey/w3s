@@ -156,7 +156,7 @@
     (define name : CSS:@Keyword (css-@rule-name import))
     (define ?block : (Option CSS:Block) (css-@rule-block import))
     (define ?target.css : (U Path CSS-Syntax-Error)
-      (cond [(eof-object? uri) (make+exn:css:empty (css-@rule-name import))]
+      (cond [(not uri) (make+exn:css:empty (css-@rule-name import))]
             [(css:string=<-? uri non-empty-string?) => (λ [url] (css-url-string->path parent-href url))]
             [(css:url=<-? uri non-empty-string?) => (λ [url] (css-url-string->path parent-href url))]
             [(or (css:string? uri) (css:url? uri)) (make+exn:css:empty uri)]
@@ -181,16 +181,16 @@
     (define-values (2nd terminal) (css-car rest))
     (define ?block : (Option CSS:Block) (css-@rule-block ns))
     (define namespace : (U String CSS-Syntax-Error)
-      (let ([uri (if (eof-object? 2nd) 1st 2nd)])
+      (let ([uri (if (not 2nd) 1st 2nd)])
         (cond [(css:string? uri) (css:string-datum uri)]
               [(css:url? uri) (css:url-datum uri)]
-              [(eof-object? 1st) (make+exn:css:empty (css-@rule-name ns))]
+              [(not 1st) (make+exn:css:empty (css-@rule-name ns))]
               [else (make+exn:css:type uri)])))
     (cond [(exn? namespace) namespace]
           [(css:block? ?block) (make+exn:css:overconsumption ?block)]
           [(css-pair? terminal) (make+exn:css:overconsumption terminal)]
           [(css:ident? 1st) (cons (css:ident-datum 1st) namespace)]
-          [(eof-object? 2nd) (cons '|| namespace)]
+          [(not 2nd) (cons '|| namespace)]
           [else (make+exn:css:type 1st)])))
 
 (define css-@condition->conditional-rule : (-> CSS-@Rule CSS-Stylesheet-Pool (U CSS-@Media-Rule CSS-@Supports-Rule CSS-Syntax-Error Void))
@@ -231,7 +231,7 @@
     (define ?block : (Option CSS:Block) (css-@rule-block viewport))
     (define name : (U Symbol CSS-Syntax-Error)
       (cond [(css:ident? modname) (css:ident-datum modname)]
-            [(eof-object? modname) 'test]
+            [(not modname) 'test]
             [else (make+exn:css:type modname)]))
     (cond [(exn? name) name]
           [(css-pair? terminal) (make+exn:css:overconsumption terminal)]

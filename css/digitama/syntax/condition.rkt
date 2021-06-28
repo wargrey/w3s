@@ -14,6 +14,7 @@
 (require (for-syntax racket/syntax))
 (require (for-syntax racket/symbol))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-syntax (define-make-media-features stx)
   (syntax-case stx [:]
     [(_ make-immutable-features [feature : DataType #:= defval] ...)
@@ -27,6 +28,7 @@
            (make-immutable-hasheq
             (list (cons 'feature feature) ...)))))]))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; https://drafts.csswg.org/css-conditional/#at-supports
 ;; https://drafts.csswg.org/mediaqueries/#media-types
 ;; https://drafts.csswg.org/mediaqueries/#mq-syntax
@@ -122,7 +124,7 @@
       (cond [(vector? query)
              (define name : Symbol (vector-ref query 0))
              (define value : CSS-Media-Datum (vector-ref query 2))
-             (define feature : (U CSS-Media-Datum EOF) (hash-ref features name (λ _ eof)))
+             (define feature : (Option CSS-Media-Datum) (hash-ref features name (λ _ #false)))
              (cond [(symbol? value) (eq? value feature)] ; TODO: values of color-gamut are ordered symbols
                    [(real? feature) (case (vector-ref query 1)
                                       [(#\>) (> feature value)] [(#\≥) (>= feature value)]

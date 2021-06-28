@@ -21,7 +21,7 @@
                [lazy? : Boolean #false]
                [rest : (Listof CSS-Token) components])
       (define-values (head tail) (if <!> (css-car/cdr rest) (css-car rest)))
-      (if (eof-object? head)
+      (if (not head)
           (let ([all (reverse lla)]) ; (reverse) does not know non-null list.
             ; whitespace-only <declaration-value>s are also valid, but they are only meaningful for variables.
             (cond [(pair? all) (values all (and (not var?) <!> #true) lazy?)]
@@ -62,7 +62,7 @@
     (let var-fold ([seulav : (Listof CSS-Token) null]
                    [--values : (Listof CSS-Token) var-values])
       (define-values (head tail) (css-car/cdr --values))
-      (cond [(eof-object? head) (if (css-pair? seulav) (reverse (filter-not css:whitespace? seulav)) seulav)]
+      (cond [(not head) (if (css-pair? seulav) (reverse (filter-not css:whitespace? seulav)) seulav)]
             [(not (css-lazy-token? head)) (var-fold (cons head seulav) tail)]
             [(and (css:function? head) (css:function-lazy? head))
              (define args : (Listof CSS-Token) (css-variable-substitute property (css:function-arguments head) varbase refpath))
@@ -95,7 +95,7 @@
     (define-values (--var ?fallback-list) (css-car (css:function-arguments var)))
     (define-values (?comma fallback) (css-car ?fallback-list))
     (cond [(not (css:ident=<-? --var symbol-unreadable?)) (make+exn:css:type:variable --var)]
-          [(eof-object? ?comma) (w3s-remake-token var css:var (css:ident-datum --var) null #false)]
+          [(not ?comma) (w3s-remake-token var css:var (css:ident-datum --var) null #false)]
           [(not (css:comma? ?comma)) (make+exn:css:missing-comma ?comma)]
           [else (let-values ([(?fallback _ lazy?) (css-any->declaration-value ?comma fallback #true)])
                   (cond [(exn? ?fallback) ?fallback]
@@ -122,7 +122,7 @@
           [(css:@keyword? token)
            (define-values (next rest) (css-car/cdr candidates))
            (define binding : Symbol (string->symbol (substring (keyword->immutable-string (css:@keyword-datum token)) 1)))
-           (if (or (eof-object? next) (not (css:block? next)))
+           (if (or (not next) (not (css:block? next)))
                (values (w3s-remake-token token css:racket binding) #false candidates)
                (let-values ([(argl lazy?) (css-lazy-subtokens-map (filter-not css:whitespace? (css:block-components next)))])
                  (cond [(exn:css? argl) (values argl #false candidates)]
@@ -174,16 +174,16 @@
                     [lgra : (Listof CSS-Token) null]
                     [tail : (Listof CSS-Token) argl])
       (define-values (head rest) (css-car/cdr tail))
-      (cond [(eof-object? head) (append (reverse swk) (reverse lgra))]
+      (cond [(not head) (append (reverse swk) (reverse lgra))]
             [(css:delim=:=? head #\#)
              (define-values (?: :kw+rest) (css-car/cdr rest))
              (define-values (?kw value+rest) (css-car/cdr :kw+rest))
              (define-values (kw-value others) (css-car/cdr value+rest))
-             (cond [(or (eof-object? ?:) (not (css:colon? ?:))) (rearrange swk (cons head lgra) rest)]
-                   [(or (eof-object? ?kw) (not (css:ident? ?kw))) (rearrange swk (list* ?: head lgra) :kw+rest)]
+             (cond [(or (not ?:) (not (css:colon? ?:))) (rearrange swk (cons head lgra) rest)]
+                   [(or (not ?kw) (not (css:ident? ?kw))) (rearrange swk (list* ?: head lgra) :kw+rest)]
                    [else (let* ([:kw (string->keyword (symbol->immutable-string (css:ident-datum ?kw)))]
                                 [<#:kw> (w3s-remake-token [head ?kw] css:#:keyword :kw)])
-                           (cond [(eof-object? kw-value) (make+exn:css:missing-value <#:kw>)]
+                           (cond [(not kw-value) (make+exn:css:missing-value <#:kw>)]
                                  [else (rearrange (cons kw-value (cons <#:kw> swk)) lgra others)]))])]
             [else (rearrange swk (cons head lgra) rest)]))))
 
@@ -192,6 +192,6 @@
     (let modifiers-filter ([sreifidom : (Listof CSS-URL-Modifier) null]
                            [tail : (Listof CSS-Token) modifiers])
       (define-values (head rest) (css-car tail))
-      (cond [(eof-object? head) (reverse sreifidom)]
+      (cond [(not head) (reverse sreifidom)]
             [(or (css:ident? head) (css-lazy-token? head)) (modifiers-filter (cons head sreifidom) rest)]
             [else (make+exn:css:type (list url head)) (modifiers-filter sreifidom rest)]))))

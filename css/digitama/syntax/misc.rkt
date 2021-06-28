@@ -10,6 +10,7 @@
 (require (for-syntax racket/syntax))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; For performance, mutating racket parameters costs too much ...
 (define-syntax (define-css-parameter stx)
   (syntax-case stx [:]
     [(_ id : Type #:= defval)

@@ -13,6 +13,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-syntax (tamer-context stx)
   (syntax-case stx []
+    [(_ desc parser #:do (it-check args ...) ...)
+     (syntax/loc stx
+       (context desc #:do
+                (it-check parser args ...)
+                ...))]
     [(_ desc filters CSS:<> CSS<> #:do (it-check args ...) ...)
      (syntax/loc stx
        (context desc #:do
@@ -73,6 +78,15 @@
     #:it
     ["should be parsed into a ~a-length list, and whose values might be '~a, when fed with ~s" size expt-values com.css] #:when maybe-count
     ["should fail, when fed with ~s" com.css]
+    #:do
+    (check-no-ordered-values vs expt-values)))
+
+(define-behavior (it-check-tricky-<&&> parser expected-values maybe-count)
+  (let*-values ([(com.css) (string-join (map ~a (append expected-values (list '<&&>))))]
+                [(expt-values size) (maybe-expected-values->values null expected-values maybe-count)]
+                [(vs rest) (tamer-parse com.css parser)])
+    #:it
+    ["should be parsed into a ~a-length list, and whose values might be '~a, when fed with ~s" size expt-values com.css]
     #:do
     (check-no-ordered-values vs expt-values)))
 
@@ -180,9 +194,8 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-feature recognizer #:do
-  (let ([filters (list (procedure-rename (<css:ident>) '<css:ident>)
-                       (procedure-rename (<css:integer>) '<css:integer>)
-                       (procedure-rename (<css:delim>) '<css:delim>))])
+  (let ([filters (list (<css:ident>) (<css:integer>) (<css:delim>))]
+        [parser (CSS<&&> (CSS:<^> (<css:ident>)) (CSS:<*> (<css:integer>) '?))])
     (context "combinators" #:do
              (tamer-context "juxtaposing values" filters CSS:<&> CSS<&> #:do
                            (it-check-<&> (list 'juxtaposing 128 #\&) #true)
@@ -191,6 +204,11 @@
              (tamer-context "combine-all" filters CSS:<&&> CSS<&&> #:do
                            (it-check-<&&> (list 128 'combine-all #\&) #true)
                            (it-check-<&&> (list 'combine-all #\&) #false))
+             
+             (tamer-context "combine-all with optional component" parser #:do
+                            (it-check-tricky-<&&> (list 128 'combine-all #\&) '(combine-all 128))
+                            (it-check-tricky-<&&> (list 'combine-all #\&) '(combine-all))
+                            (it-check-tricky-<&&> (list 128 #\&) #false))
                         
              (tamer-context "combine-any" filters CSS:<++> CSS<++> #:do
                            (it-check-<++> (list 128.0 'combine-any #\&) #false)
@@ -231,7 +249,13 @@
                       (tamer-context "1, 2, 3," filter CSS:<#> CSS<#> #:invalid-do
                                      (it-check-invalid-<#> exn:css:missing-value?))
                       (tamer-context "1, 2, 3, end" filter CSS:<#> CSS<#> #:invalid-do
-                                     (it-check-invalid-<#> 3)))))
+                                     (it-check-invalid-<#> 3))
+
+                      (let ([parser (CSS<#> (CSS:<*> filter '?) '+)])
+                        (context "with optional component and emitted commas before, after, and between values" #:do
+                                 (it-check-invalid-<#> ", 1, 2, 3" parser exn:css:missing-value?)
+                                 (it-check-invalid-<#> "1, , 2, 3" parser exn:css:missing-value?)
+                                 (it-check-invalid-<#> "1, 2, 3," parser exn:css:missing-value?))))))
 
   (context "functions" #:do
            (context "color functions" #:do
@@ -245,7 +269,24 @@
                     (it-check-function "image(rtl \"tamer.png\", rgb(0 0.5 0 / 0.618))" (<css-image-notation>) css-image?)
 
                     (context "gradient functions" #:do
-                             (it-check-function "url(tamer.png)" (<css-image>) string?)))))
+                             (it-check-function "linear-gradient(left)" (<css-gradient-notation>) 'exn:css:type)
+
+                             (context "linear gradients" #:do
+                                      (context "vertical gradient" #:do
+                                               (it-check-function "linear-gradient(yellow, blue)" (<css-gradient-notation>) linear-gradient?)
+                                               (it-check-function "linear-gradient(180deg, yellow, blue)" (<css-gradient-notation>) linear-gradient?)
+                                               (it-check-function "linear-gradient(to top, blue, yellow)" (<css-gradient-notation>) linear-gradient?)
+                                               (it-check-function "linear-gradient(to bottom, 0% yellow, blue 100%)" (<css-gradient-notation>) linear-gradient?))
+                                      
+                                      (context "gradient with angle" #:do
+                                               (it-check-function "linear-gradient(135deg, yellow, blue)" (<css-gradient-notation>) linear-gradient?)
+                                               (it-check-function "linear-gradient(-45deg, blue, yellow)" (<css-gradient-notation>) linear-gradient?))
+
+                                      (context "3-color gradient" #:do
+                                               (it-check-function "linear-gradient(yellow, blue 20%, #0f0)" (<css-gradient-notation>) linear-gradient?))
+                                      
+                                      (context "corner-to-corner gradient" #:do
+                                               (it-check-function "linear-gradient(to top right, red, white, blue)" (<css-gradient-notation>) linear-gradient?)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (module+ main

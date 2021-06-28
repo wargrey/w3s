@@ -41,7 +41,7 @@
                                  [(bytes? /dev/stdin) (open-input-bytes /dev/stdin '/dev/cssin/bytes)]
                                  [else (open-input-string (~s /dev/stdin) '/dev/cssin/error)])]
                [/dev/cssin : Input-Port (css-fallback-encode-input-port /dev/rawin)]
-               [peek-pool : (Listof CSS-Syntax-Any) null])
+               [peek-pool : (Listof (U CSS-Token EOF)) null])
           (define portname : (U String Symbol)
             (let ([src (object-name /dev/cssin)])
               (cond [(path? src) (path->string (simple-form-path src))]
@@ -49,9 +49,9 @@
           (make-input-port portname
                            (λ [[buf : Bytes]]
                              (λ _ (cond [(null? peek-pool) (css-consume-token /dev/cssin portname)]
-                                        [else (let-values ([(rest peeked) (split-at-right peek-pool 1)])
-                                                (set! peek-pool rest)
-                                                (car peeked))])))
+                                            [else (let-values ([(rest peeked) (split-at-right peek-pool 1)])
+                                                    (set! peek-pool rest)
+                                                    (car peeked))])))
                            (λ [[buf : Bytes] [skip : Nonnegative-Integer] [evt : Any]]
                              ; NOTE: It seems that optimizing this code to always throw the last peeked token
                              ;        does not improve the performance.
@@ -65,15 +65,15 @@
                            (λ [] (port-next-location /dev/cssin))
                            (λ [] (void (list css-fallback-encode-input-port '|has already set it|))))))))
     
-(define css-read-syntax/skip-whitespace : (-> Input-Port CSS-Syntax-Any)
+(define css-read-syntax/skip-whitespace : (-> Input-Port (U CSS-Token EOF))
   (lambda [css]
     (define token (css-read-syntax css))
     (cond [(not (css:whitespace? token)) token]
           [else (css-read-syntax/skip-whitespace css)])))
 
-(define css-peek-syntax/skip-whitespace : (-> Input-Port CSS-Syntax-Any)
+(define css-peek-syntax/skip-whitespace : (-> Input-Port (U CSS-Token EOF))
   (lambda [css]
-    (let peek/skip-whitespace : CSS-Syntax-Any ([skip : Nonnegative-Fixnum 0])
+    (let peek/skip-whitespace : (U CSS-Token EOF) ([skip : Nonnegative-Fixnum 0])
       (define token (css-peek-syntax css skip))
       (cond [(not (css:whitespace? token)) token]
             [else (peek/skip-whitespace (fx+ skip 1))]))))

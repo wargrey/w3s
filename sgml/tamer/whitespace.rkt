@@ -42,7 +42,7 @@
                   [(space status) (xml-consume-token* /dev/xmlin portname status)]
                   [(> status) (xml-consume-token* /dev/xmlin portname status)]
                   [(ws status) (xml-consume-token* /dev/xmlin portname status)])
-      ws)))
+      (and (xml-token? ws) ws))))
 
 (define tamer-xml:space-default : (-> XML:WhiteSpace (Option XML:Space-Filter) Symbol String XML-Syntax-Any)
   (lambda [ws filter tag xml:lang]

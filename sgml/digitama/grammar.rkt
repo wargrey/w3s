@@ -90,7 +90,7 @@
     (let extract-declaration ([rest : (Listof XML-Token) tokens]
                               [name : (Option XML:Name) #false]
                               [seidob : (Listof XML-Doctype-Body*) null])
-      (cond [(null? rest) (make+exn:xml:eof eof) (values #false null)]
+      (cond [(null? rest) (make+exn:xml:eof #false) (values #false null)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml:whitespace? self) (extract-declaration rest++ name seidob)]
                           [(xml:etag? self) (values (and name (vector-immutable name (reverse seidob))) rest++)]
@@ -117,7 +117,7 @@
       (let extract-condition : (Values (U XML:Name XML:PEReference False) (Listof XML-Token))
         ([rest : (Listof XML-Token) tokens]
          [condition : (U XML:Name XML:PEReference False) #false])
-        (cond [(null? rest) (make+exn:xml:eof eof) (values #false null)]
+        (cond [(null? rest) (make+exn:xml:eof #false) (values #false null)]
               [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                       (cond [(xml:whitespace? self) (extract-condition rest++ condition)]
                             [(or (xml:name? self) (xml:pereference? self)) (extract-condition rest++ self)]
@@ -126,7 +126,7 @@
     
     (let extract-section ([rest : (Listof XML-Token) body-tokens]
                           [seidob : (Listof XML-Definition*) null])
-      (cond [(null? rest) (make+exn:xml:eof eof condition) (values #false null)]
+      (cond [(null? rest) (make+exn:xml:eof #false condition) (values #false null)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml:whitespace? self) (extract-section rest++ seidob)]
                           [(xml:decl? self)
@@ -150,7 +150,7 @@
     (let extract-pi ([rest : (Listof XML-Token) tokens]
                      [target : (Option XML:Name) #false]
                      [body : (Option XML:String) #false])
-      (cond [(null? rest) (make+exn:xml:eof eof) (values #false null)]
+      (cond [(null? rest) (make+exn:xml:eof #false) (values #false null)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml:name? self) (extract-pi rest++ self body)]
                           [(xml:string? self) (extract-pi rest++ target self)]
@@ -162,7 +162,7 @@
   ;;; https://www.w3.org/TR/xml/#NT-ETag
   ;;; https://www.w3.org/TR/xml/#NT-content
   (lambda [tokens]
-    (cond [(null? tokens) (make+exn:xml:eof eof) (values #false null)]
+    (cond [(null? tokens) (make+exn:xml:eof #false) (values #false null)]
           [else (let-values ([(?name rest++) (values (car tokens) (cdr tokens))])
                   ; broken start tag should not affect its parent and sibling elements.
                   (define tagname : (Option XML:Name)
@@ -184,7 +184,7 @@
     ;   error spans the end of the StartTag or first whitespaces
     (let extract-element-attributes ([rest : (Listof XML-Token) tokens]
                                      [setubirtta : (Listof XML-Element-Attribute*) null])
-      (cond [(null? rest) (make+exn:xml:eof eof tagname) (values setubirtta #false null)]
+      (cond [(null? rest) (make+exn:xml:eof #false tagname) (values setubirtta #false null)]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml:etag? self) (values (reverse setubirtta) #true rest++)]
                           [(xml:cstag? self) (values (reverse setubirtta) #false rest++)]
@@ -201,7 +201,7 @@
     (let extract-subelement ([rest : (Listof XML-Token) tokens]
                              [nerdlidc : (Listof (U XML-Element* XML-Subdatum*)) null])
       (cond [(null? rest)
-             (cond [(not body-only?) (make+exn:xml:eof eof tagname) (values #false null)]
+             (cond [(not body-only?) (make+exn:xml:eof #false tagname) (values #false null)]
                    [else #| end expanding general entity |# (values (reverse nerdlidc) null)])]
             [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                     (cond [(xml-cdata-token? self) (extract-subelement rest++ (cons self nerdlidc))]
@@ -300,7 +300,7 @@
                     (cond [(not (xml:delim=:=? self #\[)) (xml-grammar-throw declname self) (trim rest++)]
                           [else (let extract-intsubset ([rest : (Listof XML-Doctype-Body*) rest++]
                                                         [snoitinifed : (Listof XML-Definition*) null])
-                                  (cond [(null? rest) #| missing ']', inset is malformed |# (make+exn:xml:eof eof declname) null]
+                                  (cond [(null? rest) #| missing ']', inset is malformed |# (make+exn:xml:eof #false declname) null]
                                         [else (let-values ([(self rest++) (values (car rest) (cdr rest))])
                                                 (cond [(xml:pereference? self) (extract-intsubset rest++ (cons self snoitinifed))]
                                                       [(xml-section? self) (extract-intsubset rest++ (cons self snoitinifed))]

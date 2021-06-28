@@ -48,7 +48,7 @@
           [(field : Type ...) (values (cons #'(? (make-predicate (U Type ...)) field) snrettap) (cons #'field stnemugra))]
           ;[,field (values (cons #'field snrettap) (cons #'field stnemugra))] ; this pattern seems useless yet troublesome
           [_ (let ([? (datum->syntax #'_ (gensym))]) (values (cons ? snrettap) (cons ? stnemugra)))]
-          [* (values (cons #'[... ...] snrettap) stnemugra)]
+          [* (values (cons #'[... ...] snrettap) stnemugra)] ; this would make sense if typed racket could understand it 
           [field (values snrettap (cons #'field stnemugra))])))
     (list (list* #'list #'_ (reverse snerttap)) (cons <constructor> (reverse stnemugra))))
   (syntax-parse stx
@@ -285,10 +285,10 @@
                    (values (if (< least n+1) data++ datum) tokens--))]
               [(= n+1 most) (values (cons datum data++) tail)]
               [else (let-values ([(?comma --tokens) (css-car/cdr tail)])
-                      (cond [(eof-object? ?comma) (mult-comma (cons datum data++) --tokens (add1 n+1) omissible?)] ; to check the least boundry
-                            [(not (css:comma? ?comma)) (values (make-exn:css:missing-comma ?comma) --tokens)]
+                      (cond [(not ?comma) (mult-comma (cons datum data++) --tokens (add1 n+1) #false)] ; to check the least boundry
+                            [(not (css:comma? ?comma)) (values (make-exn:css:missing-comma ?comma) tail)]
                             [(null? --tokens) (values (make-exn:css:missing-value ?comma) --tokens)]
-                            [else (mult-comma (cons datum data++) --tokens (add1 n+1) omissible?)]))])))))
+                            [else (mult-comma (cons datum data++) --tokens (add1 n+1) #false)]))])))))
 
 (define CSS:<!> : (->* ((CSS:Filter Any)) ((U (CSS-Multiplier Positive-Index) '+)) (CSS-Parser (Listof Any)))
   ;;; (WARNING: this is *not*) https://drafts.csswg.org/css-values/#mult-req
@@ -468,10 +468,11 @@
                      (values (if (< least n+1) data++ ++data) tokens--)))]
               [(= n+1 most) (values ++data tail)]
               [else (let-values ([(?comma --tokens) (css-car/cdr tail)])
-                      (cond [(eof-object? ?comma) (mult-comma ++data --tokens (add1 n+1) omissible?)] ; to check least boundry
-                            [(not (css:comma? ?comma)) (values (make-exn:css:missing-comma ?comma) --tokens)]
+                      (cond [(not ?comma) (mult-comma ++data --tokens (add1 n+1) #false)] ; to check least boundry
+                            [(not (css:comma? ?comma)) (values (make-exn:css:missing-comma ?comma) tail)]
                             [(null? --tokens) (values (make-exn:css:missing-value ?comma) --tokens)]
-                            [else (mult-comma ++data --tokens (add1 n+1) omissible?)]))])))))
+                            [(eq? data++ ++data) (values (make-exn:css:missing-value ?comma) --tokens)]
+                            [else (mult-comma ++data --tokens (add1 n+1) #false)]))])))))
 
 (define CSS<!> : (->* ((CSS-Parser (Listof Any))) ((U (CSS-Multiplier Positive-Index) '+)) (CSS-Parser (Listof Any)))
   ;;; (WARNING: this is *not*) https://drafts.csswg.org/css-values/#mult-req
@@ -630,9 +631,11 @@
   (CSS:<=> (<css:integer> = 1) 1.0))
 
 (define-css-disjoint-filter <css-angle> #:-> Flonum
-  (CSS:<~> (<css:integer>) exact->inexact)
-  (<css:flonum>)
-  (<css:angle>))
+  #:with [[restriction : (Option (U '#:legacy '#:strict)) #false]]
+  (case restriction
+    [(#:strict) (<css:angle>)]
+    [(#:legacy) (CSS:<+> (<css:angle>) (CSS:<=> (<css:integer> = 0) 0.0) (<css:flonum> = 0.0))] ; CSS will disable this in the future
+    [else (CSS:<+> (<css:angle>) (<css:flonum>) (CSS:<~> (<css:integer>) exact->inexact))]))
 
 (define <:css-keywords:> : (->* ((Listof Symbol)) (Symbol) (CSS-Parser (Listof Any)))
   (lambda [options [none 'none]]
@@ -645,10 +648,17 @@
 
 (define (<css-comma>) : (CSS:Filter Char) (CSS:<?> (<css:delim> #\,) make-exn:css:missing-comma))
 (define (<css-slash>) : (CSS:Filter Char) (CSS:<?> (<css:delim> #\/) make-exn:css:missing-slash))
+(define (<css-keyword:to>) : (CSS:Filter Symbol) (CSS:<?> (<css:ident> 'to) make-exn:css:missing-keyword))
+(define (<css-keyword:at>) : (CSS:Filter Symbol) (CSS:<?> (<css:ident> 'at) make-exn:css:missing-keyword))
 
 (define (<css+unitless>) : (CSS:Filter CSS+Unitless) (CSS:<~> (<css+real>) (λ [[v : Nonnegative-Real]] (let ([flv (real->double-flonum v)]) (css+unitless flv flv)))))
 (define (<css-percentage>) : (CSS:Filter CSS-%) (CSS:<~> (<css:percentage>) (λ [[v : Flonum]] (css-% v))))
 (define (<css+percentage>) : (CSS:Filter CSS+%) (CSS:<~> (<css:percentage> nonnegative-flonum?) (λ [[v : Nonnegative-Flonum]] (css+% v v))))
+
+(define (<css:length-percentage>) : (CSS:Filter (U Flonum CSS+%)) (CSS:<+> (<css:length>) (<css:percentage>)))
+(define (<css:frequency-percentage>) : (CSS:Filter (U Flonum CSS+%)) (CSS:<+> (<css:frequency>) (<css:percentage>)))
+(define (<css:angle-percentage>) : (CSS:Filter (U Flonum CSS+%)) (CSS:<+> (<css:angle>) (<css:percentage>)))
+(define (<css:time-percentage>) : (CSS:Filter (U Flonum CSS+%)) (CSS:<+> (<css:time>) (<css:percentage>)))
 
 (define css-comma-parser : (All (a) (-> (CSS-Parser a) (CSS-Parser a)))
   (lambda [atom-parser]

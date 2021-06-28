@@ -365,13 +365,14 @@
   [exn:css:missing-block      #:-> exn:css:malformed]
   [exn:css:missing-value      #:-> exn:css:malformed]
   [exn:css:missing-feature    #:-> exn:css:malformed]
+  [exn:css:missing-keyword    #:-> exn:css:malformed]
   [exn:css:missing-delimiter  #:-> exn:css:malformed]
   [exn:css:missing-colon      #:-> exn:css:missing-delimiter]
   [exn:css:missing-comma      #:-> exn:css:missing-delimiter]
   [exn:css:missing-slash      #:-> exn:css:missing-delimiter])
 
-(define css-zero? : (-> Any Boolean : #:+ CSS-Zero) (λ [v] (or (css:zero? v) (css:flzero? v))))
-(define css-one? : (-> Any Boolean : #:+ CSS-One) (λ [v] (or (css:one? v) (css:flone? v))))
+(define css-zero? : (-> Any Boolean : CSS-Zero) (λ [v] (or (css:zero? v) (css:flzero? v))))
+(define css-one? : (-> Any Boolean : CSS-One) (λ [v] (or (css:one? v) (css:flone? v))))
 
 (define css-nan? : (-> CSS-Numeric Boolean)
   (lambda [token]
@@ -407,7 +408,7 @@
                                                      Error)
   (lambda [exn:css any]
     (match any
-      [(or (? eof-object?) (list)) (exn:css (~a eof) (current-continuation-marks) null)]
+      [(or #false (list)) (exn:css (~a eof) (current-continuation-marks) null)]
       [(list token) (w3s-token->exn exn:css css-token->string css-token->syntax token)]
       [(list main others ...) (w3s-token->exn exn:css css-token->string css-token->syntax css-token-datum->string main (filter-not css:whitespace? others))]
       [(? css:function? main) (w3s-token->exn exn:css css-token->string css-token->syntax css-token-datum->string main (css:function-arguments main))]
@@ -422,7 +423,7 @@
 
 ;;; https://drafts.csswg.org/css-syntax/#parsing
 ;; Parser Combinators and Syntax Sugars of dealing with declarations for client applications
-(define-type CSS-Syntax-Any (U CSS-Token EOF))
+(define-type CSS-Syntax-Any (Option CSS-Token))
 (define-type (CSS-Multiplier idx) (U idx (List idx) (Pairof (U idx Symbol) (U idx Symbol))))
 (define-type (CSS-Maybe css) (U css CSS-Wide-Keyword))
 (define-type (CSS-Option css) (U css CSS-Syntax-Error False))
@@ -555,24 +556,24 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define css-car/cdr : (All (a b) (case-> [(Pairof a b) -> (Values a b)]
-                                         [(Listof a) -> (Values (U a EOF) (Listof a))]))
+                                         [(Listof a) -> (Values (Option a) (Listof a))]))
   (lambda [pretend-no-whitespace]
-    (cond [(null? pretend-no-whitespace) (values eof null)]
+    (cond [(null? pretend-no-whitespace) (values #false null)]
           [else (values (car pretend-no-whitespace) (cdr pretend-no-whitespace))])))
 
-(define css-car/cadr : (All (a) (case-> [(Pairof a (Listof a)) -> (Values a (Listof a) (U a EOF) (Listof a))]
-                                        [(Listof a) -> (Values (U a EOF) (Listof a) (U a EOF) (Listof a))]))
+(define css-car/cadr : (All (a) (case-> [(Pairof a (Listof a)) -> (Values a (Listof a) (Option a) (Listof a))]
+                                        [(Listof a) -> (Values (Option a) (Listof a) (Option a) (Listof a))]))
   (lambda [pretend-no-whitespace]
-    (cond [(null? pretend-no-whitespace) (values eof null eof null)]
+    (cond [(null? pretend-no-whitespace) (values #false null #false null)]
           [else (let ([1st (car pretend-no-whitespace)]
                       [2nd (cdr pretend-no-whitespace)])
-                  (cond [(null? 2nd) (values 1st null eof null)]
+                  (cond [(null? 2nd) (values 1st null #false null)]
                         [else (values 1st 2nd (car 2nd) (cdr 2nd))]))])))
 
-(define css-car : (-> (Listof CSS-Token) (Values CSS-Syntax-Any (Listof CSS-Token)))
+(define css-car : (All (a) (-> (Listof a) (Values (Option a) (Listof a))))
   (lambda [dirty]
     (let skip-whitespace ([rest dirty])
-      (cond [(null? rest) (values eof null)]
+      (cond [(null? rest) (values #false null)]
             [else (let-values ([(head tail) (values (car rest) (cdr rest))])
                     (cond [(css:whitespace? head) (skip-whitespace tail)]
                           [else (values head tail)]))]))))

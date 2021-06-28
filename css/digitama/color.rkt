@@ -15,6 +15,9 @@
 (require "../recognizer.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define-type CSS-Color-Datum (U Symbol FlColor CSS-Wide-Keyword))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-css-atomic-filter <css#color> #:-> Hexa #:with [[color-value : css:hash?] [no-alpha? : (Option '#:no-alpha) #false]]
   (or (css-hex-color->rgba color-value)
       (make-exn:css:range color-value))
@@ -87,13 +90,20 @@
    (define <:rgb:> (CSS:<^> (<rgb-gamut>)))
    (define <:hue:> (CSS:<^> (<css-angle>)))])
 
-(define-css-disjoint-filter <css-color> #:-> (U Symbol FlColor CSS-Wide-Keyword)
+(define-css-disjoint-filter <css-color> #:-> CSS-Color-Datum
   ;;; https://drafts.csswg.org/css-color/#color-type
   ;;; https://drafts.csswg.org/css-color/#named-colors
-  #:with [[hint? : Any #false]]
+  #:with [[hint? : (Option '#:inherit-currentcolor) #false]]
   (CSS:<~> (<css-keyword> (cons 'currentcolor (cons 'transparent (hash-keys css-named-colors))))
            (λ [[c : Symbol]] (cond [(not (eq? c 'currentcolor)) c]
                                    [(not hint?) c]
                                    [else css:inherit])))
   (<css#color>)
   (<css-color-notation>))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define css-color-datum? : (-> Any Boolean : CSS-Color-Datum)
+  (lambda [v]
+    (or (symbol? v)
+        (flcolor? v)
+        (css-wide-keyword? v))))

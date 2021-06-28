@@ -96,7 +96,7 @@
        (cond [(css:#:keyword? head)
               (define-values (value rest) (css-car/cdr tail))
               (define λ:kw : Keyword (css:#:keyword-datum head))
-              (cond [(eof-object? value) (make-exn:css:arity head)]
+              (cond [(not value) (make-exn:css:arity head)]
                     [(not (memq λ:kw λ:all)) (make-exn:css:range head)]
                     [else (let ([kw:filter (λfilter λname λ:kw)])
                             (cond [(void? kw:filter) (λ-fold swk λ:mkws rest)]

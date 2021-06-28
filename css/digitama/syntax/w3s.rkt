@@ -20,19 +20,19 @@
                 (struct exn:w3s exn:fail:syntax ())
                 (struct subexn parent ()) ...
 
-                (define make-exn : (-> (U EOF Token (Listof Token)) subexn)
+                (define make-exn : (-> (U False Token (Listof Token)) subexn)
                   (lambda [v]
                     (make-syntax-error subexn v)))
                 ...
 
-                (define make+exn : (->* ((U EOF Token (Listof Token))) ((Option Token) (Option Log-Level)) subexn)
+                (define make+exn : (->* ((U False Token (Listof Token))) ((Option Token) (Option Log-Level)) subexn)
                   (lambda [v [property #false] [level #false]]
                     (define errobj : subexn (make-syntax-error subexn v))
                     (log-syntax-error errobj property level)
                     errobj))
                 ...
 
-                (define throw-exn : (->* ((U EOF Token (Listof Token))) ((Option Token) Log-Level) Nothing)
+                (define throw-exn : (->* ((U False Token (Listof Token))) ((Option Token) Log-Level) Nothing)
                   (lambda [v [property #false] [level 'warning]]
                     (raise (make+exn v property level))))
                 ...)))]))

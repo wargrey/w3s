@@ -19,7 +19,7 @@
 (require (for-syntax syntax/parse))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-type XML-Syntax-Any (U XML-Token EOF))
+(define-type XML-Syntax-Any (Option XML-Token))
 
 (define-syntax (define-token-interface stx)
   (syntax-case stx [:]
@@ -211,7 +211,7 @@
 (define #:forall (Error) xml-make-syntax-error : (-> (-> String Continuation-Mark-Set (Listof Syntax) Error) (U XML-Syntax-Any (Listof XML-Token)) Error)
   (lambda [exn:xml any]
     (match any
-      [(or (? eof-object?) (list)) (exn:xml (~a eof) (current-continuation-marks) null)]
+      [(or #false (list)) (exn:xml (~a eof) (current-continuation-marks) null)]
       [(list token) (w3s-token->exn exn:xml xml-token->string xml-token->syntax token)]
       [(list main others ...) (w3s-token->exn exn:xml xml-token->string xml-token->syntax xml-token-datum->string main (filter-not xml:whitespace? others))]
       [(? xml-token?) (w3s-token->exn exn:xml xml-token->string xml-token->syntax any)])))

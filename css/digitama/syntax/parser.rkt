@@ -45,7 +45,7 @@
   (lambda [/dev/cssin]
     (define stx (css-read-syntax/skip-whitespace /dev/cssin))
     (define retval : (U CSS-Qualified-Rule CSS-@Rule CSS-Syntax-Error)
-      (cond [(eof-object? stx) (make+exn:css:empty stx)]
+      (cond [(eof-object? stx) (make+exn:css:empty #false)]
             [(css:@keyword? stx) (css-consume-@rule /dev/cssin stx)]
             [else (css-consume-qualified-rule /dev/cssin stx)]))
     (define end (css-read-syntax/skip-whitespace /dev/cssin))
@@ -58,7 +58,7 @@
   ;;; https://drafts.csswg.org/css-conditional/#at-ruledef-supports
   (lambda [/dev/cssin]
     (define token (css-read-syntax/skip-whitespace /dev/cssin))
-    (cond [(not (css:ident? token)) (make+exn:css:type:identifier token)]
+    (cond [(not (css:ident? token)) (make+exn:css:type:identifier (and (css-token? token) token))]
           [else (let-values ([(components _) (css-consume-components /dev/cssin)])
                   (css-components->declaration token components))])))
 
@@ -81,7 +81,7 @@
   ;;; https://drafts.csswg.org/css-syntax/#parse-component-value
   (lambda [/dev/cssin]
     (define token (css-read-syntax/skip-whitespace /dev/cssin))
-    (cond [(eof-object? token) (make+exn:css:empty token)]
+    (cond [(eof-object? token) (make+exn:css:empty #false)]
           [else (let ([retval (css-consume-component-value /dev/cssin token)])
                   (define end (css-read-syntax/skip-whitespace /dev/cssin))
                   (cond [(eof-object? end) retval]
@@ -104,7 +104,7 @@
   ;;; https://drafts.csswg.org/mediaqueries/#mq-syntax
   ;;; https://drafts.csswg.org/mediaqueries/#typedef-media-query-list
   ;;; https://drafts.csswg.org/mediaqueries/#error-handling
-  (lambda [/dev/cssin [rulename : CSS-Syntax-Any eof]]
+  (lambda [/dev/cssin [rulename : CSS-Syntax-Any #false]]
     (for/list : (Listof CSS-Media-Query) ([entry (in-list (css-consume-componentses /dev/cssin #:omit-comma? #true))])
       (with-handlers ([exn:css? (λ [[errcss : exn:css]] errcss)])
         (define-values (token tokens) (css-car entry))
@@ -116,7 +116,7 @@
                (define-values (?type ?<and>)
                  (cond [(css:ident-norm=:=? token 'only) (values next rest)]
                        [else (values token tokens)]))
-               (cond [(eof-object? ?type) (make+exn:css:malformed ?type)]
+               (cond [(not ?type) (make+exn:css:malformed ?type)]
                      [(css:ident? ?type) (css-components->media-type+query ?type #true ?<and>)]
                      [else (make+exn:css:type:identifier ?type)])]
               [else (css-components->feature-query entry #true rulename)])))))
@@ -124,7 +124,7 @@
 (define-css-parser-entry css-parse-feature-query #:-> CSS-Feature-Query
   ;;; https://drafts.csswg.org/mediaqueries/#media-types
   ;;; https://drafts.csswg.org/css-conditional/#at-supports
-  (lambda [/dev/cssin [rulename : CSS-Syntax-Any eof]]
+  (lambda [/dev/cssin [rulename : CSS-Syntax-Any #false]]
     (define-values (conditions _) (css-consume-components /dev/cssin))
     (with-handlers ([exn:css? (λ [[errcss : exn:css]] errcss)])
       (css-components->feature-query conditions #false rulename))))
@@ -244,26 +244,26 @@
       (cond [(css:close=:=? token close-char) (values (reverse components) token token)]
             [(not (eof-object? token)) (consume-body (cons (css-consume-component-value css token) components))]
             [else (let ([end-token (if (null? components) start-token (car components))])
-                    (make+exn:css:missing-delimiter token)
-                    (values (reverse components) token end-token))]))))
+                    (make+exn:css:missing-delimiter #false)
+                    (values (reverse components) #false end-token))]))))
   
 (define css-consume-components : (->* (Input-Port) ((Option Char) Boolean) (Values (Listof CSS-Token) CSS-Syntax-Terminal))
   ;;; https://drafts.csswg.org/css-syntax/#parse-list-of-component-values
   (lambda [css [terminating-char #false] [omit-terminate? #false]]
     (let consume-component ([stnenopmoc : (Listof CSS-Token) null])
       (define token (css-read-syntax css))
-      (cond [(eof-object? token) (values (reverse stnenopmoc) token)]
+      (cond [(eof-object? token) (values (reverse stnenopmoc) #false)]
             [(and terminating-char (css:delim=:=? token terminating-char))
              (define next (css-peek-syntax/skip-whitespace css))
              (cond [(and omit-terminate? (css-null? stnenopmoc))
                     (cond [(and (eof-object? next) (css-read-syntax/skip-whitespace css))
                            (make+exn:css:overconsumption token)
-                           (values (reverse stnenopmoc) eof)]
+                           (values (reverse stnenopmoc) #false)]
                           [else (make+exn:css:empty token)
                                 (css-consume-components css terminating-char omit-terminate?)])]
                    [(eof-object? next)
                     (css-read-syntax/skip-whitespace css)
-                    (values (reverse stnenopmoc) next)]
+                    (values (reverse stnenopmoc) #false)]
                    [else (values (reverse stnenopmoc) token)])]
             [else (consume-component (cons (css-consume-component-value css token) stnenopmoc))]))))
 
@@ -272,7 +272,7 @@
   (lambda [css #:omit-comma? [omit-comma? #true]]
     (let consume-components ([componentses : (Listof (Listof CSS-Token)) null])
       (define-values (components terminating-token) (css-consume-components css #\, omit-comma?))
-      (cond [(not (eof-object? terminating-token)) (consume-components (cons components componentses))]
+      (cond [(or terminating-token) (consume-components (cons components componentses))]
             [(not omit-comma?) (reverse (cons components componentses))]
             [else (filter (inst css-pair? CSS-Token) (reverse (cons components componentses)))]))))
 
@@ -298,7 +298,7 @@
     (define-values (?and ?conditions) (css-car conditions))
     (when (css-deprecate-media-type) (make+exn:css:deprecated media))
     (cond [(memq downcased-type '(only not and or)) (make+exn:css:misplaced media)]
-          [(eof-object? ?and) (if only? (box downcased-type) (CSS-Not (box downcased-type)))]
+          [(not ?and) (if only? (box downcased-type) (CSS-Not (box downcased-type)))]
           [(not (css:ident-norm=:=? ?and 'and)) (make+exn:css:unrecognized ?and)]
           [(css-null? ?conditions) (make+exn:css:missing-feature ?and)]
           [else (cons (if only? (box downcased-type) (CSS-Not (box downcased-type)))
@@ -310,9 +310,9 @@
   (lambda [conditions media? alt]
     (define-values (token rest) (css-car conditions))
     (define-values (op chain) (css-car rest))
-    (cond [(eof-object? token) (throw-exn:css:missing-feature alt)]
+    (cond [(not token) (throw-exn:css:missing-feature alt)]
           [(css:ident-norm=:=? token 'not) (css-components->negation token rest media?)]
-          [(eof-object? op) (css-component->feature-query token media?)]
+          [(not op) (css-component->feature-query token media?)]
           [(css:ident-norm=<-? op '(and or)) (css-components->junction chain (css:ident-norm op) token media?)]
           [else (throw-exn:css:unrecognized op)])))
 
@@ -336,9 +336,9 @@
                         [(and media?) (css-declaration->media-query descriptor condition)]
                         [else descriptor])]
                  [(and media?)
-                  (cond [(and (css:ident? name) (eof-object? op)) (css-make-media-feature name #false #\? #false)]
+                  (cond [(and (css:ident? name) (not op)) (css-make-media-feature name #false #\? #false)]
                         [else (css-components->media-range-query subany condition)])]
-                 [(eof-object? name) (throw-exn:css:empty condition)]
+                 [(not name) (throw-exn:css:empty condition)]
                  [(css:ident? name) (throw-exn:css:missing-colon condition)]
                  [(css:function? condition) (throw-exn:css:enclosed condition)]
                  [else (throw-exn:css:type:identifier condition)])]
@@ -348,7 +348,7 @@
   ;;; https://drafts.csswg.org/mediaqueries/#typedef-media-not
   (lambda [<not> tokens media?]
     (define-values (token rest) (css-car tokens))
-    (cond [(eof-object? token) (throw-exn:css:missing-feature <not>)]
+    (cond [(not token) (throw-exn:css:missing-feature <not>)]
           [(css:ident-norm=:=? token 'not) (throw-exn:css:misplaced token)]
           [(css-null? rest) (CSS-Not (css-component->feature-query token media?))]
           [else (throw-exn:css:overconsumption rest)])))
@@ -361,9 +361,9 @@
                                [--conditions : (Listof CSS-Token) conditions])
       (define-values (condition rest) (css-car --conditions))
       (define-values (token others) (css-car rest))
-      (cond [(eof-object? condition) (junctions->conditional-query junctions op media?)]
+      (cond [(not condition) (junctions->conditional-query junctions op media?)]
             [(css:ident-norm=:=? condition 'not) (throw-exn:css:misplaced condition)]
-            [(or (eof-object? token) (css:ident-norm=:=? token op)) (components->junction (cons condition junctions) others)]
+            [(or (not token) (css:ident-norm=:=? token op)) (components->junction (cons condition junctions) others)]
             [(css:ident-norm=<-? token '(and or)) (throw-exn:css:misplaced token)]
             [else (throw-exn:css:overconsumption token)]))))
 
@@ -376,15 +376,15 @@
     (define-values (value1 rest2) (css-car-media-value rest1))
     (define-values (d1 op1 po1 rest3) (css-car-comparison-operator rest2))
     (define-values (value2 terminal) (css-car-media-value rest3))
-    (cond [(eof-object? value0) (throw-exn:css:empty broken-condition)]
-          [(eof-object? d0) (throw-exn:css:missing-delimiter components)]
-          [(eof-object? value1) (throw-exn:css:missing-value rest0)]
+    (cond [(not value0) (throw-exn:css:empty broken-condition)]
+          [(not d0) (throw-exn:css:missing-delimiter components)]
+          [(not value1) (throw-exn:css:missing-value rest0)]
           [(and (css:ident? value0) (css:delim? d1)) (throw-exn:css:enclosed broken-condition)]
           [(and (eq? op0 #\=) (css:delim? d1)) (throw-exn:css:overconsumption broken-condition)]
           [(css:ident? value0) (css-make-media-feature value0 value1 op0 d0)]
-          [(and (eof-object? d1) (css:ident? value1)) (css-make-media-feature value1 value0 po0 d0)]
+          [(and (not d1) (css:ident? value1)) (css-make-media-feature value1 value0 po0 d0)]
           [(not (css:ident? value1)) (throw-exn:css:type:identifier value1)]
-          [(or (eof-object? value2) (css:ident? value2)) (throw-exn:css:missing-value rest2)]
+          [(or (not value2) (css:ident? value2)) (throw-exn:css:missing-value rest2)]
           [(css-pair? terminal) (throw-exn:css:overconsumption terminal)]
           [(not (eq? (css:delim-datum d0) (css:delim-datum d1))) (throw-exn:css:malformed (list d0 value1 d1))]
           [else (CSS-And (list (css-make-media-feature value1 value0 po0 d0)
@@ -394,16 +394,16 @@
   ;;; https://drafts.csswg.org/mediaqueries/#mq-features
   (lambda [property broken-condition]
     (define-values (media-value rest) (css-car-media-value (css-declaration-values property)))
-    (cond [(eof-object? media-value) (throw-exn:css:enclosed broken-condition)]
+    (cond [(not media-value) (throw-exn:css:enclosed broken-condition)]
           [(css-pair? rest) (throw-exn:css:enclosed broken-condition)]
           [else (css-make-media-feature (css-declaration-name property) media-value #\: #false)])))
 
-(define css-car-comparison-operator : (-> (Listof CSS-Token) (Values (U CSS:Delim EOF) Char Char (Listof CSS-Token)))
+(define css-car-comparison-operator : (-> (Listof CSS-Token) (Values (Option CSS:Delim) Char Char (Listof CSS-Token)))
   ;;; https://drafts.csswg.org/mediaqueries/#mq-range-context
   (lambda [components]
     (define-values (d rest) (css-car components))
     (define-values (?= terminal) (css-car/cdr rest))
-    (cond [(eof-object? d) (values eof #\≠ #\≠ rest)]
+    (cond [(not d) (values #false #\≠ #\≠ rest)]
           [(not (css:delim? d)) (throw-exn:css:type d)]
           [else (case (css:delim-datum d)
                   [(#\=) (values d #\= #\= rest)]
@@ -411,14 +411,14 @@
                   [(#\<) (if (css:delim=:=? ?= #\=) (values d #\≤ #\≥ terminal) (values d #\< #\> rest))]
                   [else (throw-exn:css:range d)])])))
   
-(define css-car-media-value : (-> (Listof CSS-Token) (Values (U CSS-Media-Value EOF) (Listof CSS-Token)))
+(define css-car-media-value : (-> (Listof CSS-Token) (Values (Option CSS-Media-Value) (Listof CSS-Token)))
   ;;; https://drafts.csswg.org/mediaqueries/#typedef-mf-value
   ;;; https://drafts.csswg.org/mediaqueries/#typedef-ratio
   (lambda [components]
     (define-values (value rest) (css-car components))
     (define-values (?/ ?rest) (css-car rest))
     (define-values (?int terminal) (css-car ?rest))
-    (cond [(eof-object? value) (values eof rest)]
+    (cond [(not value) (values #false rest)]
           [(css:slash? ?/)
            (define width : (Option Positive-Integer) (css:integer=<-? value exact-positive-integer?))
            (define height : (Option Positive-Integer) (css:integer=<-? ?int exact-positive-integer?))
@@ -462,16 +462,16 @@
     (with-handlers ([exn:css? (λ [[errcss : exn:css]] errcss)])
       (define-values (head-complex-selector ?eof ?rest) (css-car-complex-selector components namespaces))
       (let extract-complex-selector ([srotceles : (Listof CSS-Complex-Selector) null]
-                                     [terminal : (U EOF CSS:Delim) ?eof]
+                                     [terminal : (Option CSS:Delim) ?eof]
                                      [rest : (Listof CSS-Token) ?rest])
         (if (css-null? rest)
-            (cond [(eof-object? terminal) (cons head-complex-selector (reverse srotceles))]
+            (cond [(not terminal) (cons head-complex-selector (reverse srotceles))]
                   [else (throw-exn:css:overconsumption terminal)])
             (let-values ([(complex-selector ?terminal ?rest) (css-car-complex-selector rest namespaces)])
               (extract-complex-selector (cons complex-selector srotceles) ?terminal ?rest)))))))
   
 (define css-car-complex-selector : (-> (Listof CSS-Token) CSS-Namespace-Hint
-                                       (Values CSS-Complex-Selector (U EOF CSS:Delim) (Listof CSS-Token)))
+                                       (Values CSS-Complex-Selector (Option CSS:Delim) (Listof CSS-Token)))
   ;;; https://drafts.csswg.org/selectors/#structure
   ;;; https://drafts.csswg.org/selectors/#combinators
   ;;; https://drafts.csswg.org/selectors/#grammar
@@ -481,11 +481,11 @@
                            [tokens : (Listof CSS-Token) rest])
       (define-values (?terminal rest) (css-car tokens))
       (define-values (token ?selectors) (css-car/cdr tokens))
-      (cond [(or (eof-object? ?terminal) (css:comma? ?terminal)) (values srotceles ?terminal rest)]
+      (cond [(or (not ?terminal) (css:comma? ?terminal)) (values srotceles ?terminal rest)]
             [(not (css-selector-combinator? token)) (throw-exn:css:unrecognized ?terminal)]
             [else (let*-values ([(combinator ?selectors) (css-car-combinator token ?selectors)]
                                 [(?selector ?rest) (css-car ?selectors)])
-                    (cond [(or (eof-object? ?selector) (css:comma? ?selector)) (throw-exn:css:overconsumption ?selectors)]
+                    (cond [(or (not ?selector) (css:comma? ?selector)) (throw-exn:css:overconsumption ?selectors)]
                           [else (let-values ([(selector rest) (css-car-compound-selector ?selectors combinator namespaces)])
                                   (extract-selector (cons selector srotceles) rest))]))]))))
 
@@ -500,7 +500,7 @@
     (define-values (typename namespace simple-selector-components)
       (cond [(css:ident? head) (css-car-elemental-selector head heads namespaces)]
             [(css:delim=<-? head '(#\| #\*)) (css-car-elemental-selector head heads namespaces)]
-            [(or (eof-object? head) (css:comma? head)) (throw-exn:css:empty head)]
+            [(or (not head) (css:comma? head)) (throw-exn:css:empty head)]
             [else (values #true (or (css-declared-namespace namespaces '||) #true) (cons head heads))]))
     (define-values (:classes selector-components) (css-car-:class-selectors simple-selector-components))
     (let extract-simple-selector ([sessalc : (Listof Symbol) null]
@@ -509,7 +509,7 @@
                                   [pseudo-element : (Option CSS-::Element-Selector) #false]
                                   [selector-tokens : (Listof CSS-Token) selector-components])
       (define-values (token tokens) (css-car/cdr selector-tokens))
-      (cond [(or (eof-object? token) (css:comma? token) (css-selector-combinator? token))
+      (cond [(or (not token) (css:comma? token) (css-selector-combinator? token))
              (values (CSS-Compound-Selector combinator namespace typename (reverse sdi) (reverse sessalc)
                                             (reverse setubirtta) :classes pseudo-element)
                      selector-tokens)]
@@ -600,14 +600,14 @@
     (define-values (1st rest1) (css-car (css:block-components block)))
     (define-values (2nd rest2 3rd rest3) (css-car/cadr rest1))
     (define-values (attrname quirkname namespace op-part)
-      (cond [(eof-object? 1st) (throw-exn:css:empty block)]
+      (cond [(not 1st) (throw-exn:css:empty block)]
             [(or (css:match? 1st) (css:delim=:=? 1st #\=))
              (throw-exn:css:type:identifier block)]
-            [(or (eof-object? 2nd) (css:match? 2nd) (css:delim=:=? 2nd #\=) (css:whitespace? 2nd))
+            [(or (not 2nd) (css:match? 2nd) (css:delim=:=? 2nd #\=) (css:whitespace? 2nd))
              ; WARNING: the namespace behavior for attributes is different from that for elements 
              (cond [(css:ident? 1st) (values (css:ident-datum 1st) (css:ident-norm 1st) #false rest1)]
                    [else (throw-exn:css:type:identifier 1st)])]
-            [(or (eof-object? 3rd) (css:match? 3rd) (css:delim=:=? 3rd #\=) (css:whitespace? 3rd))
+            [(or (not 3rd) (css:match? 3rd) (css:delim=:=? 3rd #\=) (css:whitespace? 3rd))
              (cond [(and (css:vbar? 1st) (css:ident? 2nd)) (values (css:ident-datum 2nd) (css:ident-norm 2nd) #false rest2)]
                    [(css:vbar? 2nd) (throw-exn:css:type:identifier 2nd)]
                    [else (throw-exn:css:unrecognized 1st)])]
@@ -622,22 +622,22 @@
             [else (throw-exn:css:unrecognized 1st)]))
     (define-values (op value-part value ci-part) (css-car/cadr op-part))
     (define-values (i terminal) (css-car ci-part))
-    (unless (eof-object? op)
-      (cond [(eof-object? value) (throw-exn:css:missing-value op)]
-            [(nor (eof-object? i) (css:ident-norm=:=? i 'i)) (throw-exn:css:overconsumption i)]
+    (unless (not op)
+      (cond [(not value) (throw-exn:css:missing-value op)]
+            [(nor (not i) (css:ident-norm=:=? i 'i)) (throw-exn:css:overconsumption i)]
             [(css-pair? terminal) (throw-exn:css:overconsumption terminal)]))
     (define val : (U String Symbol)
       (cond [(css:string? value) (css:string-datum value)]
             [(css:ident? value) (css:ident-datum value)]
-            [(or (css:whitespace? value) (eof-object? value)) ""]
+            [(or (css:whitespace? value) (not value)) ""]
             [else (throw-exn:css:type value)]))
-    (cond [(or (css:whitespace? op) (eof-object? op)) (CSS-Attribute-Selector attrname quirkname namespace)]
+    (cond [(or (css:whitespace? op) (not op)) (CSS-Attribute-Selector attrname quirkname namespace)]
           [(css:delim=:=? op #\=) (CSS-Attribute~Selector attrname quirkname namespace #\= val (css:ident? i))]
           [(css:match? op) (CSS-Attribute~Selector attrname quirkname namespace (css:match-datum op) val (css:ident? i))]
           [else (throw-exn:css:unrecognized op)])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-type CSS-Syntax-Terminal (U CSS:Delim CSS:Close EOF))
+(define-type CSS-Syntax-Terminal (U CSS:Delim CSS:Close False))
 (define-type CSS-Syntax-Rule (U CSS-Qualified-Rule CSS-@Rule))
 (define-type CSS-Media-Value (U CSS-Numeric CSS:Ident CSS:Ratio))
 
@@ -649,10 +649,10 @@
         (let collect : (Values (Listof CSS-Token) (Listof CSS-Token)) ([seulav : (Listof CSS-Token) null]
                                                                        [rest : (Listof CSS-Token) any-values])
           (define-values (head tail) (css-car/cdr rest))
-          (cond [(or (eof-object? head) (css:semicolon? head)) (values (reverse seulav) tail)]
+          (cond [(or (not head) (css:semicolon? head)) (values (reverse seulav) tail)]
                 [(and (css:block=:=? head #\{) (css:@keyword? id)) (values (reverse (cons head seulav)) tail)]
                 [else (collect (cons head seulav) tail)])))
-      (cond [(eof-object? id) (reverse seitreporp)]
+      (cond [(not id) (reverse seitreporp)]
             [(css:ident? id) (make-style-rule (css-cons (css-components->declaration id :values) seitreporp) rest)]
             [else (make-style-rule (css-cons (make+exn:css:type:identifier (cons id :values)) seitreporp) rest)]))))
 
