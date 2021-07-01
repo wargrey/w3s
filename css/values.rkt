@@ -4,6 +4,7 @@
 
 (require "digitama/syntax/digicore.rkt")
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define css-set! : (-> CSS-Values Symbol Any Void)
   (lambda [declared-values property value]
     (hash-set! declared-values property (λ [] value))))

@@ -23,9 +23,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type Image-Set-Option (List CSS-Image-Datum Flonum))
 (define-type Image-Set-Options (Listof Image-Set-Option))
-(define-type Linear-Color-Hint (U Flonum CSS-%)) ; <length-percentage>
-(define-type Linear-Color-Stop (Pairof CSS-Color-Datum Linear-Color-Hint))
+(define-type Linear-Color-Stop (Pairof CSS-Color-Datum CSS-Flonum-%))
 (define-type Linear-Color-Stops (Pairof Linear-Color-Stop (Listof+ Linear-Color-Stop)))
+(define-type Radial-Elliptical-Size (U Nonnegative-Flonum CSS+%))
+(define-type Radial-Size (U Symbol Nonnegative-Flonum (Pairof Radial-Elliptical-Size Radial-Elliptical-Size)))
 
 (define-type CSS-Image-Datum (U CSS-Image String))
 
@@ -34,13 +35,16 @@
 (define-css-value image-set #:as Image-Set #:=> css-image ([options : Image-Set-Options]))
 
 (define-css-value css-gradient #:as CSS-Gradient #:=> css-image ())
-(define-css-value linear-gradient #:as Linear-Gradient #:=> css-gradient ([direction : Flonum] [stops : Linear-Color-Stops]))
+(define-css-value linear-gradient #:as Linear-Gradient #:=> css-gradient ([direction : Flonum] [stops : Linear-Color-Stops] [repeat? : Boolean]))
+(define-css-value radial-gradient #:as Radial-Gradient #:=> css-gradient ([shape : Symbol] [size : Radial-Size] [stops : Linear-Color-Stops] [repeat? : Boolean]))
 
 (define css-image-rendering-option : (Listof Symbol) '(auto crisp-edges pixelated))
 (define css-image-fit-option : (Listof Symbol) '(fill contain cover none scale-down))
 (define css-image-tag : (Listof Symbol) '(ltr rtl))
 (define css-gradient-hside-option : (Listof Symbol) '(left right))
 (define css-gradient-vside-option : (Listof Symbol) '(top bottom))
+(define css-gradient-ending-shape : (Listof Symbol) '(circle ellipse))
+(define css-gradient-size : (Listof Symbol) '(farthest-corner farthest-side closest-corner closest-side))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-css-function-filter <css-image-notation> #:-> CSS-Image
@@ -50,60 +54,64 @@
                  (image #false [content ? css-image? string?] [fallback ? symbol? index? flcolor?])
                  (image [tag ? symbol? false?] "" [fallback ? symbol? index? flcolor?])
                  (image [tag ? symbol? false?] [content ? css-image? string?] [fallback ? symbol? index? flcolor?])]
-   (CSS<&> (CSS:<*> (<css-keyword> css-image-tag) '?)
-           (CSS<+> (CSS:<^> (<css-color>)) ; NOTE: both color and url accept strings, however their domains are not intersective.
-                   (CSS<&> (CSS:<^> (CSS:<+> (<css-image>) (<css:string>)))
-                           (CSS<$> (CSS<?> [(<css-comma>) (CSS:<^> (<css-color>))]) 'transparent))))]
+   (CSS<&> ((inst CSS:<*> Any) (<css-keyword> css-image-tag) '?)
+           (CSS<+> ((inst CSS:<^> Any) (<css-color>)) ; NOTE: both color and url accept strings, however their domains are not intersective.
+                   (CSS<&> ((inst CSS:<^> Any) (CSS:<+> (<css-image>) (<css:string>)))
+                           (CSS<$> (CSS<?> [(<css-comma>) ((inst CSS:<^> Any) (<css-color>))]) 'transparent))))]
   [(image-set) #:=> [(image-set [options ? image-set-options?])]
    (CSS<!> (CSS<#> (CSS<!> (CSS:<^> (list (CSS:<+> (<css:string>) (<css-image>)) (<css+resolution>))))))])
 
 (define-css-function-filter <css-gradient-notation> #:-> CSS-Gradient
   ;;; https://drafts.csswg.org/css-images-4/#gradients
-  [(linear-gradient) #:=> [(linear-gradient [direction ? flonum?] [stops ? color-stop-list?])
-                           (linear-gradient (css-named-direction->degree 'bottom) [stops ? color-stop-list?])]
-   (CSS<&> (css-comma-followed-parser
-            (CSS<?> [(<css-keyword:to>) (CSS<~> (CSS:<++> (<css-keyword> css-gradient-hside-option)
-                                                          (<css-keyword> css-gradient-vside-option))
-                                                named-directions->degrees)]
-                    [else (CSS:<*> (<css-angle>) '?)]))
-           (<:color-stop-list:>))]
+  [(linear-gradient) #:=> [(linear-gradient [direction ? flonum?] [stops ? color-stop-list?] #false)
+                           (linear-gradient (css-named-direction->degree 'bottom) [stops ? color-stop-list?] #false)]
+   (CSS<&> (<:angle-or-direction:>) (<:color-stop-list:>))]
+  [(repeating-linear-gradient) #:=> [(linear-gradient [direction ? flonum?] [stops ? color-stop-list?] #true)
+                                     (linear-gradient (css-named-direction->degree 'bottom) [stops ? color-stop-list?] #true)]
+   (CSS<&> (<:angle-or-direction:>) (<:color-stop-list:>))]
   #:where
-  [(define (<:color-stop+comma:>)
+  [(define (<:angle-or-direction:>)
+     (css-comma-followed-parser
+      (CSS<?> [(<css-keyword:to>) (CSS<~> (CSS:<++> (<css-keyword> css-gradient-hside-option)
+                                                    (<css-keyword> css-gradient-vside-option))
+                                          named-directions->degrees
+                                          null)]
+              [else (CSS:<*> (<css-angle>) '?)])))
+   
+   (define (<:color-stop+comma:>)
      (css-comma-followed-parser
       ;; NOTE: it's much more efficient to parse <length-percentage> than to parse <css-color>, hence the `fold-color+maybe-position`
-      (CSS<+> (CSS<~> (CSS:<&> (<css:length-percentage>) (<css-color>)) fold-position+color)
-              (CSS<~> (CSS<&> (CSS:<^> (<css-color>)) (CSS:<*> (<css:length-percentage>) '?)) fold-color+maybe-position))))
+      (CSS<+> (CSS<~> (CSS:<&> (<css-length-percentage>) (<css-color>)) fold-position+color)
+              (CSS<~> (CSS<&> (CSS:<^> (<css-color>)) (CSS:<*> (<css-length-percentage>) '?)) fold-color+maybe-position))))
    
    (define (<:color-hint+comma:>)
-     (CSS<*> (CSS<&> (CSS:<^> (CSS:<~> (<css:length-percentage>) linear-hint->fake-stop)) (<:css-skip-comma:>)) '?))
+     (CSS<*> (CSS<&> (CSS:<^> (CSS:<~> (<css-length-percentage>) linear-hint->fake-stop)) (<:css-skip-comma:>)) '?))
 
    (define (<:color-stop-list:>)
      (CSS<!> (CSS<&> (<:color-stop+comma:>)
                      (CSS<*> (CSS<&> (<:color-hint+comma:>) (<:color-stop+comma:>)) '*))))
 
-   (define (linear-hint->fake-stop [h : Linear-Color-Hint]) : Linear-Color-Stop
+   (define (linear-hint->fake-stop [h : CSS-Flonum-%]) : Linear-Color-Stop
      (cons 'hint-only h))
 
-   (define (fold-color+maybe-position [atad : (Listof Any)]) : (Listof Any)
-     ;; NOTE
-     ; * `atad` are data in reversed order
-     ; * all color stops have been stored as pairs
-     (cond [(null? (cdr atad)) (list (cons (car atad) +nan.0))]
-           [else (let ([maybe-color (cadr atad)])
-                   (cond [(pair? maybe-color) (cons (cons (car atad) +nan.0) (cdr atad))] ; previous color-stop, no position provided in current folding
-                         [else (cons (cons maybe-color (car atad)) (cddr atad))]))]))
+   (define (fold-color+maybe-position [atad : (Listof (U CSS-Color-Datum CSS-Flonum-%))]) : Any
+     ; NOTE: `atad` are data in reversed order
+     (cond [(null? (cdr atad)) (cons (car atad) +nan.0)]
+           [else (cons (cadr atad) (car atad))]))
    
-   (define (fold-position+color [atad : (Listof Any)]) : (Listof Any)
-     (cons (cons (car atad) (cadr atad)) (cddr atad)))
+   (define (fold-position+color [atad : (Listof (U CSS-Color-Datum CSS-Flonum-%))]) : Any
+     ; NOTE: `atad` are data in reversed order
+     (cons (car atad) (cadr atad)))
 
-   (define (named-directions->degrees [side-or-corners : (Listof Any)]) : (Listof Any)
+   (define (named-directions->degrees [side-or-corners : (Listof Symbol)]) : Flonum
      (define degrees : (Listof Nonnegative-Flonum) (map css-named-direction->degree side-or-corners))
-     (cond [(or (null? degrees) (null? (cdr degrees))) degrees]
+     (cond [(null? degrees) +nan.0]
+           [(null? (cdr degrees)) (car degrees)]
            [else (let*-values ([(c1 c2) (values (car degrees) (cadr degrees))]
                                [(sum) (+ c1 c2)])
-                   (list (cond [(> (* c1 c2) 0.0) (* sum 0.5)]
-                               [(= sum 90.0) 45.0]
-                               [else 315.0])))]))])
+                   (cond [(> (* c1 c2) 0.0) (* sum 0.5)]
+                         [(= sum 90.0) 45.0]
+                         [else 315.0]))]))])
 
 (define-css-disjoint-filter <css-image> #:-> CSS-Image-Datum
   ;;; https://drafts.csswg.org/css-images/#image-values
@@ -189,16 +197,11 @@
     (and (list? v)
          (andmap image-set-option? v))))
 
-(define linear-color-hint? : (-> Any Boolean : Linear-Color-Hint)
-  (lambda [v]
-    (or (flonum? v)
-        (css-%? v))))
-
 (define linear-color-stop? : (-> Any Boolean : Linear-Color-Stop)
   (lambda [v]
     (and (pair? v)
          (css-color-datum? (car v))
-         (linear-color-hint? (cdr v)))))
+         (css-flonum-%? (cdr v)))))
 
 (define color-stops-or-hints? : (-> (Listof Any) Boolean : (Listof+ Linear-Color-Stop))
   (lambda [datum]

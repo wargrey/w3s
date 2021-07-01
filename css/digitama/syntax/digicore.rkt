@@ -429,16 +429,15 @@
 (define-type (CSS-Option css) (U css CSS-Syntax-Error False))
 (define-type (CSS:Filter css) (-> CSS-Syntax-Any (CSS-Option css)))
 (define-type (CSS-Parser css) (-> css (Listof CSS-Token) (Values (CSS-Option css) (Listof CSS-Token))))
-(define-type CSS-Shorthand+Parser (Pairof (CSS-Parser (HashTable Symbol Any)) (Listof+ Symbol)))
-(define-type CSS-Shorthand-Parser (CSS-Parser (HashTable Symbol Any)))
-(define-type CSS-Longhand-Update (-> Symbol Any Any Any))
-(define-type CSS-Declaration css-declaration)
+(define-type CSS-Shorthand+Parser (Pairof (CSS-Parser CSS-Shorthand-Datum) (Listof+ Symbol)))
+(define-type CSS-Shorthand-Parser (CSS-Parser CSS-Shorthand-Datum))
 
 (struct css-declaration
   ([name : CSS:Ident]
    [values : (Listof+ CSS-Token)]
    [important? : Boolean]
    [lazy? : Boolean])
+  #:type-name CSS-Declaration
   #:transparent)
 
 ;; https://drafts.csswg.org/css-cascade/#shorthand

@@ -79,7 +79,7 @@
 
    (define make-alpha-parser : (-> (-> (CSS:Filter Char)) (CSS-Parser (Listof Any)))
      (lambda [<delimiter>]
-       (CSS<$> (CSS<?> [(<delimiter>) (CSS:<^> (<css-%flunit>))]) 1.0)))
+       (CSS<$> (CSS<?> [(<delimiter>) ((inst CSS:<^> Any) (<css-%flunit>))]) 1.0)))
      
    (define make-parser : (-> (CSS-Parser (Listof Any)) (CSS-Parser (Listof Any)) (CSS-Parser (Listof Any)))
      ;;; https://github.com/w3c/csswg-drafts/issues/266
@@ -87,8 +87,8 @@
        (CSS<&> c1 (CSS<?> [(<css-comma>) (CSS<#> c2 '(2)) (make-alpha-parser <css-comma>)]
                           [else          (CSS<*> c2 '(2)) (make-alpha-parser <css-slash>)]))))
 
-   (define <:rgb:> (CSS:<^> (<rgb-gamut>)))
-   (define <:hue:> (CSS:<^> (<css-angle>)))])
+   (define <:rgb:> ((inst CSS:<^> Any) (<rgb-gamut>)))
+   (define <:hue:> ((inst CSS:<^> Any) (<css-angle>)))])
 
 (define-css-disjoint-filter <css-color> #:-> CSS-Color-Datum
   ;;; https://drafts.csswg.org/css-color/#color-type

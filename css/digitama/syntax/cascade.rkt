@@ -109,7 +109,7 @@
             (when (desc-more-important? desc-key important?)
               (hash-set! descbase desc-key declared-value))))
         (hash-set! descbase desc-name declared-value)))
-    (define parse-long : (-> CSS-Values (Pairof CSS-Shorthand-Parser (Listof+ Symbol)) CSS:Ident (Listof+ CSS-Token) Boolean Boolean Void)
+    (define parse-long : (-> CSS-Values CSS-Shorthand+Parser CSS:Ident (Listof+ CSS-Token) Boolean Boolean Void)
       (lambda [descbase info <desc-name> declared-values important? lazy?]
         (define css-parse : CSS-Shorthand-Parser (CSS<+> (car info) (CSS:<^> (<css-wide-keywords>) (cdr info))))
         (cond [(and lazy?)
@@ -130,7 +130,7 @@
                                   (desc-set! descbase name important? (λ [] desc-value))))])))
     (define parse-desc : (-> CSS-Values (CSS-Parser (Listof Any)) CSS:Ident (Listof+ CSS-Token) Symbol Boolean Boolean Void)
       (lambda [descbase parser <desc-name> declared-values desc-name important? lazy?]
-        (define css-parse : (CSS-Parser (Listof Any)) (CSS<+> parser (CSS:<^> (<css-wide-keywords>))))
+        (define css-parse : (CSS-Parser (Listof Any)) (CSS<+> parser ((inst CSS:<^> Any) (<css-wide-keywords>))))
         (cond [(and lazy?)
                (desc-set! descbase desc-name important?
                           (λ [] (let* ([flat (css-variable-substitute <desc-name> declared-values (css-varbase-ref descbase) null)]

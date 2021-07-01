@@ -10,6 +10,10 @@
 (require (for-syntax racket/syntax))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define-type (Listof+ css) (Pairof css (Listof css)))
+(define-type (ListofU+ css) (U css (Listof+ css)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; For performance, mutating racket parameters costs too much ...
 (define-syntax (define-css-parameter stx)
   (syntax-case stx [:]
@@ -40,9 +44,6 @@
                     [(db) (let ([pv (assq 'name db)]) (when pv (p-name (cdr pv)))) ...]
                     [() (list (cons 'name (p-name)) ...)])))))]))
 
-(define-type (Listof+ css) (Pairof css (Listof css)))
-(define-type (ListofU+ css) (U css (Listof+ css)))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;  
 (define css-log-read-error : (->* ((U exn String)) (Any Log-Level) Void)
   (lambda [errobj [src #false] [level 'debug]]
@@ -52,15 +53,47 @@
   (lambda [errobj [src #false] [level 'debug]]
     (w3s-log-exn errobj 'exn:css:eval src level)))
 
-(define hash-set++ : (-> (HashTable Symbol Any) (Listof+ Symbol) Any (HashTable Symbol Any))
-  (lambda [data++ tags v]
-    (define rest : (Listof Symbol) (cdr tags))
-    (cond [(null? rest) (hash-set data++ (car tags) v)]
-          [else (hash-set++ (hash-set data++ (car tags) v) rest v)])))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define-type CSS-Shorthand-Datum (Listof (Pairof Symbol Any)))
+(define-type CSS-Longhand-Update (-> Symbol (Option Any) Any Any))
 
-(define hash-update++ : (-> (HashTable Symbol Any) (Listof+ Symbol) Any (-> Symbol Any Any Any) (HashTable Symbol Any))
-  (lambda [data++ tags datum updater]
-    (define rest : (Listof Symbol) (cdr tags))
-    (cond [(null? rest) (hash-update data++ (car tags) (λ [[v : Any]] (updater (car tags) v datum)) (λ [] #false))]
-          [else (hash-update++ (hash-update data++ (car tags) (λ [[v : Any]] (updater (car tags) v datum)) (λ [] #false))
-                               rest datum updater)])))
+(define css-shorthand-ref : (->* (CSS-Shorthand-Datum Symbol) ((Option (-> Any))) Any)
+  (lambda [data tag [mkdefault #false]]
+    (define maybe-datum (assq tag data))
+
+    (cond [(pair? maybe-datum) (cdr maybe-datum)]
+          [(not mkdefault) (raise-user-error 'css-shorthand-ref "no such property: ~a" tag)]
+          [else (mkdefault)])))
+
+(define css-shorthand-set : (case-> [CSS-Shorthand-Datum Symbol Any -> CSS-Shorthand-Datum]
+                                    [CSS-Shorthand-Datum Symbol Any CSS-Longhand-Update -> CSS-Shorthand-Datum])
+  (case-lambda
+    [(base tag datum)
+     (let try-set ([data : CSS-Shorthand-Datum base]
+                   [atad : CSS-Shorthand-Datum null])
+       (cond [(null? data) (cons (cons tag datum) atad)]
+             [else (let-values ([(datum rest) (values (car data) (cdr data))])
+                     (cond [(not (eq? (car datum) tag)) (try-set (cdr data) (cons datum atad))]
+                           [(null? rest) (cons (cons tag datum) atad)]
+                           [else (cons (cons tag datum) (append rest atad))]))]))]
+    [(base tag datum updater)
+     (let try-update ([data : CSS-Shorthand-Datum base]
+                      [atad : CSS-Shorthand-Datum null])
+       (cond [(null? data) (cons (cons tag (updater tag #false datum)) atad)]
+             [else (let-values ([(self rest) (values (car data) (cdr data))])
+                     (cond [(not (eq? (car self) tag)) (try-update (cdr data) (cons self atad))]
+                           [(null? rest) (cons (cons tag (updater tag (cdr self) datum)) atad)]
+                           [else (cons (cons tag (updater tag (cdr self) datum)) (append rest atad))]))]))]))
+
+(define css-shorthand-set* : (case-> [CSS-Shorthand-Datum (Listof+ Symbol) Any -> CSS-Shorthand-Datum]
+                                     [CSS-Shorthand-Datum (Listof+ Symbol) Any CSS-Longhand-Update -> CSS-Shorthand-Datum])
+  (case-lambda
+    [(data tags v)
+     (define rest : (Listof Symbol) (cdr tags))
+     (cond [(null? rest) (css-shorthand-set data (car tags) v)]
+           [else (css-shorthand-set* (css-shorthand-set data (car tags) v) rest v)])]
+    [(data tags v updater)
+     (define rest : (Listof Symbol) (cdr tags))
+     (cond [(null? rest) (css-shorthand-set data (car tags) v updater)]
+           [else (css-shorthand-set* (css-shorthand-set data (car tags) v updater)
+                                     rest v updater)])]))
