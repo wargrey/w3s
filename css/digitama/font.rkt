@@ -13,6 +13,7 @@
 
 (require "syntax/digicore.rkt")
 (require "syntax/dimension.rkt")
+(require "syntax/misc.rkt")
 (require "../recognizer.rkt")
 
 (define &font : (Boxof Font) (box (default-font)))
@@ -33,13 +34,13 @@
   [small-caption (default-font)]
   [status-bar    (default-font)])
 
-(define css-font->longhand-properties : (->* (Font) ((HashTable Symbol Any)) (HashTable Symbol Any))
+(define css-font->longhand-properties : (->* (Font) (CSS-Shorthand-Datum) CSS-Shorthand-Datum)
   (lambda [font [longhand css-longhand]]
-    (let* ([longhand++ (hash-set longhand 'font-stretch (font-stretch font))]
-           [longhand++ (hash-set longhand++ 'font-weight (font-weight font))]
-           [longhand++ (hash-set longhand++ 'font-style (font-style font))]
-           [longhand++ (hash-set longhand++ 'font-size (font-size font))])
-      (hash-set longhand++ 'font-family (list (font-face->family* (font-face font)))))))
+    (let* ([longhand++ (css-shorthand-set longhand 'font-stretch (font-stretch font))]
+           [longhand++ (css-shorthand-set longhand++ 'font-weight (font-weight font))]
+           [longhand++ (css-shorthand-set longhand++ 'font-style (font-style font))]
+           [longhand++ (css-shorthand-set longhand++ 'font-size (font-size font))])
+      (css-shorthand-set longhand++ 'font-family (list (font-face->family* (font-face font)))))))
 
 (define-css-disjoint-filter <font-stretch> #:-> (U Symbol CSS+%)
   ;;; https://drafts.csswg.org/css-fonts-4/#font-stretch-prop
@@ -71,14 +72,16 @@
   
 (define <:font-shorthand:> : CSS-Shorthand+Parser
   ;;; https://drafts.csswg.org/css-fonts/#font-prop
-  (cons (CSS<+> (CSS:<^> (<css-system-font>) css-font->longhand-properties)
-                (CSS<&> (CSS<*> (CSS<+> (CSS<_> (CSS:<^> (<css-keyword> 'normal) '|Ignoring, some properties use it as defaults|))
-                                        (CSS:<^> (<font-weight>) 'font-weight)
-                                        (CSS:<^> (<css-keyword> css-font-style-option?) 'font-style)
-                                        (CSS:<^> (<css-keyword> css-font-variant-options/21) 'font-variant)
-                                        ; <font-stretch> also accepts percentage in css-fonts-4 specification,
-                                        ; however it preempts the 'font-size
-                                        (CSS:<^> (<css-keyword> css-font-stretch-options) 'font-stretch)))
+  (cons (CSS<+> #:any
+                (CSS:<^> (<css-system-font>) css-font->longhand-properties)
+                (CSS<&> #:any
+                        (CSS<*> (CSS<++> (CSS<_> (CSS:<^> (<css-keyword> 'normal) '|Ignoring, some properties use it as defaults|))
+                                         (CSS:<^> (<font-weight>) 'font-weight)
+                                         (CSS:<^> (<css-keyword> css-font-style-option?) 'font-style)
+                                         (CSS:<^> (<css-keyword> css-font-variant-options/21) 'font-variant)
+                                         ; <font-stretch> also accepts percentage in css-fonts-4 specification,
+                                         ; however it preempts the 'font-size
+                                         (CSS:<^> (<css-keyword> css-font-stretch-options) 'font-stretch)) '?)
                         (CSS:<^> (<font-size>) 'font-size)
                         (CSS<*> (CSS<?> [(<css-slash>) (CSS:<^> (<line-height>) 'line-height)]) '?)
                         (CSS<^> <:font-family:> 'font-family)))

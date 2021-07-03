@@ -74,8 +74,7 @@
      (css-comma-followed-parser
       (CSS<?> [(<css-keyword:to>) (CSS<~> (CSS:<++> (<css-keyword> css-gradient-hside-option)
                                                     (<css-keyword> css-gradient-vside-option))
-                                          named-directions->degrees
-                                          null)]
+                                          named-directions->degrees)]
               [else (CSS:<*> (<css-angle>) '?)])))
    
    (define (<:color-stop+comma:>)
@@ -94,14 +93,12 @@
    (define (linear-hint->fake-stop [h : CSS-Flonum-%]) : Linear-Color-Stop
      (cons 'hint-only h))
 
-   (define (fold-color+maybe-position [atad : (Listof (U CSS-Color-Datum CSS-Flonum-%))]) : Any
-     ; NOTE: `atad` are data in reversed order
-     (cond [(null? (cdr atad)) (cons (car atad) +nan.0)]
-           [else (cons (cadr atad) (car atad))]))
+   (define (fold-color+maybe-position [data : (Listof (U CSS-Color-Datum CSS-Flonum-%))]) : Any
+     (cond [(null? (cdr data)) (cons (car data) +nan.0)]
+           [else (cons (car data) (cadr data))]))
    
-   (define (fold-position+color [atad : (Listof (U CSS-Color-Datum CSS-Flonum-%))]) : Any
-     ; NOTE: `atad` are data in reversed order
-     (cons (car atad) (cadr atad)))
+   (define (fold-position+color [data : (Listof (U CSS-Color-Datum CSS-Flonum-%))]) : Any
+     (cons (cadr data) (car data)))
 
    (define (named-directions->degrees [side-or-corners : (Listof Symbol)]) : Flonum
      (define degrees : (Listof Nonnegative-Flonum) (map css-named-direction->degree side-or-corners))

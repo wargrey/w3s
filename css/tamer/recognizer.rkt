@@ -21,7 +21,9 @@
     [(_ desc filters CSS:<> CSS<> #:do (it-check args ...) ...)
      (syntax/loc stx
        (context desc #:do
-                (for/spec ([parser (in-list (list (apply CSS:<> filters) (apply CSS<> (map CSS:<^> filters))))]
+                (for/spec ([parser (in-list (list (apply (inst CSS:<> Any) filters)
+                                                  (CSS<> (for/list : (Listof (CSS-Parser (Listof Any))) ([f (in-list filters)])
+                                                           ((inst CSS:<^> Any) f)))))]
                            [subc (in-list (list "filter" "parser"))])
                   (context subc #:do
                            (it-check filters parser args ...)
@@ -29,7 +31,7 @@
     [(_ desc filter multiplier CSS:<> CSS<> #:do (it-check args ...) ...)
      (syntax/loc stx
        (context [desc multiplier] #:do
-                (for/spec ([parser (in-list (list (CSS:<> filter multiplier) (CSS<> (CSS:<^> filter) multiplier)))]
+                (for/spec ([parser (in-list (list ((inst CSS:<> Any) filter multiplier) (CSS<> ((inst CSS:<^> Any) filter) multiplier)))]
                            [subc (in-list (list "filter" "parser"))])
                   (context subc #:do
                            (it-check filter parser multiplier args ...)
@@ -37,7 +39,7 @@
     [(_ com.css filter CSS:<> CSS<> #:invalid-do (it-check args ...) ...)
      (syntax/loc stx
        (context ["when fed with ~s" com.css] #:do
-                (for/spec ([parser (in-list (list (CSS:<> filter) (CSS<> (CSS:<^> filter))))]
+                (for/spec ([parser (in-list (list ((inst CSS:<> Any) filter) (CSS<> ((inst CSS:<^> Any) filter))))]
                            [subc (in-list (list "filter" "parser"))])
                   (context subc #:do
                            (it-check com.css parser args ...)
@@ -195,9 +197,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-feature recognizer #:do
   (let ([filters (list (<css:ident>) (<css:integer>) (<css:delim>))]
-        [parser (CSS<&&> (CSS:<^> (<css:ident>)) (CSS:<*> (<css:integer>) '?))])
+        [parser (CSS<&&> ((inst CSS:<^> Any) (<css:ident>)) ((inst CSS:<*> Any) (<css:integer>) '?))])
     (context "combinators" #:do
-             (tamer-context "juxtaposing values" filters CSS:<&> CSS<&> #:do
+             (tamer-context "juxtaposing values" filters CSS:<&> css-juxtapose #:do
                            (it-check-<&> (list 'juxtaposing 128 #\&) #true)
                            (it-check-<&> (list 'juxtaposing 128.0 #\&) #false))
                         
@@ -251,7 +253,7 @@
                       (tamer-context "1, 2, 3, end" filter CSS:<#> CSS<#> #:invalid-do
                                      (it-check-invalid-<#> 3))
 
-                      (let ([parser (CSS<#> (CSS:<*> filter '?) '+)])
+                      (let ([parser (CSS<#> ((inst CSS:<*> Any) filter '?) '+)])
                         (context "with optional component and emitted commas before, after, and between values" #:do
                                  (it-check-invalid-<#> ", 1, 2, 3" parser exn:css:missing-value?)
                                  (it-check-invalid-<#> "1, , 2, 3" parser exn:css:missing-value?)

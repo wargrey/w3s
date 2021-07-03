@@ -113,11 +113,11 @@
       (lambda [descbase info <desc-name> declared-values important? lazy?]
         (define css-parse : CSS-Shorthand-Parser (CSS<+> (car info) (CSS:<^> (<css-wide-keywords>) (cdr info))))
         (cond [(and lazy?)
-               (define pending-thunk : (-> (Option (HashTable Symbol Any)))
+               (define pending-thunk : (-> (Option CSS-Shorthand-Datum))
                  (λ [] (let ([flat-values (css-variable-substitute <desc-name> declared-values (css-varbase-ref descbase) null)])
                          (and (css-pair? flat-values)
                               (do-parse <desc-name> css-parse flat-values css-longhand #false)))))
-               (define &pending-longhand : (Boxof (-> (Option (HashTable Symbol Any)))) (box pending-thunk))
+               (define &pending-longhand : (Boxof (-> (Option CSS-Shorthand-Datum))) (box pending-thunk))
                (for ([name (in-list (cdr info))] #:when (desc-more-important? name important?))
                  (desc-set! descbase name important?
                             (λ [] (let ([longhand ((unbox &pending-longhand))])
@@ -126,11 +126,11 @@
                                        (hash-set! descbase name (λ [] desc-value))
                                        desc-value)))))]
               [(do-parse <desc-name> css-parse declared-values css-longhand #false)
-               => (λ [longhand] (for ([(name desc-value) (in-hash longhand)])
-                                  (desc-set! descbase name important? (λ [] desc-value))))])))
+               => (λ [longhand] (for ([p (in-list longhand)])
+                                  (desc-set! descbase (car p) important? (λ [] (cdr p)))))])))
     (define parse-desc : (-> CSS-Values (CSS-Parser (Listof Any)) CSS:Ident (Listof+ CSS-Token) Symbol Boolean Boolean Void)
       (lambda [descbase parser <desc-name> declared-values desc-name important? lazy?]
-        (define css-parse : (CSS-Parser (Listof Any)) (CSS<+> parser ((inst CSS:<^> Any) (<css-wide-keywords>))))
+        (define css-parse : (CSS-Parser (Listof Any)) (CSS<+> parser (CSS:<^> (<css-wide-keywords>))))
         (cond [(and lazy?)
                (desc-set! descbase desc-name important?
                           (λ [] (let* ([flat (css-variable-substitute <desc-name> declared-values (css-varbase-ref descbase) null)]

@@ -57,6 +57,8 @@
 (define-type CSS-Shorthand-Datum (Listof (Pairof Symbol Any)))
 (define-type CSS-Longhand-Update (-> Symbol (Option Any) Any Any))
 
+(define css-longhand : CSS-Shorthand-Datum null)
+
 (define css-shorthand-ref : (->* (CSS-Shorthand-Datum Symbol) ((Option (-> Any))) Any)
   (lambda [data tag [mkdefault #false]]
     (define maybe-datum (assq tag data))

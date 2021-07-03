@@ -25,7 +25,7 @@
   ;;; https://drafts.csswg.org/css-images/#image-processing
   (lambda [name [px.names #px"-(image|icon|logo)$"]]
     (case name
-      [(image-resolution) (CSS<*> (CSS:<^> (CSS:<+> (<css-keyword> '(from-image snap)) (<css+resolution>))) '+)]
+      [(image-resolution) (CSS<*> ((inst CSS:<^> Any) (CSS:<+> (<css-keyword> '(from-image snap)) (<css+resolution>))) '+)]
       [(image-rendering) (<css-keyword> css-image-rendering-option)]
       [else (and (or (and (list? px.names) (memq name px.names))
                      (and (regexp? px.names) (regexp-match? px.names (symbol->immutable-string name))))

@@ -7,9 +7,12 @@
 (require racket/list)
 
 (require "syntax/digicore.rkt")
+(require "syntax/misc.rkt")
+
 (require "../recognizer.rkt")
 (require "color.rkt")
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define css-text-decor-line-options : (Listof Symbol) '(underline overline line-through blink))
 (define css-text-decor-skip-options : (Listof Symbol) '(objects spaces ink edges box-decoration))
 
@@ -21,7 +24,8 @@
   
 (define <:text-decoration:> : CSS-Shorthand+Parser
   ;;; https://drafts.csswg.org/css-text-decor/#text-decoration-color-property
-  (cons (CSS<*> (CSS<+> (CSS:<^> (<css-keyword> 'none) 'text-decoration-line)
+  (cons (CSS<*> (CSS<+> #:any
+                        (CSS:<^> (<css-keyword> 'none) 'text-decoration-line)
                         (CSS:<^> (<css-keyword> css-text-decor-line-options) 'text-decoration-line css-fold-decoration-line)
                         (CSS:<^> (<css-keyword> css-text-decor-style-option) 'text-decoration-style)
                         (CSS:<^> (<css-color>) 'text-decoration-color)))

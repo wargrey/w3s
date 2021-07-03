@@ -444,16 +444,11 @@
 ;; https://drafts.csswg.org/css-cascade/#filtering
 ;; https://drafts.csswg.org/css-cascade/#cascading
 (define-type CSS-Values (HashTable Symbol (-> Any)))
+(define-type CSS-Declaration-Parser (U Void False CSS-Shorthand+Parser Procedure #| generalize CSS:Filter and CSS-Parser |#))
 (define-type CSS-Declaration-Parsers (-> Symbol (-> Void) CSS-Declaration-Parser))
 (define-type (CSS-Cascaded-Value-Filter Preference) (-> CSS-Values (Option CSS-Values) Preference))
 (define-type (CSS-Cascaded-Value+Filter Preference Env) (-> CSS-Values (Option CSS-Values) Env Preference))
 (define-type (CSS->Racket racket) (-> Symbol Any racket))
-
-(define-type CSS-Declaration-Parser
-  (U CSS-Shorthand+Parser
-     (CSS-Parser (Listof Any))
-     (CSS:Filter Any)
-     Void False))
 
 (define-syntax (define-css-value stx)
   (syntax-case stx [:]
@@ -499,7 +494,6 @@
 (define-css-parameters css-root-relative-lengths [vw vh rem rlh] : Nonnegative-Flonum #:= +nan.0)
 (define-css-parameters css-font-relative-lengths [em ex cap ch ic lh] : Nonnegative-Flonum #:= +nan.0)
 
-(define css-longhand : (HashTable Symbol Any) (make-immutable-hasheq))
 (define make-css-values : (-> CSS-Values) (λ [] ((inst make-hasheq Symbol (-> Any)))))
   
 (define css-ref : (All (a b c) (case-> [CSS-Values (U CSS-Values Boolean) Symbol -> Any]
