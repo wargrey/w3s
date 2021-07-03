@@ -736,11 +736,11 @@
   (λ [[data : a] [tokens : (Listof CSS-Token)]]
     (define-values (?comma --tokens) (css-car/cdr tokens))
     (cond [(css:comma? ?comma)
-           (cond [(null? data) (values (make-exn:css:missing-value ?comma) tokens)]
-                 [(null? --tokens) (values (make-exn:css:missing-value ?comma) tokens)]
-                 [else (values data --tokens)])]
+           (cond ; WARNING: please using `css-comma-followed-parser` instead if preceding value is omissible
+             [(null? --tokens) (values (make-exn:css:missing-value ?comma) tokens)]
+             [else (values data --tokens)])]
           [(or omissible?) (values data --tokens)]
-          [(not ?comma) (values data tokens)]
+          [(not ?comma) (values data --tokens)]
           [else (values (make-exn:css:missing-comma ?comma) tokens)])))
 
 (define (<css-slash>) : (CSS:Filter Char)

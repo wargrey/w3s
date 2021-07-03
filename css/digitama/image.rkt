@@ -83,12 +83,12 @@
       (CSS<+> (CSS<~> (CSS:<&> (<css-length-percentage>) (<css-color>)) fold-position+color)
               (CSS<~> (CSS<&> (CSS:<^> (<css-color>)) (CSS:<*> (<css-length-percentage>) '?)) fold-color+maybe-position))))
    
-   (define (<:color-hint+comma:>)
-     (CSS<*> (CSS<&> (CSS:<^> (CSS:<~> (<css-length-percentage>) linear-hint->fake-stop)) (<:css-skip-comma:>)) '?))
+   (define (<:maybe-color-hint+comma:>)
+     (css-comma-followed-parser (CSS:<*> (CSS:<~> (<css-length-percentage>) linear-hint->fake-stop) '?)))
 
    (define (<:color-stop-list:>)
      (CSS<!> (CSS<&> (<:color-stop+comma:>)
-                     (CSS<*> (CSS<&> (<:color-hint+comma:>) (<:color-stop+comma:>)) '*))))
+                     (CSS<*> (CSS<&> (<:maybe-color-hint+comma:>) (<:color-stop+comma:>)) '*))))
 
    (define (linear-hint->fake-stop [h : CSS-Flonum-%]) : Linear-Color-Stop
      (cons 'hint-only h))
