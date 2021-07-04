@@ -31,6 +31,26 @@
 (require "digitama/syntax/cascade.rkt")
 (require "digitama/syntax/dimension.rkt")
 (require "digitama/syntax/selector.rkt")
+(require "digitama/syntax/unsafe/cascade.rkt")
 
 (require "values.rkt")
 (require "recognizer.rkt")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define read-css-component-values : (-> CSS-StdIn CSS-Declaration-Parser (U CSS-Syntax-Error False (Listof Any)))
+  (lambda [/dev/cssin parse]
+    (define-values (comp-values rest) (read-css-component-values* /dev/cssin parse))
+
+    comp-values))
+
+(define read-css-component-values* : (-> CSS-StdIn CSS-Declaration-Parser (Values (U CSS-Syntax-Error False (Listof Any)) (Listof CSS-Token)))
+  (lambda [/dev/cssin parse]
+    (define tokens : (Listof CSS-Token) (filter-not css:whitespace? (css-parse-component-values /dev/cssin)))
+    (define-values (seulav rest)
+      (cond [(null? tokens) (values #false null)]
+            [(css-parser? parse) (parse null tokens)]
+            [(css-filter? parse) ((CSS:<^> parse) null tokens)]
+            [(pair? parse) ((car parse) null tokens)]
+            [else (values (make+exn:css:unrecognized #false) tokens)]))
+
+    (values (if (list? seulav) (reverse seulav) seulav) rest)))

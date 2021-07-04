@@ -3,6 +3,7 @@
 (require css)
 (require css/digitama/color)
 (require css/digitama/image)
+(require css/digitama/syntax/unsafe/cascade)
 
 (require digimon/spec)
 
@@ -46,12 +47,9 @@
                            ...))))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define tamer-parse : (-> CSS-StdIn (CSS-Parser (Listof Any)) (Values (U CSS-Syntax-Error False (Listof Any)) (Listof CSS-Token)))
+(define tamer-parse : (-> CSS-StdIn Procedure (Values (U CSS-Syntax-Error False (Listof Any)) (Listof CSS-Token)))
   (lambda [com.css atom-parser]
-    (define tokens : (Listof CSS-Token) (filter-not css:whitespace? (css-parse-component-values com.css)))
-    (define-values (seulav rest) (atom-parser null tokens))
-
-    (values (if (list? seulav) (reverse seulav) seulav) rest)))
+    (read-css-component-values* com.css atom-parser)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-behavior (it-check-modifier modifier lower upper)
@@ -142,8 +140,8 @@
     (cond [(list? vs) (expect-null (cdr vs)) (check-range (car vs) expected least most)]
           [else (check-range vs expected least most)])))
 
-(define-behavior (it-check-function com.css filter expected)
-  (let-values ([(vs rest) (tamer-parse com.css (CSS:<^> filter))])
+(define-behavior (it-check com.css filter expected)
+  (let-values ([(vs rest) (tamer-parse com.css filter)])
     #:it
     ["should be parsed into an object in sense of ~a, when fed with ~s" (object-name expected) com.css] #:when (procedure? expected)
     ["should fail with exception `~a`, when fed with ~s" expected com.css] #:when (symbol? expected)
@@ -151,7 +149,7 @@
     #:do
     (cond [(not expected) (expect-false vs)]
           [(symbol? expected) (expect-satisfy exn:css? vs) (expect-eq (object-name vs) expected)]
-          [(list? vs) (expect-= (length vs) 1) (expect-satisfy expected (car vs))]
+          [(list? vs) (expect-= (length vs) 1) (expect-null rest) (expect-satisfy expected (car vs))]
           [else (tamer-deadcode vs)])))
 
 (define check-range : (-> Any (U False (-> Any Boolean) Index) Natural (U Natural +inf.0) Void)
@@ -259,37 +257,47 @@
                                  (it-check-invalid-<#> "1, , 2, 3" parser exn:css:missing-value?)
                                  (it-check-invalid-<#> "1, 2, 3," parser exn:css:missing-value?))))))
 
-  (context "functions" #:do
-           (context "color functions" #:do
-                    (it-check-function "hsl(120.0 100% 100% / 0.5)" (<css-color-notation>) flcolor?)
-                    (it-check-function "hwb(120.0, 100%, 100%, 0.5)" (<css-color-notation>) flcolor?)
-                    (it-check-function "rgb(0, 0.5, 0 / 0.618)" (<css-color-notation>) 'exn:css:missing-comma))
+  (context "datatypes" #:do
+           (context "<position>" #:do
+                    (it-check "left" (<:css-position:>) css-position?)
+                    (it-check "center bottom" (<:css-position:>) css-position?)
+                    (it-check "left 3em  top 10px" (<:css-position:>) css-position?)
+                    (it-check "     10px     15px" (<:css-position:>) css-position?)
+                    (it-check "left          15px" (<:css-position:>) css-position?)
+                    (it-check "     10px top     " (<:css-position:>) css-position?)
+                    (it-check "left      top 15px" (<:css-position:>) css-position?)
+                    (it-check "left 10px top     " (<:css-position:>) css-position?))
            
-           (context "image functions" #:do
-                    (it-check-function "url(tamer.png)" (<css-image>) string?)
-                    (it-check-function "image(url(tamer.png))" (<css-image-notation>) css-image?)
-                    (it-check-function "image(rtl \"tamer.png\", rgb(0 0.5 0 / 0.618))" (<css-image-notation>) css-image?)
+           (context "<color>" #:do
+                    (it-check "hsl(120.0 100% 100% / 0.5)" (<css-color-notation>) flcolor?)
+                    (it-check "hwb(120.0, 100%, 100%, 0.5)" (<css-color-notation>) flcolor?)
+                    (it-check "rgb(0, 0.5, 0 / 0.618)" (<css-color-notation>) 'exn:css:missing-comma))
+           
+           (context "<image>" #:do
+                    (it-check "url(tamer.png)" (<css-image>) string?)
+                    (it-check "image(url(tamer.png))" (<css-image-notation>) css-image?)
+                    (it-check "image(rtl \"tamer.png\", rgb(0 0.5 0 / 0.618))" (<css-image-notation>) css-image?)
 
                     (context "gradient functions" #:do
-                             (it-check-function "linear-gradient(left)" (<css-gradient-notation>) 'exn:css:type)
-                             (it-check-function "linear-gradient(red)" (<css-gradient-notation>) 'exn:css:arity)
+                             (it-check "linear-gradient(left)" (<css-gradient-notation>) 'exn:css:type)
+                             (it-check "linear-gradient(red)" (<css-gradient-notation>) 'exn:css:arity)
 
                              (context "linear gradients" #:do
                                       (context "vertical gradient" #:do
-                                               (it-check-function "linear-gradient(yellow, blue)" (<css-gradient-notation>) linear-gradient?)
-                                               (it-check-function "linear-gradient(180deg, yellow, blue)" (<css-gradient-notation>) linear-gradient?)
-                                               (it-check-function "linear-gradient(to top, blue, yellow)" (<css-gradient-notation>) linear-gradient?)
-                                               (it-check-function "linear-gradient(to bottom, 0% yellow, blue 100%)" (<css-gradient-notation>) linear-gradient?))
+                                               (it-check "linear-gradient(yellow, blue)" (<css-gradient-notation>) linear-gradient?)
+                                               (it-check "linear-gradient(180deg, yellow, blue)" (<css-gradient-notation>) linear-gradient?)
+                                               (it-check "linear-gradient(to top, blue, yellow)" (<css-gradient-notation>) linear-gradient?)
+                                               (it-check "linear-gradient(to bottom, 0% yellow, blue 100%)" (<css-gradient-notation>) linear-gradient?))
                                       
                                       (context "gradient with angle and hint" #:do
-                                               (it-check-function "linear-gradient(135deg, yellow, 50%, blue)" (<css-gradient-notation>) linear-gradient?)
-                                               (it-check-function "linear-gradient(-45deg, blue, 50%, yellow)" (<css-gradient-notation>) linear-gradient?))
+                                               (it-check "linear-gradient(135deg, yellow, 50%, blue)" (<css-gradient-notation>) linear-gradient?)
+                                               (it-check "linear-gradient(-45deg, blue, 50%, yellow)" (<css-gradient-notation>) linear-gradient?))
 
                                       (context "3-color gradient" #:do
-                                               (it-check-function "linear-gradient(yellow, blue 20%, #0f0)" (<css-gradient-notation>) linear-gradient?))
+                                               (it-check "linear-gradient(yellow, blue 20%, #0f0)" (<css-gradient-notation>) linear-gradient?))
                                       
                                       (context "corner-to-corner gradient" #:do
-                                               (it-check-function "linear-gradient(to top right, red, white, blue)" (<css-gradient-notation>) linear-gradient?)))))))
+                                               (it-check "linear-gradient(to top right, red, white, blue)" (<css-gradient-notation>) linear-gradient?)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (module+ main

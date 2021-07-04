@@ -3,6 +3,8 @@
 ;;; Parser Combinators and Syntax Sugars of dealing with declarations are designed for client applications
 ;;; WARNING: Notations might not follow the CSS Specification(https://drafts.csswg.org/css-values/#component-combinators)
 
+;;; TODO: If we can make the type annotation more precisely, and if it is worth doing.
+
 (provide (all-defined-out))
 (provide nonnegative-flonum? nonnegative-fixnum? positive-flonum? positive-fixnum? positive-index? positive-byte?)
 
@@ -215,15 +217,15 @@
                   (define-values (token --tokens) (css-car/cdr tokens--))
                   (define datum : (CSS-Option a) (css-filter token))
                   (cond [(nor (false? datum) (exn:css? datum)) (comb-any (cons datum data++) --tokens (cdr filters))]
-                        [else(let no-order-combine ([rest : (Listof (CSS:Filter a)) (cdr filters)]
-                                                    [sresol : (Listof (CSS:Filter a)) (list css-filter)])
-                               (cond [(pair? rest)
-                                      (let ([sub-filter (car rest)])
-                                        (define subdatum : (CSS-Option a) (sub-filter token))
-                                        (cond [(or (false? subdatum) (exn:css? subdatum)) (no-order-combine (cdr rest) (cons sub-filter sresol))]
-                                              [else (comb-any (cons subdatum data++) --tokens (append (reverse sresol) (cdr rest)))]))]
-                                     [(eq? data++ data) (values datum --tokens)] ; there should be at least one match
-                                     [else (values data++ tokens--)]))]))]
+                        [else (let no-order-combine ([rest : (Listof (CSS:Filter a)) (cdr filters)]
+                                                     [sresol : (Listof (CSS:Filter a)) (list css-filter)])
+                                (cond [(pair? rest)
+                                       (let ([sub-filter (car rest)])
+                                         (define subdatum : (CSS-Option a) (sub-filter token))
+                                         (cond [(or (false? subdatum) (exn:css? subdatum)) (no-order-combine (cdr rest) (cons sub-filter sresol))]
+                                               [else (comb-any (cons subdatum data++) --tokens (append (reverse sresol) (cdr rest)))]))]
+                                      [(eq? data++ data) (values datum --tokens)] ; there should be at least one match
+                                      [else (values data++ tokens--)]))]))]
                [(eq? data++ data) (values #false tokens)] ; there should be at least one match
                [else (values data++ tokens--)])))]))
 
@@ -366,12 +368,14 @@
        (cond [(pair? tokens) (let ([css-parser (CSS<^> css:filter tag)]) (css-parser data tokens))]
              [else (values (css-shorthand-set data tag (fdatum data)) null)]))]))
 
-(define CSS<~> : (All (a b) (-> (CSS-Parser (Listof a)) (-> (Listof a) b) (CSS-Parser (Listof b))))
-  (lambda [css-parser data=>data]
+(define CSS<~> : (All (a b) (-> (CSS-Parser (Listof a)) (-> (Listof a) (CSS-Option b)) (CSS-Parser (Listof b))))
+  (lambda [css-parser css->racket]
      (λ [[data : (Listof b)] [tokens : (Listof CSS-Token)]]
        (define-values (datum --tokens) (css-parser null tokens))
        (cond [(or (exn:css? datum) (false? datum)) (values datum --tokens)]
-             [else (values (cons (data=>data (reverse datum)) data) --tokens)]))))
+             [else (let ([rdatum (css->racket (reverse datum))])
+                     (cond [(or (exn:css? rdatum) (false? rdatum)) (values rdatum tokens)]
+                           [else (values (cons rdatum data) --tokens)]))]))))
 
 (define CSS<_> : (All (a) (-> (CSS-Parser a) (CSS-Parser a)))
   (lambda [css-parser]
@@ -541,33 +545,25 @@
                                    (cond [(or (false? datum) (exn:css? datum)) (values datum --tokens)]
                                          [else (values (append datum data) --tokens)]))]))]))]))
   
-(define css:compose : (All (a b) (-> (CSS:Filter a) (-> a b) (CSS:Filter b)))
-  (lambda [css-filter css->racket]
-    (λ [[token : CSS-Syntax-Any]]
-      (define datum : (CSS-Option a) (css-filter token))
-      (if (exn:css? datum) datum (and datum (css->racket datum))))))
-
-(define css:if : (All (a) (case-> [(Listof+ (Pairof (CSS:Filter Any) (CSS-Parser a))) (Option (CSS-Parser a)) -> (CSS-Parser a)]
-                                  [(CSS:Filter Any) (CSS-Parser a) (Option (CSS-Parser a)) -> (CSS-Parser a)]))
+(define css:juxtapose : (All (a b c) (case-> [(CSS:Filter a) (CSS:Filter b) -> (CSS:Filter (List b a))]
+                                             [(CSS:Filter a) (CSS:Filter b) (CSS:Filter c) -> (CSS:Filter (List c b a))]))
   (case-lambda
-    [(cond-parsers else-parser)
-     (λ [[data : a] [tokens : (Listof CSS-Token)]]
-       (let else-if ([branch (car cond-parsers)]
-                     [branches-- (cdr cond-parsers)])
-         (define-values (if:filter then-parser) (css-car/cdr branch))
-         (define-values (token --tokens) (css-car/cdr tokens))
-         (define if:datum : (CSS-Option Any) (if:filter token))
-         (cond [(nor (false? if:datum) (exn:css? if:datum)) (then-parser data --tokens)]
-               [(pair? branches--) (else-if (car branches--) (cdr branches--))]
-               [(false? else-parser) (values if:datum tokens)]
-               [else (else-parser data tokens)])))]
-    [(if:filter then-parser else-parser)
-     (λ [[data : a] [tokens : (Listof CSS-Token)]]
-       (define-values (token --tokens) (css-car/cdr tokens))
-       (define if:datum : (CSS-Option Any) (if:filter token))
-       (cond [(nor (false? if:datum) (exn:css? if:datum)) (then-parser data --tokens)]
-             [(false? else-parser) (values if:datum tokens)]
-             [else (else-parser data tokens)]))]))
+    [(css-filter1 css-filter2)
+     (λ [[token : CSS-Syntax-Any]]
+       (define datum : (CSS-Option a) (css-filter1 token))
+       (cond [(or (false? datum) (exn:css? datum)) datum]
+             [else (let ([datum2 (css-filter2 token)])
+                     (cond [(or (false? datum2) (exn:css? datum2)) datum2]
+                           [else (list datum2 datum)]))]))]
+    [(css-filter1 css-filter2 css-filter3)
+     (λ [[token : CSS-Syntax-Any]]
+       (define datum : (CSS-Option a) (css-filter1 token))
+       (cond [(or (false? datum) (exn:css? datum)) datum]
+             [else (let ([datum2 (css-filter2 token)])
+                     (cond [(or (false? datum2) (exn:css? datum2)) datum2]
+                           [else (let ([datum3 (css-filter3 token)])
+                                   (cond [(or (false? datum3) (exn:css? datum3)) datum3]
+                                         [else (list datum3 datum2 datum)]))]))]))]))
 
 (define css-juxtapose : (All (a b c) (case-> [(Listof (CSS-Parser a)) -> (CSS-Parser a)]
                                              [(CSS-Parser (Listof a)) (CSS-Parser (Listof b)) -> (CSS-Parser (Listof (U a b)))]
@@ -600,6 +596,34 @@
                                    (cond [(or (false? datum3) (exn:css? datum3)) (values datum3 ------tokens)]
                                          [else (values (append datum3 datum2 datum1 data) ------tokens)]))]))]))]))
 
+(define css:compose : (All (a b) (-> (CSS:Filter a) (-> a b) (CSS:Filter b)))
+  (lambda [css-filter css->racket]
+    (λ [[token : CSS-Syntax-Any]]
+      (define datum : (CSS-Option a) (css-filter token))
+      (if (exn:css? datum) datum (and datum (css->racket datum))))))
+
+(define css:if : (All (a) (case-> [(Listof+ (Pairof (CSS:Filter Any) (CSS-Parser a))) (Option (CSS-Parser a)) -> (CSS-Parser a)]
+                                  [(CSS:Filter Any) (CSS-Parser a) (Option (CSS-Parser a)) -> (CSS-Parser a)]))
+  (case-lambda
+    [(cond-parsers else-parser)
+     (λ [[data : a] [tokens : (Listof CSS-Token)]]
+       (let else-if ([branch (car cond-parsers)]
+                     [branches-- (cdr cond-parsers)])
+         (define-values (if:filter then-parser) (css-car/cdr branch))
+         (define-values (token --tokens) (css-car/cdr tokens))
+         (define if:datum : (CSS-Option Any) (if:filter token))
+         (cond [(nor (false? if:datum) (exn:css? if:datum)) (then-parser data --tokens)]
+               [(pair? branches--) (else-if (car branches--) (cdr branches--))]
+               [(false? else-parser) (values if:datum tokens)]
+               [else (else-parser data tokens)])))]
+    [(if:filter then-parser else-parser)
+     (λ [[data : a] [tokens : (Listof CSS-Token)]]
+       (define-values (token --tokens) (css-car/cdr tokens))
+       (define if:datum : (CSS-Option Any) (if:filter token))
+       (cond [(nor (false? if:datum) (exn:css? if:datum)) (then-parser data --tokens)]
+             [(false? else-parser) (values if:datum tokens)]
+             [else (else-parser data tokens)]))]))
+
 (define css:multiplier-range : (-> (U (CSS-Multiplier Index) '+ '? '*) Index (Values Natural (U Natural +inf.0)))
   (lambda [multiplier least]
     (case multiplier
@@ -627,11 +651,13 @@
     (or (nonnegative-flonum? v)
         (css+%? v))))
 
-(struct css-unitless ([value : Flonum]) #:type-name CSS-Unitless) ; for properties whoes computed values are not their used value
-(struct css+unitless css-unitless ([value : Nonnegative-Flonum]) #:type-name CSS+Unitless)
+(struct css-unitless ([value : Flonum]) #:type-name CSS-Unitless #:constructor-name make-css-unitless) ; for properties whoes computed values are not their used value
+(struct css+unitless css-unitless ([value : Nonnegative-Flonum]) #:type-name CSS+Unitless #:constructor-name unsafe-css+unitless)
+(define make-css+unitless : (-> Nonnegative-Flonum CSS+Unitless) (lambda [ul] (unsafe-css+unitless ul ul)))
 
-(struct css-% ([value : Flonum]) #:type-name CSS-% #:transparent)
-(struct css+% css-% ([value : Nonnegative-Flonum]) #:type-name CSS+% #:transparent)
+(struct css-% ([value : Flonum]) #:type-name CSS-% #:transparent #:constructor-name make-css-%)
+(struct css+% css-% ([value : Nonnegative-Flonum]) #:type-name CSS+% #:transparent #:constructor-name unsafe-css+%)
+(define make-css+% : (-> Nonnegative-Flonum CSS+%) (lambda [%] (unsafe-css+% % %)))
 
 (struct css-position ([x : CSS-Flonum-%] [y : CSS-Flonum-%]) #:type-name CSS-Position)
 
@@ -751,9 +777,9 @@
 (define (<css-keyword:to>) : (CSS:Filter Symbol) (CSS:<?> (<css:ident> 'to) make-exn:css:missing-keyword))
 (define (<css-keyword:at>) : (CSS:Filter Symbol) (CSS:<?> (<css:ident> 'at) make-exn:css:missing-keyword))
 
-(define (<css+unitless>) : (CSS:Filter CSS+Unitless) (CSS:<~> (<css+real>) (λ [[v : Nonnegative-Real]] (let ([flv (real->double-flonum v)]) (css+unitless flv flv)))))
-(define (<css-percentage>) : (CSS:Filter CSS-%) (CSS:<~> (<css:percentage>) (λ [[v : Flonum]] (css-% v))))
-(define (<css+percentage>) : (CSS:Filter CSS+%) (CSS:<~> (<css:percentage> nonnegative-flonum?) (λ [[v : Nonnegative-Flonum]] (css+% v v))))
+(define (<css+unitless>) : (CSS:Filter CSS+Unitless) (CSS:<~> (<css+real>) (λ [[v : Nonnegative-Real]] (make-css+unitless (real->double-flonum v)))))
+(define (<css-percentage>) : (CSS:Filter CSS-%) (CSS:<~> (<css:percentage>) make-css-%))
+(define (<css+percentage>) : (CSS:Filter CSS+%) (CSS:<~> (<css:percentage> nonnegative-flonum?) make-css+%))
 
 (define (<css-length-percentage>) : (CSS:Filter (U Flonum CSS-%)) (CSS:<+> (<css:length>) (<css-percentage>)))
 (define (<css+length-percentage>) : (CSS:Filter (U Nonnegative-Flonum CSS+%)) (CSS:<+> (<css+length>) (<css+percentage>)))
@@ -832,14 +858,26 @@
       (if (pixels? size) size defval))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-#;(define (<:css-position:>) : (CSS-Parser CSS-Position)
+(define (<:css-position:>) : (CSS-Parser (Listof CSS-Position))
   (define xs : (Listof Symbol) '(left right))
   (define ys : (Listof Symbol) '(top bottom))
   (define cxs : (Listof Symbol) (cons 'center xs))
   (define cys : (Listof Symbol) (cons 'center ys))
+
+  (define (keywords->position [kws : (Listof (U Symbol CSS+Flonum-%))]) : CSS-Position
+    (css-position 0.0 0.0))
+
+  (define (keyword%->position [kws : (Listof (U Symbol CSS+Flonum-%))]) : CSS-Position
+    (css-position 0.0 0.0))
+
+  (define (relative-position [kws : (Listof (U Symbol CSS+Flonum-%))]) : CSS-Position
+    (css-position 0.0 0.0))
   
-  (CSS<+> (CSS:<++> (<css-keyword> cxs) (<css-keyword> cys))
-          (CSS<&> (CSS:<^> (CSS:<+> (<css-keyword> cxs) (<css+length-percentage>)))
-                  (CSS:<*> (CSS:<+> (<css-keyword> cys) (<css+length-percentage>)) '?))
-          (CSS<&&> (CSS:<&> (<css-keyword> xs) (<css+length-percentage>))
-                   (CSS:<&> (<css-keyword> ys) (<css+length-percentage>)))))
+  (CSS<+> (CSS<~> (CSS<&> (CSS:<^> (CSS:<+> (<css-keyword> cxs) (<css+length-percentage>)))
+                          (CSS:<*> (CSS:<+> (<css-keyword> cys) (<css+length-percentage>)) '?))
+                  keyword%->position)
+          (CSS<~> (CSS:<++> (<css-keyword> cxs) (<css-keyword> cys))
+                  keywords->position)
+          (CSS<~> (CSS<&&> (CSS:<&> (<css-keyword> xs) (<css+length-percentage>))
+                           (CSS:<&> (<css-keyword> ys) (<css+length-percentage>)))
+                  relative-position)))
