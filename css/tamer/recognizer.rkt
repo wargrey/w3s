@@ -148,6 +148,7 @@
     ["should fail, when fed with ~s" com.css]
     #:do
     (cond [(not expected) (expect-false vs)]
+          [(eq? expected 'exn:css:overconsumption) (expect-satisfy pair? rest)]
           [(symbol? expected) (expect-satisfy exn:css? vs) (expect-eq (object-name vs) expected)]
           [(list? vs) (expect-= (length vs) 1) (expect-null rest) (expect-satisfy expected (car vs))]
           [else (tamer-deadcode vs)])))
@@ -261,12 +262,12 @@
            (context "<position>" #:do
                     (it-check "left" (<:css-position:>) css-position?)
                     (it-check "center bottom" (<:css-position:>) css-position?)
-                    (it-check "left 3em  top 10px" (<:css-position:>) css-position?)
+                    (it-check "left 3cm  top 10px" (<:css-position:>) css-position?)
                     (it-check "     10px     15px" (<:css-position:>) css-position?)
                     (it-check "left          15px" (<:css-position:>) css-position?)
                     (it-check "     10px top     " (<:css-position:>) css-position?)
-                    (it-check "left      top 15px" (<:css-position:>) css-position?)
-                    (it-check "left 10px top     " (<:css-position:>) css-position?))
+                    (it-check "left      top 15px" (<:css-position:>) 'exn:css:overconsumption)
+                    (it-check "left 10px top     " (<:css-position:>) 'exn:css:overconsumption))
            
            (context "<color>" #:do
                     (it-check "hsl(120.0 100% 100% / 0.5)" (<css-color-notation>) flcolor?)

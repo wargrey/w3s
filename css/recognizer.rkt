@@ -659,7 +659,7 @@
 (struct css+% css-% ([value : Nonnegative-Flonum]) #:type-name CSS+% #:transparent #:constructor-name unsafe-css+%)
 (define make-css+% : (-> Nonnegative-Flonum CSS+%) (lambda [%] (unsafe-css+% % %)))
 
-(struct css-position ([x : CSS-Flonum-%] [y : CSS-Flonum-%]) #:type-name CSS-Position)
+(struct css-position ([x : CSS-Flonum-%] [y : CSS-Flonum-%]) #:type-name CSS-Position #:transparent)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-css-disjoint-filter <css-boolean> #:-> (U Zero One)
@@ -858,26 +858,72 @@
       (if (pixels? size) size defval))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define (<:css-position:>) : (CSS-Parser (Listof CSS-Position))
-  (define xs : (Listof Symbol) '(left right))
-  (define ys : (Listof Symbol) '(top bottom))
-  (define cxs : (Listof Symbol) (cons 'center xs))
-  (define cys : (Listof Symbol) (cons 'center ys))
+(define <:css-position:> : (-> (CSS-Parser (Listof CSS-Position)))
+  ;;; https://www.w3.org/TR/css-values-4/#position
+  (let* ([xs : (Listof Symbol) '(left right)]
+         [ys : (Listof Symbol) '(top bottom)]
+         [cxs : (Listof Symbol) (cons 'center xs)]
+         [cys : (Listof Symbol) (cons 'center ys)]
+         [0% : CSS-% (make-css-% 0.0)]
+         [50% : CSS-% (make-css-% 0.5)]
+         [100% : CSS-% (make-css-% 1.0)])
+    (define (css->racket [v : (U Symbol CSS+Flonum-%)]) : CSS-Flonum-%
+      (cond [(not (symbol? v)) v]
+            [else (case v
+                    [(left top)     0%]
+                    [(right bottom) 100%]
+                    [else           50%])]))
 
-  (define (keywords->position [kws : (Listof (U Symbol CSS+Flonum-%))]) : CSS-Position
-    (css-position 0.0 0.0))
+    (define (pos-negate [v : (U Symbol CSS+Flonum-%)]) : CSS-Flonum-%
+      (cond [(flonum? v) (- v)]
+            [(css-%? v) (make-css-% (- (css-%-value v)))]
+            [else 50%]))
+    
+    (define (keyword->position [kws : (Listof Symbol)]) : CSS-Position
+      (let pfold ([ps : (Listof Symbol) kws]
+                  [x : (Option CSS-Flonum-%) #false]
+                  [y : (Option CSS-Flonum-%) #false])
+        (cond [(null? ps) (css-position (or x 50%) (or y 50%))]
+              [else (let ([rest (cdr ps)])
+                      (case (car ps)
+                        [(left)   (pfold rest 0%   y)]
+                        [(right)  (pfold rest 100% y)]
+                        [(top)    (pfold rest x    0%)]
+                        [(bottom) (pfold rest x    100%)]
+                        [else (if (not x)
+                                  (pfold rest 50%  y)
+                                  (pfold rest x    50%))]))])))
 
-  (define (keyword%->position [kws : (Listof (U Symbol CSS+Flonum-%))]) : CSS-Position
-    (css-position 0.0 0.0))
+    (define (keyword-length-%->position [vs : (Listof (U Symbol CSS+Flonum-%))]) : CSS-Position
+      (cond [(null? vs) '#:deadcode (css-position 50% 50%)]
+            [(null? (cdr vs)) (css-position (css->racket (car vs)) 50%)]
+            [else (css-position (css->racket (car vs)) (css->racket (cadr vs)))]))
+    
+    (define (relative-position [vs : (Listof (U Symbol CSS+Flonum-%))]) : CSS-Position
+      (let pfold ([ps : (Listof (U Symbol CSS+Flonum-%)) vs]
+                  [x : (Option CSS-Flonum-%) #false]
+                  [y : (Option CSS-Flonum-%) #false])
+        (cond [(or (null? ps) (null? (cdr ps))) '#:deadcode (css-position (or x 50%) (or y 50%))]
+              [else (let-values ([(pos rest) (values (cadr ps) (cddr ps))])
+                      (case (car ps)
+                        [(left)   (pfold rest (css->racket pos) y)]
+                        [(top)    (pfold rest x (css->racket pos))]
 
-  (define (relative-position [kws : (Listof (U Symbol CSS+Flonum-%))]) : CSS-Position
-    (css-position 0.0 0.0))
-  
-  (CSS<+> (CSS<~> (CSS<&> (CSS:<^> (CSS:<+> (<css-keyword> cxs) (<css+length-percentage>)))
-                          (CSS:<*> (CSS:<+> (<css-keyword> cys) (<css+length-percentage>)) '?))
-                  keyword%->position)
-          (CSS<~> (CSS:<++> (<css-keyword> cxs) (<css-keyword> cys))
-                  keywords->position)
-          (CSS<~> (CSS<&&> (CSS:<&> (<css-keyword> xs) (<css+length-percentage>))
-                           (CSS:<&> (<css-keyword> ys) (<css+length-percentage>)))
-                  relative-position)))
+                        ; NOTE: negative values are invalid by specification,
+                        ;   so that we can employ negative values for right-bottom offsets
+                        [(right)  (pfold rest (pos-negate pos) y)]
+                        [(bottom) (pfold rest x (pos-negate pos))]
+                        [else '#:deadcode (pfold rest x y)]))])))
+    
+    (lambda []
+      ; WARNING: it is interpreted as specified in `background-position`,
+      ;   however the syntax itself is different than of `background-position`
+      ;   as it does not support the 3-value variant, which causes ambiguities.
+      (CSS<+> (CSS<~> (CSS<&&> (CSS:<&> (<css-keyword> xs) (<css+length-percentage>))
+                               (CSS:<&> (<css-keyword> ys) (<css+length-percentage>)))
+                      relative-position)
+              (CSS<~> (CSS<&> (CSS:<^> (CSS:<+> (<css-keyword> cxs) (<css+length-percentage>)))
+                              (CSS:<*> (CSS:<+> (<css-keyword> cys) (<css+length-percentage>)) '?))
+                      keyword-length-%->position)
+              (CSS<~> (CSS:<++> (<css-keyword> cxs) (<css-keyword> cys))
+                      keyword->position)))))
