@@ -898,7 +898,7 @@
                                   (pfold rest x    50%))]))])))
 
     (define (keyword-length-%->position [vs : (Listof (U Symbol CSS+Flonum-%))]) : CSS-Position
-      (cond [(null? vs) '#:deadcode (css-position 50% 50%)]
+      (cond [(null? vs) '#:deadcode css-center-position]
             [(null? (cdr vs)) (css-position (css->racket (car vs)) 50%)]
             [else (css-position (css->racket (car vs)) (css->racket (cadr vs)))]))
     

@@ -133,8 +133,8 @@
    (define (<:color-stop+comma:> [<number%> : (CSS:Filter CSS-Flonum-%)])
      (css-comma-followed-parser
       ;; NOTE: it's much more efficient to parse <length-percentage> than to parse <css-color>, hence the `fold-color+maybe-position`
-      (CSS<+> (CSS<~> (CSS<&> (CSS:<*> <number%> '+) (CSS:<^> (<css-color>))) fold-positions+color)
-              (CSS<~> (CSS<&> (CSS:<^> (<css-color>)) (CSS:<*> <number%> '*)) fold-color+positions))))
+      (CSS<+> (CSS<~> (CSS<&> (CSS:<*> <number%> '(1 . 2)) (CSS:<^> (<css-color>))) fold-positions+color)
+              (CSS<~> (CSS<&> (CSS:<^> (<css-color>)) (CSS:<*> <number%> '(0 . 2))) fold-color+positions))))
    
    (define (<:color-stop-list:> [<number%> : (CSS:Filter CSS-Flonum-%)])
      (CSS<!> (CSS<&> (<:color-stop+comma:> <number%>)
