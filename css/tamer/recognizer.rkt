@@ -284,21 +284,28 @@
                              (it-check "linear-gradient(red)" (<css-gradient-notation>) 'exn:css:arity)
 
                              (context "linear gradients" #:do
-                                      (context "vertical gradient" #:do
-                                               (it-check "linear-gradient(yellow, blue)" (<css-gradient-notation>) linear-gradient?)
-                                               (it-check "linear-gradient(180deg, yellow, blue)" (<css-gradient-notation>) linear-gradient?)
-                                               (it-check "linear-gradient(to top, blue, yellow)" (<css-gradient-notation>) linear-gradient?)
-                                               (it-check "linear-gradient(to bottom, 0% yellow, blue 100%)" (<css-gradient-notation>) linear-gradient?))
-                                      
-                                      (context "gradient with angle and hint" #:do
-                                               (it-check "linear-gradient(135deg, yellow, 50%, blue)" (<css-gradient-notation>) linear-gradient?)
-                                               (it-check "linear-gradient(-45deg, blue, 50%, yellow)" (<css-gradient-notation>) linear-gradient?))
+                                      (it-check "linear-gradient(yellow, blue)" (<css-gradient-notation>) linear-gradient?)
+                                      (it-check "linear-gradient(180deg, yellow, blue)" (<css-gradient-notation>) linear-gradient?)
+                                      (it-check "linear-gradient(to top, blue, yellow)" (<css-gradient-notation>) linear-gradient?)
+                                      (it-check "linear-gradient(to bottom, 0% yellow, blue 100%)" (<css-gradient-notation>) linear-gradient?)
+                                      (it-check "linear-gradient(135deg, yellow, 50%, blue)" (<css-gradient-notation>) linear-gradient?)
+                                      (it-check "linear-gradient(-45deg, blue, 50%, yellow)" (<css-gradient-notation>) linear-gradient?)
+                                      (it-check "linear-gradient(yellow, blue 20%, #0f0)" (<css-gradient-notation>) linear-gradient?)
+                                      (it-check "linear-gradient(to top right, red, white, blue)" (<css-gradient-notation>) linear-gradient?))
 
-                                      (context "3-color gradient" #:do
-                                               (it-check "linear-gradient(yellow, blue 20%, #0f0)" (<css-gradient-notation>) linear-gradient?))
-                                      
-                                      (context "corner-to-corner gradient" #:do
-                                               (it-check "linear-gradient(to top right, red, white, blue)" (<css-gradient-notation>) linear-gradient?)))))))
+                             (context "radial gradients" #:do
+                                      (it-check "radial-gradient(5px circle at top left, yellow, blue)" (<css-gradient-notation>) radial-gradient?)
+                                      (it-check "radial-gradient(yellow, green)" (<css-gradient-notation>) radial-gradient?)
+                                      (it-check "radial-gradient(ellipse at center, yellow 0%, green 100%)" (<css-gradient-notation>) radial-gradient?)
+                                      (it-check "radial-gradient(farthest-corner at 50% 50%, yellow, green)" (<css-gradient-notation>) radial-gradient?)
+                                      (it-check "radial-gradient(circle, yellow, green)" (<css-gradient-notation>) radial-gradient?)
+                                      (it-check "radial-gradient(red, yellow, green)" (<css-gradient-notation>) radial-gradient?)
+                                      (it-check "radial-gradient(farthest-side at left bottom, red, yellow 50px, green)" (<css-gradient-notation>) radial-gradient?)
+                                      (it-check "radial-gradient(closest-side at 20px 30px, red, yellow, green)" (<css-gradient-notation>) radial-gradient?)
+                                      (it-check "radial-gradient(20px 30px at 20px 30px, red, yellow, green)" (<css-gradient-notation>) radial-gradient?)
+                                      (it-check "radial-gradient(closest-side circle at 20px 30px, red, yellow, green)" (<css-gradient-notation>) radial-gradient?)
+                                      (it-check "radial-gradient(20px 20px at 20px 30px, red, yellow, green)" (<css-gradient-notation>) radial-gradient?)
+                                      (it-check "radial-gradient(at 20px 30px, green 100%, yellow 150%, red 200%)" (<css-gradient-notation>) radial-gradient?))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (module+ main

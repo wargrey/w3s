@@ -52,13 +52,13 @@
           [_ (let ([? (datum->syntax #'_ (gensym))]) (values (cons ? snrettap) (cons ? stnemugra)))]
           [* (values (cons #'[... ...] snrettap) stnemugra)] ; this would make sense if typed racket could understand it 
           [field (values snrettap (cons #'field stnemugra))])))
-    (list (list* #'list #'_ (reverse snerttap)) (cons <constructor> (reverse stnemugra))))
+    (list (list* #'list #'_ (reverse snerttap)) (cons <constructor> (reverse stnemugra)) (length stnemugra)))
   (syntax-parse stx
     [(self func-filter #:-> RangeType
            [(fname aliases ...) #:=> [transforms ...] (~optional #:<+>) fparser ...] ...
            (~optional (~seq #:where [defaux ...])))
      (with-syntax ([defines (if (attribute defaux) #'(begin defaux ...) #'(void))]
-                   [((([pattern ...] [transform ...]) ...) ...)
+                   [((([pattern ...] [transform ...] argc) ...) ...)
                     (for/list ([<function> (in-list (syntax->list #'(fname ...)))]
                                [<transforms> (in-list (syntax->list #'([transforms ...] ...)))])
                       (define transforms (syntax-e <transforms>))
@@ -68,7 +68,7 @@
                         (cond [(pair? transform) (parse-pattern (car transform) (cdr transform))]
                               [(null? transform) (raise-syntax-error (syntax-e #'self) "missing value constructor" <transform>)]
                               [else (let ([? (datum->syntax <transform> (gensym))])
-                                      (list (list #'? #'list? ?) (list #'values ?)))])))])
+                                      (list (list #'? #'list? ?) (list #'values ?) 1))])))])
        (syntax/loc stx
          (define (func-filter) : (CSS:Filter RangeType) defines
            (define do-parse : (-> Symbol (CSS-Parser (Listof Any)) (Listof CSS-Token) (U (Listof Any) CSS-Syntax-Error))
@@ -105,7 +105,7 @@
                              (case id [(css) (current)] ... [else (current-last)])))))))]))
 
 (define-syntax (CSS<?> stx)
-  (syntax-case stx [else]
+  (syntax-parse stx #:datum-literals [else]
     [(_) #'values]
     [(_ [else <else> ...]) (syntax/loc stx (CSS<&> <else> ...))]
     [(_ [<if> <then> ...]) (syntax/loc stx (css:if <if> (CSS<&> <then> ...) #false))]
@@ -148,7 +148,8 @@
       (define datum : (CSS-Option Any) (css-filter token))
       (if (exn:css? datum) datum (and datum const)))))
 
-(define CSS:<?> : (All (a) (-> (CSS:Filter a) (-> (U CSS-Syntax-Any (Listof CSS-Token)) CSS-Syntax-Error) (CSS:Filter a)))
+(define CSS:<?> : (All (a b c) (case-> [(CSS:Filter a) (-> (U CSS-Syntax-Any (Listof CSS-Token)) CSS-Syntax-Error) -> (CSS:Filter a)]
+                                       [(CSS:Filter a) b (-> CSS-Syntax-Error c) -> (CSS:Filter (U a b c))]))
   (case-lambda
     [(css:filter make-exn)
      (λ [[token : CSS-Syntax-Any]]
@@ -641,15 +642,8 @@
 (define-type CSS-Flonum-% (U Flonum CSS-%))
 (define-type CSS+Flonum-% (U Nonnegative-Flonum CSS+%))
 
-(define css-flonum-%? : (-> Any Boolean : CSS-Flonum-%)
-  (lambda [v]
-    (or (flonum? v)
-        (css-%? v))))
-
-(define css+flonum-%? : (-> Any Boolean : #:+ CSS+Flonum-%)
-  (lambda [v]
-    (or (nonnegative-flonum? v)
-        (css+%? v))))
+(define css-flonum-%? : (-> Any Boolean : CSS-Flonum-%) (lambda [v] (or (flonum? v) (css-%? v))))
+(define css+flonum-%? : (-> Any Boolean : #:+ CSS+Flonum-%) (lambda [v] (or (nonnegative-flonum? v) (css+%? v))))
 
 (struct css-unitless ([value : Flonum]) #:type-name CSS-Unitless #:constructor-name make-css-unitless) ; for properties whoes computed values are not their used value
 (struct css+unitless css-unitless ([value : Nonnegative-Flonum]) #:type-name CSS+Unitless #:constructor-name unsafe-css+unitless)
@@ -660,6 +654,12 @@
 (define make-css+% : (-> Nonnegative-Flonum CSS+%) (lambda [%] (unsafe-css+% % %)))
 
 (struct css-position ([x : CSS-Flonum-%] [y : CSS-Flonum-%]) #:type-name CSS-Position #:transparent)
+
+(define 0% : CSS+% (make-css+% 0.0))
+(define 50% : CSS+% (make-css+% 0.5))
+(define 100% : CSS+% (make-css+% 1.0))
+
+(define css-center-position : CSS-Position (css-position 50% 50%))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-css-disjoint-filter <css-boolean> #:-> (U Zero One)
@@ -776,6 +776,7 @@
 
 (define (<css-keyword:to>) : (CSS:Filter Symbol) (CSS:<?> (<css:ident> 'to) make-exn:css:missing-keyword))
 (define (<css-keyword:at>) : (CSS:Filter Symbol) (CSS:<?> (<css:ident> 'at) make-exn:css:missing-keyword))
+(define (<css-keyword:from>) : (CSS:Filter Symbol) (CSS:<?> (<css:ident> 'from) make-exn:css:missing-keyword))
 
 (define (<css+unitless>) : (CSS:Filter CSS+Unitless) (CSS:<~> (<css+real>) (λ [[v : Nonnegative-Real]] (make-css+unitless (real->double-flonum v)))))
 (define (<css-percentage>) : (CSS:Filter CSS-%) (CSS:<~> (<css:percentage>) make-css-%))
@@ -784,9 +785,14 @@
 (define (<css-length-percentage>) : (CSS:Filter (U Flonum CSS-%)) (CSS:<+> (<css:length>) (<css-percentage>)))
 (define (<css+length-percentage>) : (CSS:Filter (U Nonnegative-Flonum CSS+%)) (CSS:<+> (<css+length>) (<css+percentage>)))
 
-(define (<css-frequency-percentage>) : (CSS:Filter (U Flonum CSS-%)) (CSS:<+> (<css:frequency>) (<css-percentage>)))
 (define (<css-angle-percentage>) : (CSS:Filter (U Flonum CSS-%)) (CSS:<+> (<css:angle>) (<css-percentage>)))
+(define (<css+angle-percentage>) : (CSS:Filter (U Nonnegative-Flonum CSS+%)) (CSS:<+> (<css+angle>) (<css+percentage>)))
+
+(define (<css-frequency-percentage>) : (CSS:Filter (U Flonum CSS-%)) (CSS:<+> (<css:frequency>) (<css-percentage>)))
+(define (<css+frequency-percentage>) : (CSS:Filter (U Nonnegative-Flonum CSS+%)) (CSS:<+> (<css+frequency>) (<css+percentage>)))
+
 (define (<css-time-percentage>) : (CSS:Filter (U Flonum CSS-%)) (CSS:<+> (<css:time>) (<css-percentage>)))
+(define (<css+time-percentage>) : (CSS:Filter (U Nonnegative-Flonum CSS-%)) (CSS:<+> (<css+time>) (<css+percentage>)))
 
 (define css-omissible-comma-parser : (All (a) (-> (CSS-Parser a) (CSS-Parser a)))
   (lambda [atom-parser]
@@ -863,10 +869,7 @@
   (let* ([xs : (Listof Symbol) '(left right)]
          [ys : (Listof Symbol) '(top bottom)]
          [cxs : (Listof Symbol) (cons 'center xs)]
-         [cys : (Listof Symbol) (cons 'center ys)]
-         [0% : CSS-% (make-css-% 0.0)]
-         [50% : CSS-% (make-css-% 0.5)]
-         [100% : CSS-% (make-css-% 1.0)])
+         [cys : (Listof Symbol) (cons 'center ys)])
     (define (css->racket [v : (U Symbol CSS+Flonum-%)]) : CSS-Flonum-%
       (cond [(not (symbol? v)) v]
             [else (case v

@@ -5,6 +5,7 @@
 (provide (all-defined-out))
 
 (require racket/string)
+(require racket/list)
 
 (require bitmap/base)
 (require bitmap/resize)
@@ -23,10 +24,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type Image-Set-Option (List CSS-Image-Datum Flonum))
 (define-type Image-Set-Options (Listof Image-Set-Option))
-(define-type Linear-Color-Stop (Pairof CSS-Color-Datum CSS-Flonum-%))
+(define-type Linear-Color-Stop (Pairof CSS-Color-Datum (Listof CSS-Flonum-%)))
 (define-type Linear-Color-Stops (Pairof Linear-Color-Stop (Listof+ Linear-Color-Stop)))
-(define-type Radial-Elliptical-Size (U Nonnegative-Flonum CSS+%))
-(define-type Radial-Size (U Symbol Nonnegative-Flonum (Pairof Radial-Elliptical-Size Radial-Elliptical-Size)))
+(define-type Radial-Size (U Symbol Nonnegative-Flonum (Pairof (U Nonnegative-Flonum CSS+%) (U Nonnegative-Flonum CSS+%))))
+(define-type Radial-Shape (Pairof Symbol Radial-Size))
 
 (define-type CSS-Image-Datum (U CSS-Image String))
 
@@ -35,8 +36,10 @@
 (define-css-value image-set #:as Image-Set #:=> css-image ([options : Image-Set-Options]))
 
 (define-css-value css-gradient #:as CSS-Gradient #:=> css-image ())
-(define-css-value linear-gradient #:as Linear-Gradient #:=> css-gradient ([direction : Flonum] [stops : Linear-Color-Stops] [repeat? : Boolean]))
-(define-css-value radial-gradient #:as Radial-Gradient #:=> css-gradient ([shape : Symbol] [size : Radial-Size] [stops : Linear-Color-Stops] [repeat? : Boolean]))
+(define-css-value linear-gradient #:as Linear-Gradient #:=> css-gradient
+  ([direction : Flonum] [stops : Linear-Color-Stops] [repeat? : Boolean]))
+(define-css-value radial-gradient #:as Radial-Gradient #:=> css-gradient
+  ([shape : Radial-Shape] [center : CSS-Position] [stops : Linear-Color-Stops] [repeat? : Boolean]))
 
 (define css-image-rendering-option : (Listof Symbol) '(auto crisp-edges pixelated))
 (define css-image-fit-option : (Listof Symbol) '(fill contain cover none scale-down))
@@ -44,61 +47,111 @@
 (define css-gradient-hside-option : (Listof Symbol) '(left right))
 (define css-gradient-vside-option : (Listof Symbol) '(top bottom))
 (define css-gradient-ending-shape : (Listof Symbol) '(circle ellipse))
-(define css-gradient-size : (Listof Symbol) '(farthest-corner farthest-side closest-corner closest-side))
+(define css-gradient-extent-size : (Listof Symbol) '(farthest-corner farthest-side closest-corner closest-side))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-css-function-filter <css-image-notation> #:-> CSS-Image
   ;;; https://drafts.csswg.org/css-images-4/#image-notation
   ;;; https://drafts.csswg.org/css-images-4/#image-set-notation
-  [(image) #:=> [(image #false "" [fallback ? index? symbol? flcolor?])
-                 (image #false [content ? css-image? string?] [fallback ? symbol? index? flcolor?])
-                 (image [tag ? symbol? false?] "" [fallback ? symbol? index? flcolor?])
-                 (image [tag ? symbol? false?] [content ? css-image? string?] [fallback ? symbol? index? flcolor?])]
+  [(image)
+   #:=> [(image #false "" [fallback ? index? symbol? flcolor?])
+         (image #false [content ? css-image? string?] [fallback ? symbol? index? flcolor?])
+         (image [tag ? symbol? false?] "" [fallback ? symbol? index? flcolor?])
+         (image [tag ? symbol? false?] [content ? css-image? string?] [fallback ? symbol? index? flcolor?])]
    (CSS<&> ((inst CSS:<*> Any) (<css-keyword> css-image-tag) '?)
            (CSS<+> ((inst CSS:<^> Any) (<css-color>)) ; NOTE: both color and url accept strings, however their domains are not intersective.
                    (CSS<&> ((inst CSS:<^> Any) (CSS:<+> (<css-image>) (<css:string>)))
                            (CSS<$> (CSS<?> [(<css-comma>) ((inst CSS:<^> Any) (<css-color>))]) 'transparent))))]
-  [(image-set) #:=> [(image-set [options ? image-set-options?])]
+  [(image-set)
+   #:=> [(image-set [options ? image-set-options?])]
    (CSS<!> (CSS<#> (CSS<!> (CSS:<^> (list (CSS:<+> (<css:string>) (<css-image>)) (<css+resolution>))))))])
 
 (define-css-function-filter <css-gradient-notation> #:-> CSS-Gradient
   ;;; https://drafts.csswg.org/css-images-4/#gradients
-  [(linear-gradient) #:=> [(linear-gradient [direction ? flonum?] [stops ? color-stop-list?] #false)
-                           (linear-gradient (css-named-direction->degree 'bottom) [stops ? color-stop-list?] #false)]
-   (CSS<&> (<:angle-or-direction:>) (<:color-stop-list:>))]
-  [(repeating-linear-gradient) #:=> [(linear-gradient [direction ? flonum?] [stops ? color-stop-list?] #true)
-                                     (linear-gradient (css-named-direction->degree 'bottom) [stops ? color-stop-list?] #true)]
-   (CSS<&> (<:angle-or-direction:>) (<:color-stop-list:>))]
+  [(linear-gradient)
+   #:=> [(linear-gradient [direction ? flonum?] [stops ? linear-color-stop-list?] #false)
+         (linear-gradient (css-named-direction->degree 'bottom) [stops ? linear-color-stop-list?] #false)]
+   (CSS<&> (<:angle-or-direction:>) (<:linear-color-stop-list:>))]
+  [(repeating-linear-gradient)
+   #:=> [(linear-gradient [direction ? flonum?] [stops ? linear-color-stop-list?] #true)
+         (linear-gradient (css-named-direction->degree 'bottom) [stops ? linear-color-stop-list?] #true)]
+   (CSS<&> (<:angle-or-direction:>) (<:linear-color-stop-list:>))]
+  [(radial-gradient)
+   #:=> [(radial-gradient [shape ? radial-shape?] [center ? css-position?] [stops ? linear-color-stop-list?] #false)
+         (radial-gradient default-shape [center ? css-position?] [stops ? linear-color-stop-list?] #false)
+         (radial-gradient [shape ? radial-shape?] css-center-position [stops ? linear-color-stop-list?] #false)
+         (radial-gradient default-shape css-center-position [stops ? linear-color-stop-list?] #false)]
+   (CSS<&> (CSS<*> (<:ending-shape+comma:>) '?) (<:linear-color-stop-list:>))]
+  [(repeating-radial-gradient)
+   #:=> [(radial-gradient [shape ? radial-shape?] [center ? css-position?] [stops ? linear-color-stop-list?] #false)
+         (radial-gradient default-shape [center ? css-position?] [stops ? linear-color-stop-list?] #false)
+         (radial-gradient [shape ? radial-shape?] css-center-position [stops ? linear-color-stop-list?] #false)
+         (radial-gradient default-shape css-center-position [stops ? linear-color-stop-list?] #false)]
+   (CSS<&> (CSS<*> (<:ending-shape+comma:>) '?) (<:linear-color-stop-list:>))]
   #:where
-  [(define (<:angle-or-direction:>)
+  [(define default-shape : Radial-Shape (cons 'ellipse 'farthest-corner))
+
+   (define (<:angle-or-direction:>)
      (css-comma-followed-parser
       (CSS<?> [(<css-keyword:to>) (CSS<~> (CSS:<++> (<css-keyword> css-gradient-hside-option)
                                                     (<css-keyword> css-gradient-vside-option))
                                           named-directions->degrees)]
               [else (CSS:<*> (<css-angle>) '?)])))
+
+   (define (<:ending-shape+comma:>)
+     (css-comma-followed-parser
+      (CSS<?> [(<css-keyword:at>) (CSS<^> (<:css-position:>))]
+              [else (CSS<&> (CSS<+> (CSS<~> ((inst CSS<++> (Listof (U Symbol CSS+Flonum-%)))
+                                             (CSS:<^> (<css-keyword> 'ellipse)) (CSS:<*> (<css+length-percentage>) 2))
+                                            fold-ellipse)
+                                    (CSS<~> (CSS:<++> (<css-keyword> 'circle) (<css+length>))
+                                            fold-circle)
+                                    (CSS<~> (CSS:<++> (<css-keyword> css-gradient-ending-shape) (<css-keyword> css-gradient-extent-size))
+                                            fold-keyword-shape))
+                            (CSS<*> (CSS<?> [(<css-keyword:at>) (CSS<^> (<:css-position:>))]) '?))])))
    
-   (define (<:color-stop+comma:>)
+   (define (<:length-color-stop+comma:>)
      (css-comma-followed-parser
       ;; NOTE: it's much more efficient to parse <length-percentage> than to parse <css-color>, hence the `fold-color+maybe-position`
-      (CSS<+> (CSS<~> (CSS:<&> (<css-length-percentage>) (<css-color>)) fold-position+color)
-              (CSS<~> (CSS<&> (CSS:<^> (<css-color>)) (CSS:<*> (<css-length-percentage>) '?)) fold-color+maybe-position))))
+      (CSS<+> (CSS<~> (CSS<&> (CSS:<*> (<css-length-percentage>) '+) (CSS:<^> (<css-color>))) fold-positions+color)
+              (CSS<~> (CSS<&> (CSS:<^> (<css-color>)) (CSS:<*> (<css-length-percentage>) '*)) fold-color+positions))))
    
    (define (<:maybe-color-hint+comma:>)
      (css-comma-followed-parser (CSS:<*> (CSS:<~> (<css-length-percentage>) linear-hint->fake-stop) '?)))
 
-   (define (<:color-stop-list:>)
-     (CSS<!> (CSS<&> (<:color-stop+comma:>)
-                     (CSS<*> (CSS<&> (<:maybe-color-hint+comma:>) (<:color-stop+comma:>)) '*))))
+   (define (<:linear-color-stop-list:>)
+     (CSS<!> (CSS<&> (<:length-color-stop+comma:>)
+                     (CSS<*> (CSS<&> (<:maybe-color-hint+comma:>) (<:length-color-stop+comma:>)) '*))))
 
    (define (linear-hint->fake-stop [h : CSS-Flonum-%]) : Linear-Color-Stop
-     (cons 'hint-only h))
+     (cons 'hint-only (list h)))
 
-   (define (fold-color+maybe-position [data : (Listof (U CSS-Color-Datum CSS-Flonum-%))]) : Any
-     (cond [(null? (cdr data)) (cons (car data) +nan.0)]
-           [else (cons (car data) (cadr data))]))
+   (define (fold-color+positions [data : (Listof (U CSS-Color-Datum CSS-Flonum-%))]) : Any
+     ; yes, it's nothing but another `identity` function
+     ; please let `CSS<~>` isolate these `color stop`s from preceding color stops and hints
+     data)
    
-   (define (fold-position+color [data : (Listof (U CSS-Color-Datum CSS-Flonum-%))]) : Any
-     (cons (cadr data) (car data)))
+   (define (fold-positions+color [data : (Listof (U CSS-Color-Datum CSS-Flonum-%))]) : Any
+     (let-values ([(positions color) (split-at-right data 1)])
+       (cons (car color) positions)))
+
+   (define (fold-circle [data : (Listof (U Symbol Nonnegative-Flonum))]) : Any
+     (cons 'circle
+           (let ([s (filter flonum? data)])
+             (if (null? s) (cdr default-shape) (car s)))))
+
+   (define (fold-ellipse [data : (Listof (U Symbol CSS+Flonum-%))]) : Any
+     (cons 'ellipse
+           (let ([s (filter-not symbol? data)])
+             (if (or (null? s) (null? (cdr s)))
+                 (cdr default-shape)
+                 (cons (car s) (cadr s))))))
+
+   (define (fold-keyword-shape [data : (Listof Symbol)]) : Any
+     (cond [(null? data) '#:deadcode default-shape]
+           [else (let ([kws (remove* css-gradient-ending-shape data)])
+                   (cond [(null? kws) (cons (car data) (cdr default-shape))]
+                         [else (cons (car default-shape) (car kws))]))]))
 
    (define (named-directions->degrees [side-or-corners : (Listof Symbol)]) : Flonum
      (define degrees : (Listof Nonnegative-Flonum) (map css-named-direction->degree side-or-corners))
@@ -194,18 +247,37 @@
     (and (list? v)
          (andmap image-set-option? v))))
 
+(define flonum-%-list? : (-> Any Boolean : (Listof CSS-Flonum-%))
+  (lambda [v]
+    (and (list? v)
+         (andmap css-flonum-%? v))))
+
 (define linear-color-stop? : (-> Any Boolean : Linear-Color-Stop)
   (lambda [v]
     (and (pair? v)
          (css-color-datum? (car v))
-         (css-flonum-%? (cdr v)))))
+         (flonum-%-list? (cdr v)))))
 
 (define color-stops-or-hints? : (-> (Listof Any) Boolean : (Listof+ Linear-Color-Stop))
   (lambda [datum]
     (and (pair? datum)
          (andmap linear-color-stop? datum))))
 
-(define color-stop-list? : (-> Any Boolean : Linear-Color-Stops)
+(define radial-shape? : (-> Any Boolean : #:+ Radial-Shape)
+  (lambda [v]
+    (and (pair? v)
+         (symbol? (car v))
+         (radial-size? (cdr v)))))
+
+(define radial-size? : (-> Any Boolean : #:+ Radial-Size)
+  (lambda [v]
+    (or (symbol? v)
+        (nonnegative-flonum? v)
+        (and (pair? v)
+             (css+flonum-%? (car v))
+             (css+flonum-%? (cdr v))))))
+
+(define linear-color-stop-list? : (-> Any Boolean : Linear-Color-Stops)
   (lambda [datum]
     (and (list? datum)
          (pair? datum)
