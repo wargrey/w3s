@@ -782,17 +782,17 @@
 (define (<css-percentage>) : (CSS:Filter CSS-%) (CSS:<~> (<css:percentage>) make-css-%))
 (define (<css+percentage>) : (CSS:Filter CSS+%) (CSS:<~> (<css:percentage> nonnegative-flonum?) make-css+%))
 
-(define (<css-length-percentage>) : (CSS:Filter (U Flonum CSS-%)) (CSS:<+> (<css:length>) (<css-percentage>)))
-(define (<css+length-percentage>) : (CSS:Filter (U Nonnegative-Flonum CSS+%)) (CSS:<+> (<css+length>) (<css+percentage>)))
+(define (<css-length-percentage>) : (CSS:Filter CSS-Flonum-%) (CSS:<+> (<css:length>) (<css-percentage>)))
+(define (<css+length-percentage>) : (CSS:Filter CSS+Flonum-%) (CSS:<+> (<css+length>) (<css+percentage>)))
 
-(define (<css-angle-percentage>) : (CSS:Filter (U Flonum CSS-%)) (CSS:<+> (<css:angle>) (<css-percentage>)))
-(define (<css+angle-percentage>) : (CSS:Filter (U Nonnegative-Flonum CSS+%)) (CSS:<+> (<css+angle>) (<css+percentage>)))
+(define (<css-angle-percentage>) : (CSS:Filter CSS-Flonum-%) (CSS:<+> (<css:angle>) (<css-percentage>)))
+(define (<css+angle-percentage>) : (CSS:Filter CSS+Flonum-%) (CSS:<+> (<css+angle>) (<css+percentage>)))
 
-(define (<css-frequency-percentage>) : (CSS:Filter (U Flonum CSS-%)) (CSS:<+> (<css:frequency>) (<css-percentage>)))
-(define (<css+frequency-percentage>) : (CSS:Filter (U Nonnegative-Flonum CSS+%)) (CSS:<+> (<css+frequency>) (<css+percentage>)))
+(define (<css-frequency-percentage>) : (CSS:Filter CSS-Flonum-%) (CSS:<+> (<css:frequency>) (<css-percentage>)))
+(define (<css+frequency-percentage>) : (CSS:Filter CSS+Flonum-%) (CSS:<+> (<css+frequency>) (<css+percentage>)))
 
-(define (<css-time-percentage>) : (CSS:Filter (U Flonum CSS-%)) (CSS:<+> (<css:time>) (<css-percentage>)))
-(define (<css+time-percentage>) : (CSS:Filter (U Nonnegative-Flonum CSS-%)) (CSS:<+> (<css+time>) (<css+percentage>)))
+(define (<css-time-percentage>) : (CSS:Filter CSS-Flonum-%) (CSS:<+> (<css:time>) (<css-percentage>)))
+(define (<css+time-percentage>) : (CSS:Filter CSS+Flonum-%) (CSS:<+> (<css+time>) (<css+percentage>)))
 
 (define css-omissible-comma-parser : (All (a) (-> (CSS-Parser a) (CSS-Parser a)))
   (lambda [atom-parser]

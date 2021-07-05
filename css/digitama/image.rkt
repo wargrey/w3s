@@ -40,6 +40,8 @@
   ([direction : Flonum] [stops : Linear-Color-Stops] [repeat? : Boolean]))
 (define-css-value radial-gradient #:as Radial-Gradient #:=> css-gradient
   ([shape : Radial-Shape] [center : CSS-Position] [stops : Linear-Color-Stops] [repeat? : Boolean]))
+(define-css-value conic-gradient #:as Conic-Gradient #:=> css-gradient
+  ([angle : Flonum] [center : CSS-Position] [stops : Linear-Color-Stops] [repeat? : Boolean]))
 
 (define css-image-rendering-option : (Listof Symbol) '(auto crisp-edges pixelated))
 (define css-image-fit-option : (Listof Symbol) '(fill contain cover none scale-down))
@@ -71,25 +73,38 @@
   [(linear-gradient)
    #:=> [(linear-gradient [direction ? flonum?] [stops ? linear-color-stop-list?] #false)
          (linear-gradient (css-named-direction->degree 'bottom) [stops ? linear-color-stop-list?] #false)]
-   (CSS<&> (<:angle-or-direction:>) (<:linear-color-stop-list:>))]
+   (CSS<&> (<:angle-or-direction:>) (<:color-stop-list:> (<css-length-percentage>)))]
   [(repeating-linear-gradient)
    #:=> [(linear-gradient [direction ? flonum?] [stops ? linear-color-stop-list?] #true)
          (linear-gradient (css-named-direction->degree 'bottom) [stops ? linear-color-stop-list?] #true)]
-   (CSS<&> (<:angle-or-direction:>) (<:linear-color-stop-list:>))]
+   (CSS<&> (<:angle-or-direction:>) (<:color-stop-list:> (<css-length-percentage>)))]
   [(radial-gradient)
    #:=> [(radial-gradient [shape ? radial-shape?] [center ? css-position?] [stops ? linear-color-stop-list?] #false)
          (radial-gradient default-shape [center ? css-position?] [stops ? linear-color-stop-list?] #false)
          (radial-gradient [shape ? radial-shape?] css-center-position [stops ? linear-color-stop-list?] #false)
          (radial-gradient default-shape css-center-position [stops ? linear-color-stop-list?] #false)]
-   (CSS<&> (CSS<*> (<:ending-shape+comma:>) '?) (<:linear-color-stop-list:>))]
+   (CSS<&> (<:ending-shape+comma:>) (<:color-stop-list:> (<css-length-percentage>)))]
   [(repeating-radial-gradient)
    #:=> [(radial-gradient [shape ? radial-shape?] [center ? css-position?] [stops ? linear-color-stop-list?] #false)
          (radial-gradient default-shape [center ? css-position?] [stops ? linear-color-stop-list?] #false)
          (radial-gradient [shape ? radial-shape?] css-center-position [stops ? linear-color-stop-list?] #false)
          (radial-gradient default-shape css-center-position [stops ? linear-color-stop-list?] #false)]
-   (CSS<&> (CSS<*> (<:ending-shape+comma:>) '?) (<:linear-color-stop-list:>))]
+   (CSS<&> (<:ending-shape+comma:>) (<:color-stop-list:> (<css-length-percentage>)))]
+  [(conic-gradient)
+   #:=> [(conic-gradient [angle ? flonum?] [center ? css-position?] [stops ? linear-color-stop-list?] #false)
+         (conic-gradient default-angle [center ? css-position?] [stops ? linear-color-stop-list?] #false)
+         (conic-gradient [angle ? flonum?] css-center-position [stops ? linear-color-stop-list?] #false)
+         (conic-gradient default-angle css-center-position [stops ? linear-color-stop-list?] #false)]
+   (CSS<&> (<:from-angle+comma:>) (<:color-stop-list:> (<css-angle-percentage>)))]
+  [(repeating-conic-gradient)
+   #:=> [(conic-gradient [angle ? flonum?] [center ? css-position?] [stops ? linear-color-stop-list?] #true)
+         (conic-gradient default-angle [center ? css-position?] [stops ? linear-color-stop-list?] #true)
+         (conic-gradient [angle ? flonum?] css-center-position [stops ? linear-color-stop-list?] #true)
+         (conic-gradient default-angle css-center-position [stops ? linear-color-stop-list?] #true)]
+   (CSS<&> (<:from-angle+comma:>) (<:color-stop-list:> (<css-angle-percentage>)))]
   #:where
   [(define default-shape : Radial-Shape (cons 'ellipse 'farthest-corner))
+   (define default-angle : Flonum 0.0)
 
    (define (<:angle-or-direction:>)
      (css-comma-followed-parser
@@ -100,30 +115,34 @@
 
    (define (<:ending-shape+comma:>)
      (css-comma-followed-parser
-      (CSS<?> [(<css-keyword:at>) (CSS<^> (<:css-position:>))]
-              [else (CSS<&> (CSS<+> (CSS<~> ((inst CSS<++> (Listof (U Symbol CSS+Flonum-%)))
-                                             (CSS:<^> (<css-keyword> 'ellipse)) (CSS:<*> (<css+length-percentage>) 2))
-                                            fold-ellipse)
-                                    (CSS<~> (CSS:<++> (<css-keyword> 'circle) (<css+length>))
-                                            fold-circle)
-                                    (CSS<~> (CSS:<++> (<css-keyword> css-gradient-ending-shape) (<css-keyword> css-gradient-extent-size))
-                                            fold-keyword-shape))
-                            (CSS<*> (CSS<?> [(<css-keyword:at>) (CSS<^> (<:css-position:>))]) '?))])))
+      (CSS<&> (CSS<*> (CSS<+> (CSS<~> ((inst CSS<++> (Listof (U Symbol CSS+Flonum-%)))
+                                       (CSS:<^> (<css-keyword> 'ellipse)) (CSS:<*> (<css+length-percentage>) 2))
+                                      fold-ellipse)
+                              (CSS<~> (CSS:<++> (<css-keyword> 'circle) (<css+length>))
+                                      fold-circle)
+                              (CSS<~> (CSS:<++> (<css-keyword> css-gradient-ending-shape) (<css-keyword> css-gradient-extent-size))
+                                      fold-keyword-shape))
+                      '?)
+              (CSS<*> (CSS<?> [(<css-keyword:at>) (CSS<^> (<:css-position:>))]) '?))))
+
+   (define (<:from-angle+comma:>)
+     (css-comma-followed-parser
+      (CSS<&> (CSS<*> (CSS<?> [(<css-keyword:from>) (CSS:<^> (<css:angle>))]) '?)
+              (CSS<*> (CSS<?> [(<css-keyword:at>) (CSS<^> (<:css-position:>))]) '?))))
    
-   (define (<:length-color-stop+comma:>)
+   (define (<:color-stop+comma:> [<number%> : (CSS:Filter CSS-Flonum-%)])
      (css-comma-followed-parser
       ;; NOTE: it's much more efficient to parse <length-percentage> than to parse <css-color>, hence the `fold-color+maybe-position`
-      (CSS<+> (CSS<~> (CSS<&> (CSS:<*> (<css-length-percentage>) '+) (CSS:<^> (<css-color>))) fold-positions+color)
-              (CSS<~> (CSS<&> (CSS:<^> (<css-color>)) (CSS:<*> (<css-length-percentage>) '*)) fold-color+positions))))
+      (CSS<+> (CSS<~> (CSS<&> (CSS:<*> <number%> '+) (CSS:<^> (<css-color>))) fold-positions+color)
+              (CSS<~> (CSS<&> (CSS:<^> (<css-color>)) (CSS:<*> <number%> '*)) fold-color+positions))))
    
-   (define (<:maybe-color-hint+comma:>)
-     (css-comma-followed-parser (CSS:<*> (CSS:<~> (<css-length-percentage>) linear-hint->fake-stop) '?)))
+   (define (<:color-stop-list:> [<number%> : (CSS:Filter CSS-Flonum-%)])
+     (CSS<!> (CSS<&> (<:color-stop+comma:> <number%>)
+                     (CSS<*> (CSS<&> (css-comma-followed-parser (CSS:<*> (CSS:<~> <number%> interpolation-hint->fake-stop) '?))
+                                     (<:color-stop+comma:> <number%>))
+                             '*))))
 
-   (define (<:linear-color-stop-list:>)
-     (CSS<!> (CSS<&> (<:length-color-stop+comma:>)
-                     (CSS<*> (CSS<&> (<:maybe-color-hint+comma:>) (<:length-color-stop+comma:>)) '*))))
-
-   (define (linear-hint->fake-stop [h : CSS-Flonum-%]) : Linear-Color-Stop
+   (define (interpolation-hint->fake-stop [h : CSS-Flonum-%]) : Linear-Color-Stop
      (cons 'hint-only (list h)))
 
    (define (fold-color+positions [data : (Listof (U CSS-Color-Datum CSS-Flonum-%))]) : Any

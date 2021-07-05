@@ -305,7 +305,27 @@
                                       (it-check "radial-gradient(20px 30px at 20px 30px, red, yellow, green)" (<css-gradient-notation>) radial-gradient?)
                                       (it-check "radial-gradient(closest-side circle at 20px 30px, red, yellow, green)" (<css-gradient-notation>) radial-gradient?)
                                       (it-check "radial-gradient(20px 20px at 20px 30px, red, yellow, green)" (<css-gradient-notation>) radial-gradient?)
-                                      (it-check "radial-gradient(at 20px 30px, green 100%, yellow 150%, red 200%)" (<css-gradient-notation>) radial-gradient?))))))
+                                      (it-check "radial-gradient(at 20px 30px, green 100%, yellow 150%, red 200%)" (<css-gradient-notation>) radial-gradient?))
+
+                             (context "conic gradients" #:do
+                                      (it-check "conic-gradient(at 25% 30%, white, black 60%)" (<css-gradient-notation>) conic-gradient?)
+                                      (it-check "conic-gradient(#f06, gold)" (<css-gradient-notation>) conic-gradient?)
+                                      (it-check "conic-gradient(at 50% 50%, #f06, gold)" (<css-gradient-notation>) conic-gradient?)
+                                      (it-check "conic-gradient(from 0deg, #f06, gold)" (<css-gradient-notation>) conic-gradient?)
+                                      (it-check "conic-gradient(from 0deg at center, #f06, gold)" (<css-gradient-notation>) conic-gradient?)
+                                      (it-check "conic-gradient(#f06 0%, gold 100%)" (<css-gradient-notation>) conic-gradient?)
+                                      (it-check "conic-gradient(#f06 0deg, gold 1turn)" (<css-gradient-notation>) conic-gradient?)
+                                      (it-check "conic-gradient(white -50%, black 150%)" (<css-gradient-notation>) conic-gradient?)
+                                      (it-check "conic-gradient(white -180deg, black 540deg)" (<css-gradient-notation>) conic-gradient?)
+                                      (it-check "conic-gradient(hsl(0,0%,75%), hsl(0,0%,25%))" (<css-gradient-notation>) conic-gradient?)
+                                      (it-check "conic-gradient(from 45deg, white, black, white)" (<css-gradient-notation>) conic-gradient?)
+                                      (it-check "conic-gradient(hsl(0,0%,87.5%), white 45deg, black 225deg, hsl(0,0%,87.5%))"
+                                                (<css-gradient-notation>) conic-gradient?)
+                                      (it-check "conic-gradient(white 45deg, black 225deg, white 405deg)" (<css-gradient-notation>) conic-gradient?)
+                                      (it-check "conic-gradient(red, yellow, lime, aqua, blue, magenta, red)" (<css-gradient-notation>) conic-gradient?)
+                                      (it-check "conic-gradient(yellowgreen 40%, gold 0deg 75%, #f06 0deg)" (<css-gradient-notation>) conic-gradient?)
+                                      (it-check "repeating-conic-gradient(hsla(0,0%,100%,.2) 0deg 15deg, hsla(0,0%,100%,0) 0deg 30deg)"
+                                                (<css-gradient-notation>) conic-gradient?))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (module+ main
