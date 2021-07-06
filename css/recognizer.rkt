@@ -52,7 +52,7 @@
           [_ (let ([? (datum->syntax #'_ (gensym))]) (values (cons ? snrettap) (cons ? stnemugra)))]
           [* (values (cons #'[... ...] snrettap) stnemugra)] ; this would make sense if typed racket could understand it 
           [field (values snrettap (cons #'field stnemugra))])))
-    (list (list* #'list #'_ (reverse snerttap)) (cons <constructor> (reverse stnemugra)) (length stnemugra)))
+    (list (list* #'list #;'func-name (reverse snerttap)) (cons <constructor> (reverse stnemugra)) (length stnemugra)))
   (syntax-parse stx
     [(self func-filter #:-> RangeType
            [(fname aliases ...) #:=> [transforms ...] (~optional #:<+>) fparser ...] ...
@@ -71,9 +71,9 @@
                                       (list (list #'? #'list? ?) (list #'values ?) 1))])))])
        (syntax/loc stx
          (define (func-filter) : (CSS:Filter RangeType) defines
-           (define do-parse : (-> Symbol (CSS-Parser (Listof Any)) (Listof CSS-Token) (U (Listof Any) CSS-Syntax-Error))
+           (define do-parse : (All (a) (-> Symbol (CSS-Parser (Listof a)) (Listof CSS-Token) (U (Listof Any) CSS-Syntax-Error)))
              (lambda [func-name func-parse func-argl]
-               (define-values (fargs --tokens) (func-parse (list func-name) func-argl))
+               (define-values (fargs --tokens) (func-parse null func-argl))
                (cond [(exn:css? fargs) fargs]
                      [(false? fargs) (make-exn:css:type --tokens)]
                      [(pair? --tokens) (make-exn:css:overconsumption --tokens)]
