@@ -1,12 +1,9 @@
 #lang typed/racket/base
 
+(provide (all-defined-out))
+
 (require css)
-(require css/digitama/color)
-(require css/digitama/image)
-(require css/digitama/syntax/unsafe/cascade)
-
 (require digimon/spec)
-
 (require racket/string)
 
 (require (for-syntax racket/base))
@@ -194,139 +191,139 @@
           [else (let ([size (length filters)]) (values (take expected-values size) size))])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-feature recognizer #:do
-  (let ([filters (list (<css:ident>) (<css:integer>) (<css:delim>))]
-        [parser (CSS<&&> ((inst CSS:<^> Any) (<css:ident>)) ((inst CSS:<*> Any) (<css:integer>) '?))])
-    (context "combinators" #:do
-             (tamer-context "juxtaposing values" filters CSS:<&> css-juxtapose #:do
-                           (it-check-<&> (list 'juxtaposing 128 #\&) #true)
-                           (it-check-<&> (list 'juxtaposing 128.0 #\&) #false))
-                        
-             (tamer-context "combine-all" filters CSS:<&&> CSS<&&> #:do
-                           (it-check-<&&> (list 128 'combine-all #\&) #true)
-                           (it-check-<&&> (list 'combine-all #\&) #false))
-             
-             (tamer-context "combine-all with optional component" parser #:do
-                            (it-check-tricky-<&&> (list 128 'combine-all #\&) '(combine-all 128))
-                            (it-check-tricky-<&&> (list 'combine-all #\&) '(combine-all))
-                            (it-check-tricky-<&&> (list 128 #\&) #false))
-                        
-             (tamer-context "combine-any" filters CSS:<++> CSS<++> #:do
-                           (it-check-<++> (list 128.0 'combine-any #\&) #false)
-                           (it-check-<++> (list 'combine-any 128.0 #\&) '(combine-any))
-                           (it-check-<++> (list #\& 'combine-any 128.0) '(combine-any #\&)))))
-
-  (let ([filter (<css:integer>)])
-    (context "multipliers" #:do
-             (it-check-modifier '?         0  1)
-             (it-check-modifier '*         0  +inf.0)
-             (it-check-modifier '+         1  +inf.0)
-             (it-check-modifier +16        16 16)
-             (it-check-modifier '(8)       8  8)
-             (it-check-modifier '(3 . 8)   3  8)
-             (it-check-modifier '(4 . inf) 4  +inf.0)
-             (it-check-modifier '(NaN . 4) 0  4)
-
-             (tamer-context "given with the multiplier '~s'" filter '+ CSS:<!> CSS<!> #:do
-                            (it-check-<!> 0 #false)
-                            (it-check-<!> 3 3)
-                            (it-check-<!> 5 5))
-
-             (tamer-context "given with the multiplier '~s'" filter '(2 . 4) CSS:<*> CSS<*> #:do
-                            (it-check-<*> 1 #false)
-                            (it-check-<*> 2 2)
-                            (it-check-<*> 5 4))
-             
-             (tamer-context "given with the multiplier '~s'" filter '(1 . 3) CSS:<#> CSS<#> #:do
-                            (it-check-<#> 0 #false)
-                            (it-check-<#> 3 3)
-                            (it-check-<#> 5 3))
-
-             (context "invalid hash mark syntax" #:do
-                      (tamer-context ", 1, 2, 3" filter CSS:<#> CSS<#> #:invalid-do
-                                     (it-check-invalid-<#> #false))
-                      (tamer-context "1, , 2, 3" filter CSS:<#> CSS<#> #:invalid-do
-                                     (it-check-invalid-<#> 3))
-                      (tamer-context "1, 2, 3," filter CSS:<#> CSS<#> #:invalid-do
-                                     (it-check-invalid-<#> exn:css:missing-value?))
-                      (tamer-context "1, 2, 3, end" filter CSS:<#> CSS<#> #:invalid-do
-                                     (it-check-invalid-<#> 3))
-
-                      (let ([parser (CSS<#> ((inst CSS:<*> Any) filter '?) '+)])
-                        (context "with optional component and emitted commas before, after, and between values" #:do
-                                 (it-check-invalid-<#> ", 1, 2, 3" parser exn:css:missing-value?)
-                                 (it-check-invalid-<#> "1, , 2, 3" parser exn:css:missing-value?)
-                                 (it-check-invalid-<#> "1, 2, 3," parser exn:css:missing-value?))))))
-
-  (context "datatypes" #:do
-           (context "<position>" #:do
-                    (it-check "left" (<:css-position:>) css-position?)
-                    (it-check "center bottom" (<:css-position:>) css-position?)
-                    (it-check "left 3cm  top 10px" (<:css-position:>) css-position?)
-                    (it-check "     10px     15px" (<:css-position:>) css-position?)
-                    (it-check "left          15px" (<:css-position:>) css-position?)
-                    (it-check "     10px top     " (<:css-position:>) css-position?)
-                    (it-check "left      top 15px" (<:css-position:>) 'exn:css:overconsumption)
-                    (it-check "left 10px top     " (<:css-position:>) 'exn:css:overconsumption))
-           
-           (context "<color>" #:do
-                    (it-check "hsl(120.0 100% 100% / 0.5)" (<css-color-notation>) flcolor?)
-                    (it-check "hwb(120.0, 100%, 100%, 0.5)" (<css-color-notation>) flcolor?)
-                    (it-check "rgb(0, 0.5, 0 / 0.618)" (<css-color-notation>) 'exn:css:missing-comma))
-           
-           (context "<image>" #:do
-                    (it-check "url(tamer.png)" (<css-image>) string?)
-                    (it-check "image(url(tamer.png))" (<css-image-notation>) css-image?)
-                    (it-check "image(rtl \"tamer.png\", rgb(0 0.5 0 / 0.618))" (<css-image-notation>) css-image?)
-
-                    (context "gradient functions" #:do
-                             (it-check "linear-gradient(left)" (<css-gradient-notation>) 'exn:css:type)
-                             (it-check "linear-gradient(red)" (<css-gradient-notation>) 'exn:css:arity)
-
-                             (context "linear gradients" #:do
-                                      (it-check "linear-gradient(yellow, blue)" (<css-gradient-notation>) linear-gradient?)
-                                      (it-check "linear-gradient(180deg, yellow, blue)" (<css-gradient-notation>) linear-gradient?)
-                                      (it-check "linear-gradient(to top, blue, yellow)" (<css-gradient-notation>) linear-gradient?)
-                                      (it-check "linear-gradient(to bottom, 0% yellow, blue 100%)" (<css-gradient-notation>) linear-gradient?)
-                                      (it-check "linear-gradient(135deg, yellow, 50%, blue)" (<css-gradient-notation>) linear-gradient?)
-                                      (it-check "linear-gradient(-45deg, blue, 50%, yellow)" (<css-gradient-notation>) linear-gradient?)
-                                      (it-check "linear-gradient(yellow, blue 20%, #0f0)" (<css-gradient-notation>) linear-gradient?)
-                                      (it-check "linear-gradient(to top right, red, white, blue)" (<css-gradient-notation>) linear-gradient?))
-
-                             (context "radial gradients" #:do
-                                      (it-check "radial-gradient(5px circle at top left, yellow, blue)" (<css-gradient-notation>) radial-gradient?)
-                                      (it-check "radial-gradient(yellow, green)" (<css-gradient-notation>) radial-gradient?)
-                                      (it-check "radial-gradient(ellipse at center, yellow 0%, green 100%)" (<css-gradient-notation>) radial-gradient?)
-                                      (it-check "radial-gradient(farthest-corner at 50% 50%, yellow, green)" (<css-gradient-notation>) radial-gradient?)
-                                      (it-check "radial-gradient(circle, yellow, green)" (<css-gradient-notation>) radial-gradient?)
-                                      (it-check "radial-gradient(red, yellow, green)" (<css-gradient-notation>) radial-gradient?)
-                                      (it-check "radial-gradient(farthest-side at left bottom, red, yellow 50px, green)" (<css-gradient-notation>) radial-gradient?)
-                                      (it-check "radial-gradient(closest-side at 20px 30px, red, yellow, green)" (<css-gradient-notation>) radial-gradient?)
-                                      (it-check "radial-gradient(20px 30px at 20px 30px, red, yellow, green)" (<css-gradient-notation>) radial-gradient?)
-                                      (it-check "radial-gradient(closest-side circle at 20px 30px, red, yellow, green)" (<css-gradient-notation>) radial-gradient?)
-                                      (it-check "radial-gradient(20px 20px at 20px 30px, red, yellow, green)" (<css-gradient-notation>) radial-gradient?)
-                                      (it-check "radial-gradient(at 20px 30px, green 100%, yellow 150%, red 200%)" (<css-gradient-notation>) radial-gradient?))
-
-                             (context "conic gradients" #:do
-                                      (it-check "conic-gradient(at 25% 30%, white, black 60%)" (<css-gradient-notation>) conic-gradient?)
-                                      (it-check "conic-gradient(#f06, gold)" (<css-gradient-notation>) conic-gradient?)
-                                      (it-check "conic-gradient(at 50% 50%, #f06, gold)" (<css-gradient-notation>) conic-gradient?)
-                                      (it-check "conic-gradient(from 0deg, #f06, gold)" (<css-gradient-notation>) conic-gradient?)
-                                      (it-check "conic-gradient(from 0deg at center, #f06, gold)" (<css-gradient-notation>) conic-gradient?)
-                                      (it-check "conic-gradient(#f06 0%, gold 100%)" (<css-gradient-notation>) conic-gradient?)
-                                      (it-check "conic-gradient(#f06 0deg, gold 1turn)" (<css-gradient-notation>) conic-gradient?)
-                                      (it-check "conic-gradient(white -50%, black 150%)" (<css-gradient-notation>) conic-gradient?)
-                                      (it-check "conic-gradient(white -180deg, black 540deg)" (<css-gradient-notation>) conic-gradient?)
-                                      (it-check "conic-gradient(hsl(0,0%,75%), hsl(0,0%,25%))" (<css-gradient-notation>) conic-gradient?)
-                                      (it-check "conic-gradient(from 45deg, white, black, white)" (<css-gradient-notation>) conic-gradient?)
-                                      (it-check "conic-gradient(hsl(0,0%,87.5%), white 45deg, black 225deg, hsl(0,0%,87.5%))"
-                                                (<css-gradient-notation>) conic-gradient?)
-                                      (it-check "conic-gradient(white 45deg, black 225deg, white 405deg)" (<css-gradient-notation>) conic-gradient?)
-                                      (it-check "conic-gradient(red, yellow, lime, aqua, blue, magenta, red)" (<css-gradient-notation>) conic-gradient?)
-                                      (it-check "conic-gradient(yellowgreen 40%, gold 0deg 75%, #f06 0deg)" (<css-gradient-notation>) conic-gradient?)
-                                      (it-check "repeating-conic-gradient(hsla(0,0%,100%,.2) 0deg 15deg, hsla(0,0%,100%,0) 0deg 30deg)"
-                                                (<css-gradient-notation>) conic-gradient?))))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (module+ main
-  (void (spec-prove recognizer)))
+  (require css/digitama/color)
+  (require css/digitama/image)
+  
+  (spec-begin recognizer #:do
+    (let ([filters (list (<css:ident>) (<css:integer>) (<css:delim>))]
+          [parser (CSS<&&> ((inst CSS:<^> Any) (<css:ident>)) ((inst CSS:<*> Any) (<css:integer>) '?))])
+      (context "combinators" #:do
+               (tamer-context "juxtaposing values" filters CSS:<&> css-juxtapose #:do
+                              (it-check-<&> (list 'juxtaposing 128 #\&) #true)
+                              (it-check-<&> (list 'juxtaposing 128.0 #\&) #false))
+                        
+               (tamer-context "combine-all" filters CSS:<&&> CSS<&&> #:do
+                              (it-check-<&&> (list 128 'combine-all #\&) #true)
+                              (it-check-<&&> (list 'combine-all #\&) #false))
+             
+               (tamer-context "combine-all with optional component" parser #:do
+                              (it-check-tricky-<&&> (list 128 'combine-all #\&) '(combine-all 128))
+                              (it-check-tricky-<&&> (list 'combine-all #\&) '(combine-all))
+                              (it-check-tricky-<&&> (list 128 #\&) #false))
+                        
+               (tamer-context "combine-any" filters CSS:<++> CSS<++> #:do
+                              (it-check-<++> (list 128.0 'combine-any #\&) #false)
+                              (it-check-<++> (list 'combine-any 128.0 #\&) '(combine-any))
+                              (it-check-<++> (list #\& 'combine-any 128.0) '(combine-any #\&)))))
+
+    (let ([filter (<css:integer>)])
+      (context "multipliers" #:do
+               (it-check-modifier '?         0  1)
+               (it-check-modifier '*         0  +inf.0)
+               (it-check-modifier '+         1  +inf.0)
+               (it-check-modifier +16        16 16)
+               (it-check-modifier '(8)       8  8)
+               (it-check-modifier '(3 . 8)   3  8)
+               (it-check-modifier '(4 . inf) 4  +inf.0)
+               (it-check-modifier '(NaN . 4) 0  4)
+
+               (tamer-context "given with the multiplier '~s'" filter '+ CSS:<!> CSS<!> #:do
+                              (it-check-<!> 0 #false)
+                              (it-check-<!> 3 3)
+                              (it-check-<!> 5 5))
+
+               (tamer-context "given with the multiplier '~s'" filter '(2 . 4) CSS:<*> CSS<*> #:do
+                              (it-check-<*> 1 #false)
+                              (it-check-<*> 2 2)
+                              (it-check-<*> 5 4))
+             
+               (tamer-context "given with the multiplier '~s'" filter '(1 . 3) CSS:<#> CSS<#> #:do
+                              (it-check-<#> 0 #false)
+                              (it-check-<#> 3 3)
+                              (it-check-<#> 5 3))
+
+               (context "invalid hash mark syntax" #:do
+                        (tamer-context ", 1, 2, 3" filter CSS:<#> CSS<#> #:invalid-do
+                                       (it-check-invalid-<#> #false))
+                        (tamer-context "1, , 2, 3" filter CSS:<#> CSS<#> #:invalid-do
+                                       (it-check-invalid-<#> 3))
+                        (tamer-context "1, 2, 3," filter CSS:<#> CSS<#> #:invalid-do
+                                       (it-check-invalid-<#> exn:css:missing-value?))
+                        (tamer-context "1, 2, 3, end" filter CSS:<#> CSS<#> #:invalid-do
+                                       (it-check-invalid-<#> 3))
+
+                        (let ([parser (CSS<#> ((inst CSS:<*> Any) filter '?) '+)])
+                          (context "with optional component and emitted commas before, after, and between values" #:do
+                                   (it-check-invalid-<#> ", 1, 2, 3" parser exn:css:missing-value?)
+                                   (it-check-invalid-<#> "1, , 2, 3" parser exn:css:missing-value?)
+                                   (it-check-invalid-<#> "1, 2, 3," parser exn:css:missing-value?))))))
+
+    (context "datatypes" #:do
+             (context "<position>" #:do
+                      (it-check "left" (<:css-position:>) css-position?)
+                      (it-check "center bottom" (<:css-position:>) css-position?)
+                      (it-check "left 3cm  top 10px" (<:css-position:>) css-position?)
+                      (it-check "     10px     15px" (<:css-position:>) css-position?)
+                      (it-check "left          15px" (<:css-position:>) css-position?)
+                      (it-check "     10px top     " (<:css-position:>) css-position?)
+                      (it-check "left      top 15px" (<:css-position:>) 'exn:css:overconsumption)
+                      (it-check "left 10px top     " (<:css-position:>) 'exn:css:overconsumption))
+           
+             (context "<color>" #:do
+                      (it-check "hsl(120.0 100% 100% / 0.5)" (<css-color-notation>) flcolor?)
+                      (it-check "hwb(120.0, 100%, 100%, 0.5)" (<css-color-notation>) flcolor?)
+                      (it-check "rgb(0, 0.5, 0 / 0.618)" (<css-color-notation>) 'exn:css:missing-comma))
+           
+             (context "<image>" #:do
+                      (it-check "url(tamer.png)" (<css-image>) string?)
+                      (it-check "image(url(tamer.png))" (<css-image-notation>) css-image?)
+                      (it-check "image(rtl \"tamer.png\", rgb(0 0.5 0 / 0.618))" (<css-image-notation>) css-image?)
+
+                      (context "gradient functions" #:do
+                               (it-check "linear-gradient(left)" (<css-gradient-notation>) 'exn:css:type)
+                               (it-check "linear-gradient(red)" (<css-gradient-notation>) 'exn:css:arity)
+
+                               (context "linear gradients" #:do
+                                        (it-check "linear-gradient(yellow, blue)" (<css-gradient-notation>) linear-gradient?)
+                                        (it-check "linear-gradient(180deg, yellow, blue)" (<css-gradient-notation>) linear-gradient?)
+                                        (it-check "linear-gradient(to top, blue, yellow)" (<css-gradient-notation>) linear-gradient?)
+                                        (it-check "linear-gradient(to bottom, 0% yellow, blue 100%)" (<css-gradient-notation>) linear-gradient?)
+                                        (it-check "linear-gradient(135deg, yellow, 50%, blue)" (<css-gradient-notation>) linear-gradient?)
+                                        (it-check "linear-gradient(-45deg, blue, 50%, yellow)" (<css-gradient-notation>) linear-gradient?)
+                                        (it-check "linear-gradient(yellow, blue 20%, #0f0)" (<css-gradient-notation>) linear-gradient?)
+                                        (it-check "linear-gradient(to top right, red, white, blue)" (<css-gradient-notation>) linear-gradient?))
+
+                               (context "radial gradients" #:do
+                                        (it-check "radial-gradient(5px circle at top left, yellow, blue)" (<css-gradient-notation>) radial-gradient?)
+                                        (it-check "radial-gradient(yellow, green)" (<css-gradient-notation>) radial-gradient?)
+                                        (it-check "radial-gradient(ellipse at center, yellow 0%, green 100%)" (<css-gradient-notation>) radial-gradient?)
+                                        (it-check "radial-gradient(farthest-corner at 50% 50%, yellow, green)" (<css-gradient-notation>) radial-gradient?)
+                                        (it-check "radial-gradient(circle, yellow, green)" (<css-gradient-notation>) radial-gradient?)
+                                        (it-check "radial-gradient(red, yellow, green)" (<css-gradient-notation>) radial-gradient?)
+                                        (it-check "radial-gradient(farthest-side at left bottom, red, yellow 50px, green)" (<css-gradient-notation>) radial-gradient?)
+                                        (it-check "radial-gradient(closest-side at 20px 30px, red, yellow, green)" (<css-gradient-notation>) radial-gradient?)
+                                        (it-check "radial-gradient(20px 30px at 20px 30px, red, yellow, green)" (<css-gradient-notation>) radial-gradient?)
+                                        (it-check "radial-gradient(closest-side circle at 20px 30px, red, yellow, green)" (<css-gradient-notation>) radial-gradient?)
+                                        (it-check "radial-gradient(20px 20px at 20px 30px, red, yellow, green)" (<css-gradient-notation>) radial-gradient?)
+                                        (it-check "radial-gradient(at 20px 30px, green 100%, yellow 150%, red 200%)" (<css-gradient-notation>) radial-gradient?))
+
+                               (context "conic gradients" #:do
+                                        (it-check "conic-gradient(at 25% 30%, white, black 60%)" (<css-gradient-notation>) conic-gradient?)
+                                        (it-check "conic-gradient(#f06, gold)" (<css-gradient-notation>) conic-gradient?)
+                                        (it-check "conic-gradient(at 50% 50%, #f06, gold)" (<css-gradient-notation>) conic-gradient?)
+                                        (it-check "conic-gradient(from 0deg, #f06, gold)" (<css-gradient-notation>) conic-gradient?)
+                                        (it-check "conic-gradient(from 0deg at center, #f06, gold)" (<css-gradient-notation>) conic-gradient?)
+                                        (it-check "conic-gradient(#f06 0%, gold 100%)" (<css-gradient-notation>) conic-gradient?)
+                                        (it-check "conic-gradient(#f06 0deg, gold 1turn)" (<css-gradient-notation>) conic-gradient?)
+                                        (it-check "conic-gradient(white -50%, black 150%)" (<css-gradient-notation>) conic-gradient?)
+                                        (it-check "conic-gradient(white -180deg, black 540deg)" (<css-gradient-notation>) conic-gradient?)
+                                        (it-check "conic-gradient(hsl(0,0%,75%), hsl(0,0%,25%))" (<css-gradient-notation>) conic-gradient?)
+                                        (it-check "conic-gradient(from 45deg, white, black, white)" (<css-gradient-notation>) conic-gradient?)
+                                        (it-check "conic-gradient(hsl(0,0%,87.5%), white 45deg, black 225deg, hsl(0,0%,87.5%))"
+                                                  (<css-gradient-notation>) conic-gradient?)
+                                        (it-check "conic-gradient(white 45deg, black 225deg, white 405deg)" (<css-gradient-notation>) conic-gradient?)
+                                        (it-check "conic-gradient(red, yellow, lime, aqua, blue, magenta, red)" (<css-gradient-notation>) conic-gradient?)
+                                        (it-check "conic-gradient(yellowgreen 40%, gold 0deg 75%, #f06 0deg)" (<css-gradient-notation>) conic-gradient?)
+                                        (it-check "repeating-conic-gradient(hsla(0,0%,100%,.2) 0deg 15deg, hsla(0,0%,100%,0) 0deg 30deg)"
+                                                  (<css-gradient-notation>) conic-gradient?)))))))
