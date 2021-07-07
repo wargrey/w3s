@@ -69,48 +69,52 @@
    (CSS<!> (CSS<#> (CSS<!> (CSS:<^> (list (CSS:<+> (<css:string>) (<css-image>)) (<css+resolution>))))))])
 
 (define-css-function-filter <css-gradient-notation> #:-> CSS-Gradient
+  #:with [[<:css-color:> : (CSS-Parser (Listof Any)) (CSS:<^> (<css-color>))]]
   ;;; https://drafts.csswg.org/css-images-4/#gradients
   [(linear-gradient)
    #:=> [(linear-gradient [direction ? flonum?] [stops ? linear-color-stop-list?] #false)
          (linear-gradient (css-named-direction->degree 'bottom) [stops ? linear-color-stop-list?] #false)]
-   (CSS<&> (<:angle-or-direction:>) (<:color-stop-list:> (<css-length-percentage>)))]
+   (CSS<&> (<:angle-or-direction:>) (<:css-length-color-stop:>))]
   [(repeating-linear-gradient)
    #:=> [(linear-gradient [direction ? flonum?] [stops ? linear-color-stop-list?] #true)
          (linear-gradient (css-named-direction->degree 'bottom) [stops ? linear-color-stop-list?] #true)]
-   (CSS<&> (<:angle-or-direction:>) (<:color-stop-list:> (<css-length-percentage>)))]
+   (CSS<&> (<:angle-or-direction:>) (<:css-length-color-stop:>))]
   [(radial-gradient)
    #:=> [(radial-gradient [shape ? radial-shape?] [center ? css-position?] [stops ? linear-color-stop-list?] #false)
          (radial-gradient default-shape [center ? css-position?] [stops ? linear-color-stop-list?] #false)
          (radial-gradient [shape ? radial-shape?] css-center-position [stops ? linear-color-stop-list?] #false)
          (radial-gradient default-shape css-center-position [stops ? linear-color-stop-list?] #false)]
-   (CSS<&> (<:ending-shape+comma:>) (<:color-stop-list:> (<css-length-percentage>)))]
+   (CSS<&> (<:ending-shape+comma:>) (<:css-length-color-stop:>))]
   [(repeating-radial-gradient)
    #:=> [(radial-gradient [shape ? radial-shape?] [center ? css-position?] [stops ? linear-color-stop-list?] #false)
          (radial-gradient default-shape [center ? css-position?] [stops ? linear-color-stop-list?] #false)
          (radial-gradient [shape ? radial-shape?] css-center-position [stops ? linear-color-stop-list?] #false)
          (radial-gradient default-shape css-center-position [stops ? linear-color-stop-list?] #false)]
-   (CSS<&> (<:ending-shape+comma:>) (<:color-stop-list:> (<css-length-percentage>)))]
+   (CSS<&> (<:ending-shape+comma:>) (<:css-length-color-stop:>))]
   [(conic-gradient)
    #:=> [(conic-gradient [angle ? flonum?] [center ? css-position?] [stops ? linear-color-stop-list?] #false)
          (conic-gradient default-angle [center ? css-position?] [stops ? linear-color-stop-list?] #false)
          (conic-gradient [angle ? flonum?] css-center-position [stops ? linear-color-stop-list?] #false)
          (conic-gradient default-angle css-center-position [stops ? linear-color-stop-list?] #false)]
-   (CSS<&> (<:from-angle+comma:>) (<:color-stop-list:> (<css-angle-percentage>)))]
+   (CSS<&> (<:from-angle+comma:>) (<:css-angle-color-stop:>))]
   [(repeating-conic-gradient)
    #:=> [(conic-gradient [angle ? flonum?] [center ? css-position?] [stops ? linear-color-stop-list?] #true)
          (conic-gradient default-angle [center ? css-position?] [stops ? linear-color-stop-list?] #true)
          (conic-gradient [angle ? flonum?] css-center-position [stops ? linear-color-stop-list?] #true)
          (conic-gradient default-angle css-center-position [stops ? linear-color-stop-list?] #true)]
-   (CSS<&> (<:from-angle+comma:>) (<:color-stop-list:> (<css-angle-percentage>)))]
+   (CSS<&> (<:from-angle+comma:>) (<:css-angle-color-stop:>))]
   #:where
   [(define default-shape : Radial-Shape (cons 'ellipse 'farthest-corner))
    (define default-angle : Flonum 0.0)
+   
+   (define (<:css-length-color-stop:>) (<:css-color-stop-list:> <:css-color:> (<css-length-percentage>)))
+   (define (<:css-angle-color-stop:>) (<:css-color-stop-list:> <:css-color:> (<css-angle-percentage>)))
 
    (define (<:angle-or-direction:>)
      (css-comma-followed-parser
       (CSS<?> [(<css-keyword:to>) (CSS<~> (CSS:<++> (<css-keyword> css-gradient-hside-option)
                                                     (<css-keyword> css-gradient-vside-option))
-                                          named-directions->degrees)]
+                                          css-named-directions->degrees)]
               [else (CSS:<*> (<css-angle>) '?)])))
 
    (define (<:ending-shape+comma:>)
@@ -129,30 +133,6 @@
      (css-comma-followed-parser
       (CSS<&> (CSS<*> (CSS<?> [(<css-keyword:from>) (CSS:<^> (<css:angle>))]) '?)
               (CSS<*> (CSS<?> [(<css-keyword:at>) (CSS<^> (<:css-position:>))]) '?))))
-   
-   (define (<:color-stop+comma:> [<number%> : (CSS:Filter CSS-Flonum-%)])
-     (css-comma-followed-parser
-      ;; NOTE: it's much more efficient to parse <length-percentage> than to parse <css-color>, hence the `fold-color+maybe-position`
-      (CSS<+> (CSS<~> (CSS<&> (CSS:<*> <number%> '(1 . 2)) (CSS:<^> (<css-color>))) fold-positions+color)
-              (CSS<~> (CSS<&> (CSS:<^> (<css-color>)) (CSS:<*> <number%> '(0 . 2))) fold-color+positions))))
-   
-   (define (<:color-stop-list:> [<number%> : (CSS:Filter CSS-Flonum-%)])
-     (CSS<!> (CSS<&> (<:color-stop+comma:> <number%>)
-                     (CSS<*> (CSS<&> (css-comma-followed-parser (CSS:<*> (CSS:<~> <number%> interpolation-hint->fake-stop) '?))
-                                     (<:color-stop+comma:> <number%>))
-                             '*))))
-
-   (define (interpolation-hint->fake-stop [h : CSS-Flonum-%]) : Linear-Color-Stop
-     (cons 'hint-only (list h)))
-
-   (define (fold-color+positions [data : (Listof (U CSS-Color-Datum CSS-Flonum-%))]) : Any
-     ; yes, it's nothing but another `identity` function
-     ; please let `CSS<~>` isolate these `color stop`s from preceding color stops and hints
-     data)
-   
-   (define (fold-positions+color [data : (Listof (U CSS-Color-Datum CSS-Flonum-%))]) : Any
-     (let-values ([(positions color) (split-at-right data 1)])
-       (cons (car color) positions)))
 
    (define (fold-circle [data : (Listof (U Symbol Nonnegative-Flonum))]) : Any
      (cons 'circle
@@ -170,23 +150,40 @@
      (cond [(null? data) '#:deadcode default-shape]
            [else (let ([kws (remove* css-gradient-ending-shape data)])
                    (cond [(null? kws) (cons (car data) (cdr default-shape))]
-                         [else (cons (car default-shape) (car kws))]))]))
-
-   (define (named-directions->degrees [side-or-corners : (Listof Symbol)]) : Flonum
-     (define degrees : (Listof Nonnegative-Flonum) (map css-named-direction->degree side-or-corners))
-     (cond [(null? degrees) +nan.0]
-           [(null? (cdr degrees)) (car degrees)]
-           [else (let*-values ([(c1 c2) (values (car degrees) (cadr degrees))]
-                               [(sum) (+ c1 c2)])
-                   (cond [(> (* c1 c2) 0.0) (* sum 0.5)]
-                         [(= sum 90.0) 45.0]
-                         [else 315.0]))]))])
+                         [else (cons (car default-shape) (car kws))]))]))])
 
 (define-css-disjoint-filter <css-image> #:-> CSS-Image-Datum
   ;;; https://drafts.csswg.org/css-images/#image-values
   ;;; https://drafts.csswg.org/css-images/#invalid-image
   (<css-image-notation>)
   (<css:url>))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define <:css-color-stop-list:> : (All (c) (-> (CSS-Parser (Listof c)) (CSS:Filter CSS-Flonum-%) (CSS-Parser (Listof Any))))
+  (let ()
+    (define #:forall (c) (fold-color+positions [data : (Listof (U c CSS-Flonum-%))]) : Any
+      ; yes, it's nothing but another `identity` function
+      ; please let `CSS<~>` isolate these `color stop`s from preceding color stops and hints
+      data)
+    
+    (define #:forall (c) (fold-positions+color [data : (Listof (U c CSS-Flonum-%))]) : Any
+      (let-values ([(positions color) (split-at-right data 1)])
+        (cons (car color) positions)))
+
+    (define #:forall (c) (<:color-stop:> [<:color:> : (CSS-Parser (Listof c))] [<number%> : (CSS:Filter CSS-Flonum-%)]) : (CSS-Parser (Listof Any))
+      (css-comma-followed-parser
+       ;; NOTE: it's much more efficient to parse <length-percentage> than to parse <css-color>, hence the `fold-color+maybe-position`
+       (CSS<+> ((inst CSS<~> (U c CSS-Flonum-%) Any) (CSS<&> (CSS:<*> <number%> '(1 . 2)) <:color:>) fold-positions+color)
+               ((inst CSS<~> (U c CSS-Flonum-%) Any) (CSS<&> <:color:> (CSS:<*> <number%> '(0 . 2))) fold-color+positions))))
+
+    (define (interpolation-hint->fake-stop [h : CSS-Flonum-%]) : Linear-Color-Stop
+      (cons 'hint-only (list h)))
+    
+    (lambda [<:color:> <number%>]
+      (let ([<:color-stop+comma:> (<:color-stop:> <:color:> <number%>)])
+        (CSS<!> (CSS<&> <:color-stop+comma:>
+                        (CSS<*> (CSS<&> (css-comma-followed-parser (CSS:<*> (CSS:<~> <number%> interpolation-hint->fake-stop) '?))
+                                        <:color-stop+comma:>) '*)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define make-image-normalizer : (case-> [Nonnegative-Real Positive-Flonum (-> Bitmap) -> (-> (CSS-Maybe Bitmap) Bitmap)]
@@ -246,6 +243,17 @@
       [(bottom) 180.0]
       [(left) 270.0]
       [else (css-named-direction->degree 'bottom)])))
+   
+(define css-named-directions->degrees : (-> (Listof Symbol) Flonum)
+  (lambda [side-or-corners]
+    (define degrees : (Listof Nonnegative-Flonum) (map css-named-direction->degree side-or-corners))
+    (cond [(null? degrees) +nan.0]
+          [(null? (cdr degrees)) (car degrees)]
+          [else (let*-values ([(c1 c2) (values (car degrees) (cadr degrees))]
+                              [(sum) (+ c1 c2)])
+                  (cond [(> (* c1 c2) 0.0) (* sum 0.5)]
+                        [(= sum 90.0) 45.0]
+                        [else 315.0]))])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define css-image-datum? : (-> Any Boolean : CSS-Image-Datum)

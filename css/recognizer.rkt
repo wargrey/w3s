@@ -53,8 +53,8 @@
           [* (values (cons #'[... ...] snrettap) stnemugra)] ; this would make sense if typed racket could understand it 
           [field (values snrettap (cons #'field stnemugra))])))
     (list (list* #'list #;'func-name (reverse snerttap)) (cons <constructor> (reverse stnemugra)) (length stnemugra)))
-  (syntax-parse stx
-    [(self func-filter #:-> RangeType
+  (syntax-parse stx #:datum-literals [:]
+    [(self func-filter #:-> RangeType #:with [[dom : DomType defval ...] ...]
            [(fname aliases ...) #:=> [transforms ...] (~optional #:<+>) fparser ...] ...
            (~optional (~seq #:where [defaux ...])))
      (with-syntax ([defines (if (attribute defaux) #'(begin defaux ...) #'(void))]
@@ -70,7 +70,7 @@
                               [else (let ([? (datum->syntax <transform> (gensym))])
                                       (list (list #'? #'list? ?) (list #'values ?) 1))])))])
        (syntax/loc stx
-         (define (func-filter) : (CSS:Filter RangeType) defines
+         (define (func-filter [dom : DomType defval ...] ...) : (CSS:Filter RangeType) defines
            (define do-parse : (All (a) (-> Symbol (CSS-Parser (Listof a)) (Listof CSS-Token) (U (Listof Any) CSS-Syntax-Error)))
              (lambda [func-name func-parse func-argl]
                (define-values (fargs --tokens) (func-parse null func-argl))
@@ -88,7 +88,9 @@
                          [(? exn? e) e]
                          [_ (make-exn:css:arity token)])]
                       ...
-                      [else (make-exn:css:range token)])))))))]))
+                      [else (make-exn:css:range token)])))))))]
+    [(self func-filter #:-> RangeType rest ...)
+     (syntax/loc stx (define-css-function-filter func-filter #:-> RangeType #:with [] rest ...))]))
 
 (define-syntax (define-css-prefab-filter stx)
   (syntax-parse stx
