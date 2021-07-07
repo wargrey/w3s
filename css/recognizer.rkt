@@ -648,12 +648,13 @@
 (define css-flonum-%? : (-> Any Boolean : CSS-Flonum-%) (lambda [v] (or (flonum? v) (css-%? v))))
 (define css+flonum-%? : (-> Any Boolean : #:+ CSS+Flonum-%) (lambda [v] (or (nonnegative-flonum? v) (css+%? v))))
 
-(struct css-unitless ([value : Flonum]) #:type-name CSS-Unitless #:constructor-name make-css-unitless) ; for properties whoes computed values are not their used value
+; for properties whoes computed values are not their used value
+(struct css-unitless ([value : Flonum]) #:type-name CSS-Unitless #:transparent #:constructor-name make-css-unitless)
 (struct css+unitless css-unitless ([value : Nonnegative-Flonum]) #:type-name CSS+Unitless #:constructor-name unsafe-css+unitless)
 (define make-css+unitless : (-> Nonnegative-Flonum CSS+Unitless) (lambda [ul] (unsafe-css+unitless ul ul)))
 
 (struct css-% ([value : Flonum]) #:type-name CSS-% #:transparent #:constructor-name make-css-%)
-(struct css+% css-% ([value : Nonnegative-Flonum]) #:type-name CSS+% #:transparent #:constructor-name unsafe-css+%)
+(struct css+% css-% ([value : Nonnegative-Flonum]) #:type-name CSS+% #:constructor-name unsafe-css+%)
 (define make-css+% : (-> Nonnegative-Flonum CSS+%) (lambda [%] (unsafe-css+% % %)))
 
 (struct css-position ([x : CSS-Flonum-%] [y : CSS-Flonum-%]) #:type-name CSS-Position #:transparent)
