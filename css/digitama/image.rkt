@@ -14,6 +14,8 @@
 (require bitmap/constructor)
 (require bitmap/invalid)
 
+(require digimon/predicate)
+
 (require "syntax/digicore.rkt")
 (require "syntax/dimension.rkt")
 (require "syntax/misc.rkt")
@@ -271,24 +273,20 @@
 
 (define image-set-options? : (-> Any Boolean : Image-Set-Options)
   (lambda [v]
-    (and (list? v)
-         (andmap image-set-option? v))))
-
-(define flonum-%-list? : (-> Any Boolean : (Listof CSS-Flonum-%))
-  (lambda [v]
-    (and (list? v)
-         (andmap css-flonum-%? v))))
+    (is-listof? v image-set-option?)))
 
 (define linear-color-stop? : (-> Any Boolean : Linear-Color-Stop)
   (lambda [v]
     (and (pair? v)
          (css-color-datum? (car v))
-         (flonum-%-list? (cdr v)))))
+         ((inst is-listof? CSS-Flonum-%) (cdr v) css-flonum-%?))))
 
-(define color-stops-or-hints? : (-> (Listof Any) Boolean : (Listof+ Linear-Color-Stop))
+(define linear-color-stop-list? : (-> Any Boolean : Linear-Color-Stops)
   (lambda [datum]
-    (and (pair? datum)
-         (andmap linear-color-stop? datum))))
+    (and (list? datum)
+         (pair? datum)
+         (linear-color-stop? (car datum))
+         ((inst is-listof+? Linear-Color-Stop) (cdr datum) linear-color-stop?))))
 
 (define radial-shape? : (-> Any Boolean : #:+ Radial-Shape)
   (lambda [v]
@@ -303,10 +301,3 @@
         (and (pair? v)
              (css+flonum-%? (car v))
              (css+flonum-%? (cdr v))))))
-
-(define linear-color-stop-list? : (-> Any Boolean : Linear-Color-Stops)
-  (lambda [datum]
-    (and (list? datum)
-         (pair? datum)
-         (linear-color-stop? (car datum))
-         (color-stops-or-hints? (cdr datum)))))

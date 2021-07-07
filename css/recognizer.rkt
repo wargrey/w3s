@@ -11,6 +11,7 @@
 (require racket/keyword)
 
 (require digimon/number)
+(require digimon/predicate)
 
 (require "digitama/syntax/misc.rkt")
 (require "digitama/syntax/digicore.rkt")
@@ -43,7 +44,7 @@
     (define-values (snerttap stnemugra)
       (for/fold ([snrettap null] [stnemugra null])
                 ([<pattern> (in-list <matches>)])
-        (syntax-case <pattern> [: ? _ * quote]
+        (syntax-case <pattern> [: ? ?* _ * quote]
           [(field ? type?) (values (cons #'(? type? field) snrettap) (cons #'field stnemugra))]
           [(field ? type? ...) (values (cons #'(? (λ [v] (or (type? v) ...)) field) snrettap) (cons #'field stnemugra))]
           [(field : Type) (values (cons #'(? (make-predicate Type) field) snrettap) (cons #'field stnemugra))]
