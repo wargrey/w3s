@@ -74,41 +74,41 @@
   [(linear-gradient)
    #:=> [(linear-gradient [direction ? flonum?] [stops ? linear-color-stop-list?] #false)
          (linear-gradient (css-named-direction->degree 'bottom) [stops ? linear-color-stop-list?] #false)]
-   (CSS<&> (<:angle-or-direction:>) (<:css-length-color-stop:>))]
+   (CSS<&> (<:angle-or-direction:>) (<:css-length-color-stop-list:>))]
   [(repeating-linear-gradient)
    #:=> [(linear-gradient [direction ? flonum?] [stops ? linear-color-stop-list?] #true)
          (linear-gradient (css-named-direction->degree 'bottom) [stops ? linear-color-stop-list?] #true)]
-   (CSS<&> (<:angle-or-direction:>) (<:css-length-color-stop:>))]
+   (CSS<&> (<:angle-or-direction:>) (<:css-length-color-stop-list:>))]
   [(radial-gradient)
    #:=> [(radial-gradient [shape ? radial-shape?] [center ? css-position?] [stops ? linear-color-stop-list?] #false)
          (radial-gradient default-shape [center ? css-position?] [stops ? linear-color-stop-list?] #false)
          (radial-gradient [shape ? radial-shape?] css-center-position [stops ? linear-color-stop-list?] #false)
          (radial-gradient default-shape css-center-position [stops ? linear-color-stop-list?] #false)]
-   (CSS<&> (<:ending-shape+comma:>) (<:css-length-color-stop:>))]
+   (CSS<&> (<:ending-shape+comma:>) (<:css-length-color-stop-list:>))]
   [(repeating-radial-gradient)
    #:=> [(radial-gradient [shape ? radial-shape?] [center ? css-position?] [stops ? linear-color-stop-list?] #false)
          (radial-gradient default-shape [center ? css-position?] [stops ? linear-color-stop-list?] #false)
          (radial-gradient [shape ? radial-shape?] css-center-position [stops ? linear-color-stop-list?] #false)
          (radial-gradient default-shape css-center-position [stops ? linear-color-stop-list?] #false)]
-   (CSS<&> (<:ending-shape+comma:>) (<:css-length-color-stop:>))]
+   (CSS<&> (<:ending-shape+comma:>) (<:css-length-color-stop-list:>))]
   [(conic-gradient)
    #:=> [(conic-gradient [angle ? flonum?] [center ? css-position?] [stops ? linear-color-stop-list?] #false)
          (conic-gradient default-angle [center ? css-position?] [stops ? linear-color-stop-list?] #false)
          (conic-gradient [angle ? flonum?] css-center-position [stops ? linear-color-stop-list?] #false)
          (conic-gradient default-angle css-center-position [stops ? linear-color-stop-list?] #false)]
-   (CSS<&> (<:from-angle+comma:>) (<:css-angle-color-stop:>))]
+   (CSS<&> (<:from-angle+comma:>) (<:css-angle-color-stop-list:>))]
   [(repeating-conic-gradient)
    #:=> [(conic-gradient [angle ? flonum?] [center ? css-position?] [stops ? linear-color-stop-list?] #true)
          (conic-gradient default-angle [center ? css-position?] [stops ? linear-color-stop-list?] #true)
          (conic-gradient [angle ? flonum?] css-center-position [stops ? linear-color-stop-list?] #true)
          (conic-gradient default-angle css-center-position [stops ? linear-color-stop-list?] #true)]
-   (CSS<&> (<:from-angle+comma:>) (<:css-angle-color-stop:>))]
+   (CSS<&> (<:from-angle+comma:>) (<:css-angle-color-stop-list:>))]
   #:where
   [(define default-shape : Radial-Shape (cons 'ellipse 'farthest-corner))
    (define default-angle : Flonum 0.0)
    
-   (define (<:css-length-color-stop:>) (<:css-color-stop-list:> <:css-color:> (<css-length-percentage>)))
-   (define (<:css-angle-color-stop:>) (<:css-color-stop-list:> <:css-color:> (<css-angle-percentage>)))
+   (define (<:css-length-color-stop-list:>) (<:css-color-stop-list:> <:css-color:> (<css-length-percentage>)))
+   (define (<:css-angle-color-stop-list:>) (<:css-color-stop-list:> <:css-color:> (<css-angle-percentage>)))
 
    (define (<:angle-or-direction:>)
      (css-comma-followed-parser
