@@ -13,6 +13,8 @@
 (require digimon/number)
 (require digimon/predicate)
 
+(require bitmap/digitama/unsafe/image)
+
 (require "digitama/syntax/misc.rkt")
 (require "digitama/syntax/digicore.rkt")
 (require "digitama/syntax/dimension.rkt")
@@ -658,12 +660,14 @@
 (define make-css+% : (-> Nonnegative-Flonum CSS+%) (lambda [%] (unsafe-css+% % %)))
 
 (struct css-position ([x : CSS-Flonum-%] [y : CSS-Flonum-%]) #:type-name CSS-Position #:transparent)
+(struct css-region ([top : Flonum] [right : Flonum] [bottom : Flonum] [left : Flonum]) #:type-name CSS-Region #:transparent)
 
 (define 0% : CSS+% (make-css+% 0.0))
 (define 50% : CSS+% (make-css+% 0.5))
 (define 100% : CSS+% (make-css+% 1.0))
 
 (define css-center-position : CSS-Position (css-position 50% 50%))
+(define css-no-region : CSS-Region (css-region 0.0 0.0 0.0 0.0))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-css-disjoint-filter <css-boolean> #:-> (U Zero One)
@@ -934,3 +938,13 @@
                       keyword-length-%->position)
               (CSS<~> (CSS:<++> (<css-keyword> cxs) (<css-keyword> cys))
                       keyword->position)))))
+
+(define <:css-region:> : (-> (CSS:Filter Flonum) (CSS-Parser (Listof CSS-Region)))
+  (let ()
+    (define (smart-region [fs : (Listof Flonum)]) : CSS-Region
+      (define-values (top right bottom left) (list->4:values fs 0.0))
+      (css-region top right bottom left))
+    
+    (lambda [atom-filter]
+      (CSS<~> (CSS:<*> atom-filter '+)
+              smart-region))))
