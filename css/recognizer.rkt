@@ -784,6 +784,7 @@
 
 (define (<css-keyword:to>) : (CSS:Filter Symbol) (CSS:<?> (<css:ident> 'to) make-exn:css:missing-keyword))
 (define (<css-keyword:at>) : (CSS:Filter Symbol) (CSS:<?> (<css:ident> 'at) make-exn:css:missing-keyword))
+(define (<css-keyword:in>) : (CSS:Filter Symbol) (CSS:<?> (<css:ident> 'in) make-exn:css:missing-keyword))
 (define (<css-keyword:from>) : (CSS:Filter Symbol) (CSS:<?> (<css:ident> 'from) make-exn:css:missing-keyword))
 
 (define (<css+unitless>) : (CSS:Filter CSS+Unitless) (CSS:<~> (<css+real>) (λ [[v : Nonnegative-Real]] (make-css+unitless (real->double-flonum v)))))
