@@ -141,13 +141,21 @@
   (let-values ([(vs rest) (tamer-parse com.css filter)])
     #:it
     ["should be parsed into an object in sense of ~a, when fed with ~s" (object-name expected) com.css] #:when (procedure? expected)
+    ["should be parsed into a list of objects ordered as in ~a, when fed with ~s" (map object-name expected) com.css] #:when (list? expected)
     ["should fail with exception `~a`, when fed with ~s" expected com.css] #:when (symbol? expected)
     ["should fail, when fed with ~s" com.css]
     #:do
     (cond [(not expected) (expect-false vs)]
           [(eq? expected 'exn:css:overconsumption) (expect-satisfy pair? rest)]
           [(symbol? expected) (expect-satisfy exn:css? vs) (expect-eq (object-name vs) expected)]
-          [(list? vs) (expect-= (length vs) 1) (expect-null rest) (expect-satisfy expected (car vs))]
+          [(list? vs)
+           (expect-null rest)
+           (if (list? expected)
+               (begin (expect-= (length vs) (length expected))
+                      (for ([e (in-list expected)] [v (in-list vs)])
+                        (expect-satisfy e v)))
+               (begin (expect-= (length vs) 1)
+                      (expect-satisfy expected (car vs))))]
           [else (tamer-deadcode vs)])))
 
 (define check-range : (-> Any (U False (-> Any Boolean) Index) Natural (U Natural +inf.0) Void)
