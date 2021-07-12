@@ -390,11 +390,6 @@
       (cond [(or (exn:css? ++data) (false? ++data)) (values ++data --tokens)]
             [else (values data tokens)]))))
 
-(define CSS<=> : (All (a) (-> a (CSS-Parser (Listof a))))
-  (lambda [constant]
-    (λ [[data : (Listof a)] [tokens : (Listof CSS-Token)]]
-      (values (cons constant data) tokens))))
-
 (define CSS<++> : (All (a) (case-> [(Listof (CSS-Parser a)) -> (CSS-Parser a)]
                                    [(CSS-Parser a) * -> (CSS-Parser a)]))
   ;;; https://drafts.csswg.org/css-values/#comb-any
@@ -878,7 +873,20 @@
               [else -1]))
       (if (pixels? size) size defval))))
 
+(define make-css->unboxed-datum : (All (a b) (-> (-> Any Boolean : #:+ a) b (CSS->Racket (U a b))))
+  (lambda [datum? fallback-value]
+    (λ [property datum]
+      (if (pair? datum)
+          (let ([v (car datum)])
+            (if (datum? v) v fallback-value))
+          fallback-value))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; WARNING
+; These are intentionally designed for function filter, which accepts a list for pattern matching.
+; If they are used to parse declaration whose computed value is a single datum directly,
+;   please keep in mind that the computed value is contained in a list,
+;   and `make-css->unboxed-datum` is your friend.
 (define <:css-position:> : (-> (CSS-Parser (Listof CSS-Position)))
   ;;; https://www.w3.org/TR/css-values-4/#position
   (let* ([xs : (Listof Symbol) '(left right)]
