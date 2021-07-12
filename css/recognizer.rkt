@@ -644,9 +644,11 @@
                                 [else (values n n)]))])])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define-type CSS-Boolean (U One Zero))
 (define-type CSS-Flonum-% (U Flonum CSS-%))
 (define-type CSS+Flonum-% (U Nonnegative-Flonum CSS+%))
 
+(define css-boolean? : (-> Any Boolean : #:+ CSS-Boolean) (lambda [v] (and (byte? v) (or (= v 0) (= v 1)))))
 (define css-flonum-%? : (-> Any Boolean : CSS-Flonum-%) (lambda [v] (or (flonum? v) (css-%? v))))
 (define css+flonum-%? : (-> Any Boolean : #:+ CSS+Flonum-%) (lambda [v] (or (nonnegative-flonum? v) (css+%? v))))
 
@@ -667,12 +669,16 @@
 (define 100% : CSS+% (make-css+% 1.0))
 
 (define css-center-position : CSS-Position (css-position 50% 50%))
-(define css-no-region : CSS-Region (css-region 0.0 0.0 0.0 0.0))
+(define css-full-region : CSS-Region (css-region 0.0 0.0 0.0 0.0))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-css-disjoint-filter <css-boolean> #:-> (U Zero One)
+;;; WARNING: Racket's Boolean cannot be used directly since `#false` has been interpreted as a failure by recognizer 
+(define-css-disjoint-filter <css-boolean> #:-> CSS-Boolean
+  #:with [[true-value : Symbol 'true] [false-value : Symbol 'false]]
   (CSS:<=> (<css:integer> = 0) 0)
-  (CSS:<=> (<css:integer> = 1) 1))
+  (CSS:<=> (<css:integer> = 1) 1)
+  (CSS:<=> (<css-keyword> true-value) 1)
+  (CSS:<=> (<css-keyword> false-value) 0))
 
 (define-css-disjoint-filter <css-keyword> #:-> Symbol
   #:with [[options : (U (-> Symbol Boolean) (Listof Symbol) Symbol)]]

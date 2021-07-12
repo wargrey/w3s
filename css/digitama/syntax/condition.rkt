@@ -92,7 +92,7 @@
 
   [resolution      : Nonnegative-Flonum      #:= 2.0] ; the drafts don't mention if 0.0 is allowed.
   [scan            : Symbol                  #:= 'progressive]
-  [grid            : (U One Zero)            #:= 0]
+  [grid            : CSS-Boolean             #:= 0]
   [update          : Symbol                  #:= 'slow]
   [overflow-block  : Symbol                  #:= 'none]
   [overflow-inline : Symbol                  #:= 'none]
