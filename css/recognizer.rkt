@@ -644,6 +644,9 @@
 (define-type CSS+Flonum-% (U Nonnegative-Flonum CSS+%))
 
 (define css-boolean? : (-> Any Boolean : #:+ CSS-Boolean) (lambda [v] (and (byte? v) (or (= v 0) (= v 1)))))
+(define css-true? : (-> Integer Boolean) (lambda [v] (not (css-false? v))))
+(define css-false? : (-> Integer Boolean) (lambda [v] (= v 0)))
+
 (define css-flonum-%? : (-> Any Boolean : CSS-Flonum-%) (lambda [v] (or (flonum? v) (css-%? v))))
 (define css+flonum-%? : (-> Any Boolean : #:+ CSS+Flonum-%) (lambda [v] (or (nonnegative-flonum? v) (css+%? v))))
 
