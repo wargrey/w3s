@@ -51,13 +51,14 @@
     (define ch (read-char /dev/cssin))
     (cond [(eof-object? ch) eof]
           [(char-whitespace? ch) (css-consume-whitespace-token srcloc)]
-          [(char-numeric? ch) (css-consume-numeric-token srcloc ch)]
+          [(char-numeric? ch) (css-consume-numeric-token srcloc ch #false)]
           [(css-char-name-prefix? ch) (css-consume-ident-token srcloc ch)]
           [else (case ch
                   [(#\( #\[ #\{) (css-make-token srcloc css:open ch)]
                   [(#\) #\] #\}) (css-make-token srcloc css:close ch)]
                   [(#\' #\") (css-consume-string-token srcloc ch)]
-                  [(#\+ #\.) (css-consume-numeric-token srcloc ch)]
+                  [(#\+) (css-consume-numeric-token srcloc ch #true)]
+                  [(#\.) (css-consume-numeric-token srcloc ch #false)]
                   [(#\^ #\$ #\| #\~ #\*) (css-consume-match-token srcloc ch)]
                   [(#\#) (css-consume-hash-token srcloc)]
                   [(#\@) (css-consume-@keyword-token srcloc)]
@@ -83,7 +84,7 @@
           (cond [(eof-object? cdc) (css-make-token srcloc css:delim #\-)]
                 [(string=? cdc "->") (read-string 2 /dev/cssin) (css-make-token srcloc css:cdc '-->)]
                 [(css-identifier-prefix? #\- (string-ref cdc 0) (string-ref cdc 1)) (css-consume-ident-token srcloc #\-)]
-                [else (css-consume-numeric-token srcloc #\-)])))))
+                [else (css-consume-numeric-token srcloc #\- #true)])))))
 
 (define css-consume-comment-token : (-> CSS-Srcloc (U CSS:WhiteSpace CSS:Delim CSS:Bad))
   (lambda [srcloc]
@@ -146,10 +147,10 @@
                           [(and (char=? next #\newline) (read-char /dev/cssin)) (consume-string-token (cons ch chars))]
                           [else (consume-string-token (cons (css-consume-escaped-char /dev/cssin) chars))]))]))))
 
-(define css-consume-numeric-token : (-> CSS-Srcloc Char (U CSS-Numeric CSS:Delim CSS:Bad))
+(define css-consume-numeric-token : (-> CSS-Srcloc Char Boolean (U CSS-Numeric CSS:Delim CSS:Bad))
   ;;; https://drafts.csswg.org/css-syntax/#consume-a-number
   ;;; https://drafts.csswg.org/css-values/#numeric-types
-  (lambda [srcloc sign/digit]
+  (lambda [srcloc sign/digit signed?]
     (define /dev/cssin : Input-Port (css-srcloc-in srcloc))
     (define ch1 : (U EOF Char) (peek-char /dev/cssin 0))
     (define ch2 : (U EOF Char) (peek-char /dev/cssin 1))
@@ -163,26 +164,26 @@
                            (define value : Flonum (real->double-flonum n))
                            (define rep+unit : String (~a representation unit))
                            (case unit
-                             [(em ex ch ic rem)       (css-make-token srcloc css:length:font     rep+unit value unit)]
-                             [(cap lh rlh)            (css-make-token srcloc css:length:font     rep+unit value unit)]
-                             [(vw vh vi vb vmin vmax) (css-make-token srcloc css:length:viewport rep+unit value unit)]
-                             [(px cm mm q in pc pt)   (css-make-token srcloc css:length          rep+unit value unit)]
-                             [(apc pls ls)            (css-make-token srcloc css:length          rep+unit value unit)]
-                             [(deg grad rad turn)     (css-make-token srcloc css:angle           rep+unit value unit)]
-                             [(s ms min h mtn tn)     (css-make-token srcloc css:time            rep+unit value unit)]
-                             [(hz khz)                (css-make-token srcloc css:frequency       rep+unit value unit)]
-                             [(dpi dpcm dppx x)       (css-make-token srcloc css:resolution      rep+unit value unit)]
-                             [else                    (css-make-token srcloc css:dimension       rep+unit value unit)])]
+                             [(em ex ch ic rem)       (css-make-token srcloc css:length:font     rep+unit signed? value unit)]
+                             [(cap lh rlh)            (css-make-token srcloc css:length:font     rep+unit signed? value unit)]
+                             [(vw vh vi vb vmin vmax) (css-make-token srcloc css:length:viewport rep+unit signed? value unit)]
+                             [(px cm mm q in pc pt)   (css-make-token srcloc css:length          rep+unit signed? value unit)]
+                             [(apc pls ls)            (css-make-token srcloc css:length          rep+unit signed? value unit)]
+                             [(deg grad rad turn)     (css-make-token srcloc css:angle           rep+unit signed? value unit)]
+                             [(s ms min h mtn tn)     (css-make-token srcloc css:time            rep+unit signed? value unit)]
+                             [(hz khz)                (css-make-token srcloc css:frequency       rep+unit signed? value unit)]
+                             [(dpi dpcm dppx x)       (css-make-token srcloc css:resolution      rep+unit signed? value unit)]
+                             [else                    (css-make-token srcloc css:dimension       rep+unit signed? value unit)])]
                           [(and (char? ch1) (char=? ch1 #\%) (read-char /dev/cssin))
                            (define n% : Flonum (real->double-flonum (* n 0.01)))
-                           (css-make-token srcloc css:percentage (string-append representation "%") n%)]
+                           (css-make-token srcloc css:percentage (string-append representation "%") signed? n%)]
                           [(flonum? n)
-                           (cond [(zero? n) (css-make-token srcloc css:flzero representation n)]
-                                 [(fl= n 1.0) (css-make-token srcloc css:flone representation n)]
-                                 [else (css-make-token srcloc css:flonum representation n)])]
-                          [(zero? n) (css-make-token srcloc css:zero representation n)]
-                          [(= n 1) (css-make-token srcloc css:one representation n)]
-                          [else (css-make-token srcloc css:integer representation n)])))])))
+                           (cond [(zero? n) (css-make-token srcloc css:flzero representation signed? n)]
+                                 [(fl= n 1.0) (css-make-token srcloc css:flone representation signed? n)]
+                                 [else (css-make-token srcloc css:flonum representation signed? n)])]
+                          [(zero? n) (css-make-token srcloc css:zero representation signed? n)]
+                          [(= n 1) (css-make-token srcloc css:one representation signed? n)]
+                          [else (css-make-token srcloc css:integer representation signed? n)])))])))
 
 (define css-consume-url-token : (-> CSS-Srcloc (U CSS:URL CSS:Bad))
   ;;; https://drafts.csswg.org/css-syntax/#consume-a-url-token

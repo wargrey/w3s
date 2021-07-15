@@ -3,6 +3,8 @@
 (provide (all-defined-out))
 
 (require css)
+(require css/digitama/syntax/selector)
+
 (require digimon/spec)
 (require racket/string)
 
@@ -47,6 +49,10 @@
 (define tamer-parse : (-> CSS-StdIn Procedure (Values (U CSS-Syntax-Error False (Listof Any)) (Listof CSS-Token)))
   (lambda [com.css atom-parser]
     (read-css-component-values* com.css atom-parser)))
+
+(define tamer-An+B : (-> CSS-StdIn (Option (Pairof Integer Integer)))
+  (lambda [com.css]
+    (css-extract-An+B (css-parse-component-values com.css))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-behavior (it-check-modifier modifier lower upper)
@@ -158,6 +164,14 @@
                       (expect-satisfy expected (car vs))))]
           [else (tamer-deadcode vs)])))
 
+(define-behavior (it-check-an+b com.css expected)
+  (let ([A.B (tamer-An+B com.css)])
+    #:it
+    ["should be parsed into an integer pair (~a, ~a), when fed with ~s" (car expected) (cdr expected) com.css] #:when (pair? expected)
+    ["should fail, when fed with ~s" com.css]
+    #:do
+    (expect-equal A.B expected)))
+
 (define check-range : (-> Any (U False (-> Any Boolean) Index) Natural (U Natural +inf.0) Void)
   (lambda [vs expected least most]
     (cond [(not expected) (expect-false vs)]
@@ -268,6 +282,25 @@
                                    (it-check-invalid-<#> "1, 2, 3," parser exn:css:missing-value?))))))
 
     (context "datatypes" #:do
+             (context "<An+B>" #:do
+                      (it-check-an+b "even" '(2 . 0))
+                      (it-check-an+b "odd" '(2 . 1))
+                      (it-check-an+b "0n+5" '(0 . 5))
+                      (it-check-an+b "5" '(0 . 5))
+                      (it-check-an+b "1n+0" '(1 . 0))
+                      (it-check-an+b "n+0" '(1 . 0))
+                      (it-check-an+b "n" '(1 . 0))
+                      (it-check-an+b "3n-6" '(3 . -6))
+                      (it-check-an+b "3n + 1" '(3 . 1))
+                      (it-check-an+b "-3n - 2" '(-3 . -2))
+                      (it-check-an+b "-n+ 6" '(-1 . 6))
+                      (it-check-an+b "-n- 6" '(-1 . -6))
+                      (it-check-an+b "-3n- 5" '(-3 . -5))
+                      (it-check-an+b "-n-6" '(-1 . -6))
+                      (it-check-an+b "n +2" '(1 . 2))
+                      (it-check-an+b "3 n" #false)
+                      (it-check-an+b "+ 2n" #false)
+                      (it-check-an+b "+ 2" #false))
              (context "<position>" #:do
                       (it-check "left" (<:css-position:>) css-position?)
                       (it-check "center bottom" (<:css-position:>) css-position?)

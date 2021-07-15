@@ -6,6 +6,10 @@
 
 (require racket/set)
 (require racket/string)
+(require racket/symbol)
+(require racket/list)
+
+(require racket/math)
 
 (require "digicore.rkt")
 (require "misc.rkt")
@@ -37,6 +41,8 @@
 (define-type CSS-Attribute-Value (U (U String Symbol (Listof (U String Symbol)))
                                     (Vector Symbol (U String Symbol (Listof (U String Symbol))))))
 
+(define-type CSS-An+B-Predicate (->* () (Positive-Index) Boolean))
+
 (define-preference css-subject : CSS-Subject
   ([combinator : CSS-Selector-Combinator                #:= '>]
    [type : Symbol                                       #:= (css-root-element-type)]
@@ -52,7 +58,10 @@
   [css-attribute-selector : CSS-Attribute-Selector ([name : Symbol] [quirk : Symbol] [namespace : (U Symbol Boolean)])]
   [css-attribute~selector : CSS-Attribute~Selector css-attribute-selector ([type : Char] [value : (U Symbol String)] [i? : Boolean])]  
 
-  [css-:class-selector : CSS-:Class-Selector ([name : Symbol] [arguments : (Option (Listof Any))])]
+  [css-:class-selector : CSS-:Class-Selector ([name : Symbol])]
+  [css-:child-selector : CSS-:Child-Selector css-:class-selector ([predicate : CSS-An+B-Predicate])]
+  [css-:function-selector : CSS-:Function-Selector css-:class-selector ([arguments : (Option (Listof Any))])]
+
   [css-::element-selector : CSS-::Element-Selector ([name : Symbol] [arguments : (Option (Listof Any))] [:classes : (Listof CSS-:Class-Selector)])]
 
   [css-compound-selector : CSS-Compound-Selector
@@ -145,6 +154,9 @@
   [in-range out-of-range]
   [required optional])
 
+(define current-css-child-index : (Parameterof Positive-Index) (make-parameter 1))
+(define current-css-children-count : (Parameterof (Option Positive-Index)) (make-parameter #false))
+
 (define default-css-abc->specificity : (Parameterof (-> Natural Natural Natural Natural))
   (make-parameter (λ [[A : Natural] [B : Natural] [C : Natural]] : Natural
                     (fxior (fxlshift A 16) (fxior (fxlshift B 8) C)))))
@@ -208,3 +220,99 @@
            ; TODO: deal with functional (especially dynamical) pseudo classes
            (memq (css-:class-selector-name s:c) :classes))
          #true)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; https://www.w3.org/TR/css-syntax-3/#anb-microsyntax
+(define css-An+B-predicate : (-> Integer Integer Boolean CSS-An+B-Predicate)
+  (let ([always-true (λ [[i : Positive-Index (current-css-child-index)]] #true)])
+    (lambda [a b last?]
+      (define last-b (- b 1))
+      (cond [(= b 0) always-true]
+            [(= a 0)
+             (if (not last?)
+                 (λ [[i : Positive-Index (current-css-child-index)]] : Boolean
+                   (= i b))
+                 (λ [[i : Positive-Index (current-css-child-index)]] : Boolean
+                   (let ([s (current-css-children-count)])
+                     (and s (= (- s i) last-b)))))]
+            [else
+             (if (not last?)
+                 (λ [[i : Positive-Index (current-css-child-index)]] : Boolean
+                   (exact-nonnegative-integer? (/ (- i b) a)))
+                 (λ [[i : Positive-Index (current-css-child-index)]] : Boolean
+                   (let ([s (current-css-children-count)])
+                     (and s (exact-nonnegative-integer? (/ (- (- s i) last-b) a))))))]))))
+
+(define css-extract-An+B : (-> (Listof CSS-Token) (Option (Pairof Integer Integer)))
+  (lambda [argl]
+    ; WARNING: `-` is a valid ident character 
+    (cond [(null? argl) #false]
+          [(null? (cdr argl)) (css-filter-An/B/kw (car argl))]
+          [(null? (cddr argl)) ; `An- B` contains 3 tokens, and therefore will not match this condition
+           (let-values ([(A _) (css-filter-An (car argl))])
+             (and A (let ([B (css-filter-B (cadr argl) #true)])
+                      (and B (cons A B)))))]
+          [else ; whitespaces are allowed around the sign connecting `An` and `B`
+           (let-values ([(A ?n-) (css-filter-An (car argl))])
+             (and A (let ([+B (filter-not css:whitespace? (cdr argl))])
+                      (cond [(null? +B) (cons A 0)]
+                            [(null? (cdr +B))
+                             (let ([B (css-filter-B (car +B) (= ?n- 1))])
+                               (and B (cons A (* B ?n-))))]
+                            [(and (css:delim? (car +B)) (null? (cddr +B)))
+                             (let ([sign (case (css:delim-datum (car +B)) [(#\+) 1] [(#\-) -1] [else #false])])
+                               (and sign (let ([B (css-filter-B (cadr +B) #false)])
+                                           (and B (cons A (* sign B))))))]
+                            [else #false]))))])))
+
+(define css-filter-An/B/kw : (-> CSS-Token (Option (Pairof Integer Integer)))
+  (lambda [An]
+    (cond [(css:ident? An)
+           (case (css:ident-norm An)
+             [(n) (cons 1 0)]
+             [(-n) (cons -1 0)]
+             [(even) (cons 2 0)]
+             [(odd) (cons 2 1)]
+             [else (let* ([N-B (symbol->immutable-string (css:ident-norm An))]
+                          [?B (css-extract-B-from-N-ddd N-B)])
+                     (and ?B (cons (if (string-prefix? N-B "-") -1 1) ?B)))])]
+          [(css:dimension? An)
+           (let ([A (css:dimension-datum An)])
+             (and (integer? A)
+                  (let ([B (case (css:dimension-unit An) [(n N) 0] [else (css-extract-B-from-N-ddd (css-numeric-representation An))])])
+                    (and B (cons (exact-round A) B)))))]
+          [(css:integer? An) (cons 0 (css:integer-datum An))]
+          [else #false])))
+
+(define css-filter-An : (-> CSS-Token (Values (Option Integer) Integer))
+  (lambda [An]
+    (cond [(css:ident? An)
+           (case (css:ident-norm An)
+             [(n) (values 1 1)]
+             [(-n) (values -1 1)]
+             [(-n-) (values -1 -1)]
+             [else (values #false 0)])]
+          [(css:dimension? An)
+           (let ([flA (css:dimension-datum An)])
+             (cond [(not (integer? flA)) (values #false 0)]
+                   [else (let ([A (exact-truncate flA)])
+                           (case (css:dimension-unit An)
+                             [(n N) (values A 1)]
+                             [(n- N-) (values A -1)]
+                             [else (values #false 0)]))]))]
+          [else (values #false 0)])))
+
+(define css-filter-B : (-> CSS-Token Boolean (Option Integer) : #:+ CSS:Integer)
+  (lambda [B signed?]
+    (and (css:integer? B)
+         (eq? (css-numeric-signed? B) signed?)
+         (css:integer-datum B))))
+
+(define css-extract-B-from-N-ddd : (-> String (Option Integer))
+  (lambda [An-ddd]
+    (define ?B (regexp-match #px"[Nn]([-]\\d+)$" An-ddd))
+    (define -ddd : (Option String) (and ?B (cadr ?B)))
+    
+    (and -ddd
+         (let ([B (string->number -ddd)])
+           (and (exact-integer? B) B)))))

@@ -4,6 +4,7 @@
 
 (provide (all-defined-out) CSS-StdIn)
 (provide (struct-out CSS-Subject) make-css-subject)
+(provide current-css-child-index current-css-children-count)
 
 (provide (except-out (all-from-out "digitama/syntax/digicore.rkt") css-log-syntax-error))
 (provide (except-out (all-from-out "digitama/syntax/grammar.rkt") css-stylesheet-placeholder))

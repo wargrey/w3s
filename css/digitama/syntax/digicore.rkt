@@ -277,7 +277,7 @@
 (define-type CSS-One (U CSS:One CSS:Flone))
 
 (define-tokens css-token w3s-token #:+ CSS-Token
-  [[css-numeric         #:+ CSS-Numeric         #:-> css-token   ([representation : String])]
+  [[css-numeric         #:+ CSS-Numeric         #:-> css-token   ([representation : String] [signed? : Boolean])]
    [css:dimension       #:+ CSS:Dimension       #:-> css-numeric ([datum : Flonum] [unit : Symbol])]]
 
   [[css:one             #:+ CSS:One             #:-> css:integer]
@@ -352,6 +352,7 @@
   [exn:css:unrecognized       #:-> exn:css]
   [exn:css:misplaced          #:-> exn:css:unrecognized]
   [exn:css:type               #:-> exn:css:unrecognized]
+  [exn:css:type:An+B          #:-> exn:css:type]
   [exn:css:type:identifier    #:-> exn:css:type]
   [exn:css:type:variable      #:-> exn:css:type:identifier]
   [exn:css:range              #:-> exn:css:unrecognized]
@@ -373,6 +374,15 @@
 
 (define css-zero? : (-> Any Boolean : CSS-Zero) (λ [v] (or (css:zero? v) (css:flzero? v))))
 (define css-one? : (-> Any Boolean : CSS-One) (λ [v] (or (css:one? v) (css:flone? v))))
+
+(define css-signed-integer? : (-> CSS:Integer Boolean)
+  (lambda [<B>]
+    (or (< (css:integer-datum <B>) 0)
+        (let ([raw (css-numeric-representation <B>)])
+          (and (> (string-length raw) 0)
+               (let ([sign (string-ref raw 0)])
+                 (or (eq? sign #\+)
+                     (eq? sign #\- #| -0 |#))))))))
 
 (define css-nan? : (-> CSS-Numeric Boolean)
   (lambda [token]

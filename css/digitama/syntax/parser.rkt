@@ -16,6 +16,7 @@
 
 (require (for-syntax racket/base))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-syntax (define-css-parser-entry stx)
   ;;; https://drafts.csswg.org/css-syntax/#parser-entry-points
   (syntax-case stx [: lambda]
@@ -28,6 +29,7 @@
                               (λ [] (css-parse /dev/cssin args ...))
                               (λ [] (close-input-port /dev/cssin))))))]))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; https://drafts.csswg.org/css-syntax/#parser-entry-points
 (define-css-parser-entry css-parse-stylesheet #:-> (Listof CSS-Syntax-Rule)
   ;;; https://drafts.csswg.org/css-syntax/#parse-stylesheet
@@ -526,7 +528,7 @@
                    [else (let ([pclass (car ?pseudo-classes)])
                            (define pelement : CSS-::Element-Selector
                              (CSS-::Element-Selector (css-:class-selector-name pclass)
-                                                     (css-:class-selector-arguments pclass)
+                                                     #false ; seems no ::element is of form function
                                                      (cdr ?pseudo-classes)))
                            (extract-simple-selector sessalc sdi setubirtta pelement ?rest))])]
             [(css:block=:=? token #\[)
@@ -585,10 +587,22 @@
       (define-values (maybe: rest ?id rest2) (css-car/cadr tokens))
       (cond [(or (not (css:colon? maybe:)) (css:colon? ?id)) (values (reverse srotceles) tokens)]
             [(css:ident? ?id)
-             (let ([selector (CSS-:Class-Selector (css:ident-datum ?id) #false)])
+             (let ([selector (CSS-:Class-Selector (css:ident-datum ?id))])
                (extract-:class-selector (cons selector srotceles) rest2))]
+            [(css:function=<-? ?id '(nth-child nth-of-type nth-col))
+             (let ([A.B (css-extract-An+B (css:function-arguments ?id))])
+               (cond [(not A.B) (throw-exn:css:type:An+B ?id)]
+                     [else (let* ([predicate (css-An+B-predicate (car A.B) (cdr A.B) #false)]
+                                  [selector (CSS-:Child-Selector (css:function-norm ?id) predicate)])
+                             (extract-:class-selector (cons selector srotceles) rest2))]))]
+            [(css:function=<-? ?id '(nth-last-child nth-of-last-type nth-last-col))
+             (let ([A.B (css-extract-An+B (css:function-arguments ?id))])
+               (cond [(not A.B) (throw-exn:css:type:An+B ?id)]
+                     [else (let* ([predicate (css-An+B-predicate (car A.B) (cdr A.B) #true)]
+                                  [selector (CSS-:Child-Selector (css:function-norm ?id) predicate)])
+                             (extract-:class-selector (cons selector srotceles) rest2))]))]
             [(css:function? ?id)
-             (let ([selector (CSS-:Class-Selector (css:function-norm ?id) (css:function-arguments ?id))])
+             (let ([selector (CSS-:Function-Selector (css:function-norm ?id) (css:function-arguments ?id))])
                (extract-:class-selector (cons selector srotceles) rest2))]
             [else (throw-exn:css:type:identifier maybe:)]))))
   
