@@ -121,8 +121,7 @@
          (let ([s:classes : (Listof CSS-:Class-Selector) (css-compound-selector-:classes selector)]
                [:classes : (Listof Symbol) (css-subject-:classes element)])
            (or (null? s:classes)
-               (and root? (css-:classes-match? s:classes (cons 'root :classes)))
-               (and (pair? :classes) (css-:classes-match? s:classes :classes))))
+               (css-:classes-match? s:classes (if (not root?) :classes (cons 'root :classes)))))
          (let-values ([(a b c) (css-compound-selector-abc selector)])
            ((default-css-abc->specificity) a b c)))))
 
@@ -210,14 +209,13 @@
                                [(#\*) (regexp-match? (pregexp (format "(?~a:~a)" mode px:val)) val)]
                                [else #false]))))))))))
 
-(define css-:classes-match? : (-> (Listof+ CSS-:Class-Selector) (Listof+ Symbol) Boolean)
+(define css-:classes-match? : (-> (Listof+ CSS-:Class-Selector) (Listof Symbol) Boolean)
   (lambda [s:classes :classes]
     (define excluded : (Listof Symbol) (filter-map (λ [[:c : Symbol]] (hash-ref css-exclusive-:classes :c (λ _ #false))) :classes))
     (and (or (null? excluded)
              (for/and : Boolean ([s:c (in-list s:classes)])
                (not (memq (css-:class-selector-name s:c) excluded))))
-         (let ([child-idx (current-css-child-index)]
-               [total-idx (current-css-children-count)])
+         (let ([child-idx (current-css-child-index)])
            (for/or : Any ([s:c (in-list s:classes)])
              (cond [(css-:child-selector? s:c) ((css-:child-selector-predicate s:c) child-idx)]
                    [else (memq (css-:class-selector-name s:c) :classes)])))
