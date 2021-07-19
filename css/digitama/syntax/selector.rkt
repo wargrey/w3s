@@ -216,13 +216,20 @@
     (and (or (null? excluded)
              (for/and : Boolean ([s:c (in-list s:classes)])
                (not (memq (css-:class-selector-name s:c) excluded))))
-         (for/or : Any ([s:c (in-list s:classes)])
-           (cond [(not (css-:child-selector? s:c)) (memq (css-:class-selector-name s:c) :classes)]
-                 [else ((css-:child-selector-predicate s:c) (current-css-child-index))]))
+         (let ([child-idx (current-css-child-index)]
+               [total-idx (current-css-children-count)])
+           (for/or : Any ([s:c (in-list s:classes)])
+             (cond [(css-:child-selector? s:c) ((css-:child-selector-predicate s:c) child-idx)]
+                   [else (memq (css-:class-selector-name s:c) :classes)])))
          #true)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; https://www.w3.org/TR/css-syntax-3/#anb-microsyntax
+(define :only-child : CSS-An+B-Predicate
+  (lambda [[i : Positive-Integer (current-css-child-index)]] : Boolean
+    (and (eq? (current-css-children-count) 1)
+         (= i 1))))
+
 (define css-An+B-predicate : (case-> [(Pairof Integer Integer) Boolean -> CSS-An+B-Predicate]
                                      [Integer Integer Boolean -> CSS-An+B-Predicate])
   (let ()
@@ -242,15 +249,15 @@
       [(a b last?)
        (or (and (not last?)
                 (case a
-                  [(-1) (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean (<= i b))]
-                  [(0) (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean (= i b))]
-                  [(1) (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean (> i b))]
+                  [(-1) (procedure-rename (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean (<= i b)) ':-n+B)]
+                  [(0) (procedure-rename (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean (= i b)) ':B)]
+                  [(1) (procedure-rename (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean (> i b)) ':n+B)]
                   [(2) (case b
-                         [(0) (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean (even? i))]
-                         [(1) (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean (odd? i))]
-                         [else (predicate a b last?)])]
+                         [(0) (procedure-rename (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean (even? i)) ':even)]
+                         [(1) (procedure-rename (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean (odd? i)) ':odd)]
+                         [else (procedure-rename (predicate a b last?) ':2n+B)])]
                   [else #false]))
-           (predicate a b last?))])))
+           (procedure-rename (predicate a b last?) ':An+B))])))
 
 (define css-extract-An+B : (-> (Listof CSS-Token) (Option (Pairof Integer Integer)))
   (lambda [argl]

@@ -587,8 +587,12 @@
       (define-values (maybe: rest ?id rest2) (css-car/cadr tokens))
       (cond [(or (not (css:colon? maybe:)) (css:colon? ?id)) (values (reverse srotceles) tokens)]
             [(css:ident? ?id)
-             (let ([selector (CSS-:Class-Selector (css:ident-datum ?id))])
-               (extract-:class-selector (cons selector srotceles) rest2))]
+             (let ([name (css:ident-datum ?id)])
+               (case name
+                 [(first-child) (extract-:class-selector (cons (CSS-:Child-Selector name (css-An+B-predicate 0 1 #false)) srotceles) rest2)]
+                 [(last-child) (extract-:class-selector (cons (CSS-:Child-Selector name (css-An+B-predicate 0 1 #true)) srotceles) rest2)]
+                 [(only-child) (extract-:class-selector (cons (CSS-:Child-Selector name :only-child) srotceles) rest2)]
+                 [else (extract-:class-selector (cons (CSS-:Class-Selector name) srotceles) rest2)]))]
             [(css:function=<-? ?id '(nth-child nth-of-type nth-col))
              (let ([A.B (css-extract-An+B (css:function-arguments ?id))])
                (cond [(not A.B) (throw-exn:css:type:An+B ?id)]
