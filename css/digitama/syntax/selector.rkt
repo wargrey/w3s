@@ -217,8 +217,8 @@
              (for/and : Boolean ([s:c (in-list s:classes)])
                (not (memq (css-:class-selector-name s:c) excluded))))
          (for/or : Any ([s:c (in-list s:classes)])
-           ; TODO: deal with functional (especially dynamical) pseudo classes
-           (memq (css-:class-selector-name s:c) :classes))
+           (cond [(not (css-:child-selector? s:c)) (memq (css-:class-selector-name s:c) :classes)]
+                 [else ((css-:child-selector-predicate s:c) (current-css-child-index))]))
          #true)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -240,24 +240,17 @@
     (case-lambda
       [(a.b last?) (css-An+B-predicate (car a.b) (cdr a.b) last?)]
       [(a b last?)
-       (case a
-         [(-1)
-          (cond [(not last?) (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean (<= i b))]
-                [else (predicate a b last?)])]
-         [(0)
-          (cond [(not last?) (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean (= i b))]
-                [else (predicate a b last?)])]
-         [(1)
-          (cond [(not last?) (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean (> i b))]
-                [else (predicate a b last?)])]
-         [(2)
-          (cond [(not last?)
-                 (case b
-                   [(0) (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean (even? i))]
-                   [(1) (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean (odd? i))]
-                   [else (predicate a b last?)])]
-                [else (predicate a b last?)])]
-         [else (predicate a b last?)])])))
+       (or (and (not last?)
+                (case a
+                  [(-1) (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean (<= i b))]
+                  [(0) (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean (= i b))]
+                  [(1) (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean (> i b))]
+                  [(2) (case b
+                         [(0) (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean (even? i))]
+                         [(1) (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean (odd? i))]
+                         [else (predicate a b last?)])]
+                  [else #false]))
+           (predicate a b last?))])))
 
 (define css-extract-An+B : (-> (Listof CSS-Token) (Option (Pairof Integer Integer)))
   (lambda [argl]
