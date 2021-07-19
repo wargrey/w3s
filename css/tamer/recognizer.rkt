@@ -54,6 +54,12 @@
   (lambda [com.css]
     (css-extract-An+B (css-parse-component-values com.css))))
 
+(define tamer-An+B-predicate : (-> CSS-StdIn (Option Keyword) CSS-An+B-Predicate)
+  (lambda [com.css last?]
+    (let ([A.B (tamer-An+B com.css)])
+      (cond [(and A.B) (css-An+B-predicate A.B (and last? #true))]
+            [else (error 'tamer-An+B-predicate "not a valid <An+B>: ~a" com.css)]))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-behavior (it-check-modifier modifier lower upper)
   (let-values ([(least most) (css:multiplier-range modifier lower)])
@@ -172,6 +178,18 @@
     #:do
     (expect-equal A.B expected)))
 
+(define-behavior (it-check-an+b-predicate com.css last? indices failures)
+  (let ([An+B-predicate? (tamer-An+B-predicate com.css last?)])
+    #:it
+    ["should select all items with indices in ~a, and drop all items with indices in ~a, when fed with An+B ~s" indices failures com.css] #:when (not last?)
+    ["should select all items with indices in ~a, and drop all items with indices in ~a, when fed with An+B ~s for :last classes" indices failures com.css]
+    #:do
+    (for ([idx (in-list indices)])
+      (expect-true (An+B-predicate? idx)))
+
+    (for ([idx (in-list failures)])
+      (expect-false (An+B-predicate? idx)))))
+
 (define check-range : (-> Any (U False (-> Any Boolean) Index) Natural (U Natural +inf.0) Void)
   (lambda [vs expected least most]
     (cond [(not expected) (expect-false vs)]
@@ -216,7 +234,7 @@
 (module+ main
   (require css/digitama/color)
   (require css/digitama/image)
-  
+
   (spec-begin recognizer #:do
     (let ([filters (list (<css:ident>) (<css:integer>) (<css:delim>))]
           [parser (CSS<&&> ((inst CSS:<^> Any) (<css:ident>)) ((inst CSS:<*> Any) (<css:integer>) '?))])
@@ -300,7 +318,38 @@
                       (it-check-an+b "n +2" '(1 . 2))
                       (it-check-an+b "3 n" #false)
                       (it-check-an+b "+ 2n" #false)
-                      (it-check-an+b "+ 2" #false))
+                      (it-check-an+b "+ 2" #false)
+
+                      (context "predicate" #:do
+                               (it-check-an+b-predicate "0" #false (ann '() (Listof Positive-Byte)) '(1 2 3 4 5 6 7 8 9 10))
+                               (it-check-an+b-predicate "odd" #false '(1 3 5 7 9) '(2 4 6 8 10))
+                               (it-check-an+b-predicate "even" #false '(2 4 6 8 10) '(1 3 5 7 9))
+                               (it-check-an+b-predicate "4n+1" #false '(1 5 9 13) '(2 3 4 6 7 8 10 11 12))
+                               (it-check-an+b-predicate "-n+6" #false '(1 2 3 4 5 6) '(7 8 9 10))
+                               (it-check-an+b-predicate "-4n+10" #false '(2 6 10) '(1 3 4 5 7 8 9))
+                               (it-check-an+b-predicate "7" #false '(7) '(1 2 3 4 5 6 8 9 10)))
+                      
+                      (context ":last predicate" #:do
+                               (it-check-an+b-predicate "0" '#:last (ann '() (Listof Positive-Byte)) '(1 2 3 4 5 6 7 8 9 10))
+
+                               (context "given odd total" #:do
+                                        #:parameterize ([current-css-children-count 15]) #:do
+                                        (it-check-an+b-predicate "odd" '#:last '(1 3 5 7 9) '(2 4 6 8 10))
+                                        (it-check-an+b-predicate "even" '#:last '(2 4 6 8 10) '(1 3 5 7 9))
+                                        (it-check-an+b-predicate "4n+1" '#:last '(3 7 11 15) '(1 2 4 5 6 8 9 10 12 13 14))
+                                        (it-check-an+b-predicate "-n+6" '#:last '(10 11 12 13 14 15) '(1 2 3 4 5 6 7 8 9))
+                                        (it-check-an+b-predicate "-4n+10" '#:last '(6 10 14) '(1 2 3 4 5 7 8 9 11 12 13 15))
+                                        (it-check-an+b-predicate "7" '#:last '(9) '(1 2 3 4 5 6 7 8 10 11 12 13 14 15 16)))
+
+                               (context "given even total" #:do
+                                        #:parameterize ([current-css-children-count 16]) #:do
+                                        (it-check-an+b-predicate "odd" '#:last '(2 4 6 8 10) '(1 3 5 7 9))
+                                        (it-check-an+b-predicate "even" '#:last '(1 3 5 7 9) '(2 4 6 8 10))
+                                        (it-check-an+b-predicate "4n+1" '#:last '(4 8 12 16) '(1 2 3 5 6 7 9 10 11 13 14 15))
+                                        (it-check-an+b-predicate "-n+6" '#:last '(11 12 13 14 15 16) '(1 2 3 4 5 6 7 8 9 10))
+                                        (it-check-an+b-predicate "-4n+10" '#:last '(7 11 15) '(1 2 3 4 5 6 8 9 10 12 13 14 16))
+                                        (it-check-an+b-predicate "7" '#:last '(10) '(1 2 3 4 5 6 7 8 9 11 12 13 14 15 16)))))
+             
              (context "<position>" #:do
                       (it-check "left" (<:css-position:>) css-position?)
                       (it-check "center bottom" (<:css-position:>) css-position?)

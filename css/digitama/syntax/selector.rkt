@@ -41,7 +41,7 @@
 (define-type CSS-Attribute-Value (U (U String Symbol (Listof (U String Symbol)))
                                     (Vector Symbol (U String Symbol (Listof (U String Symbol))))))
 
-(define-type CSS-An+B-Predicate (->* () (Positive-Index) Boolean))
+(define-type CSS-An+B-Predicate (->* () (Positive-Integer) Boolean))
 
 (define-preference css-subject : CSS-Subject
   ([combinator : CSS-Selector-Combinator                #:= '>]
@@ -223,25 +223,41 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; https://www.w3.org/TR/css-syntax-3/#anb-microsyntax
-(define css-An+B-predicate : (-> Integer Integer Boolean CSS-An+B-Predicate)
-  (let ([always-true (λ [[i : Positive-Index (current-css-child-index)]] #true)])
-    (lambda [a b last?]
-      (define last-b (- b 1))
-      (cond [(= b 0) always-true]
-            [(= a 0)
-             (if (not last?)
-                 (λ [[i : Positive-Index (current-css-child-index)]] : Boolean
-                   (= i b))
-                 (λ [[i : Positive-Index (current-css-child-index)]] : Boolean
-                   (let ([s (current-css-children-count)])
-                     (and s (= (- s i) last-b)))))]
-            [else
-             (if (not last?)
-                 (λ [[i : Positive-Index (current-css-child-index)]] : Boolean
-                   (exact-nonnegative-integer? (/ (- i b) a)))
-                 (λ [[i : Positive-Index (current-css-child-index)]] : Boolean
-                   (let ([s (current-css-children-count)])
-                     (and s (exact-nonnegative-integer? (/ (- (- s i) last-b) a))))))]))))
+(define css-An+B-predicate : (case-> [(Pairof Integer Integer) Boolean -> CSS-An+B-Predicate]
+                                     [Integer Integer Boolean -> CSS-An+B-Predicate])
+  (let ()
+    (define (predicate [A : Integer] [B : Integer] [last? : Boolean]) : CSS-An+B-Predicate
+      (define B-1 (- B 1))
+      (if (not last?)
+          (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean
+            (exact-nonnegative-integer? (/ (- i B) A)))
+          (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean
+            (let ([end-idx (current-css-children-count)])
+              (and end-idx
+                   ; if counted straightforward, the `idx` should be `end-idx + 1 - i`
+                   (cond [(= A 0) (= i (- end-idx B-1))]
+                         [else (exact-nonnegative-integer? (/ (- (- end-idx i) B-1) A))]))))))
+    (case-lambda
+      [(a.b last?) (css-An+B-predicate (car a.b) (cdr a.b) last?)]
+      [(a b last?)
+       (case a
+         [(-1)
+          (cond [(not last?) (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean (<= i b))]
+                [else (predicate a b last?)])]
+         [(0)
+          (cond [(not last?) (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean (= i b))]
+                [else (predicate a b last?)])]
+         [(1)
+          (cond [(not last?) (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean (> i b))]
+                [else (predicate a b last?)])]
+         [(2)
+          (cond [(not last?)
+                 (case b
+                   [(0) (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean (even? i))]
+                   [(1) (λ [[i : Positive-Integer (current-css-child-index)]] : Boolean (odd? i))]
+                   [else (predicate a b last?)])]
+                [else (predicate a b last?)])]
+         [else (predicate a b last?)])])))
 
 (define css-extract-An+B : (-> (Listof CSS-Token) (Option (Pairof Integer Integer)))
   (lambda [argl]
