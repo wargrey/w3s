@@ -45,6 +45,20 @@
 
     variables))
 
+(define css-cascade-children
+  : (All (s) (->* ((ListofU+ CSS-Stylesheet) (ListofU+ CSS-Subject) CSS-Declaration-Parsers (CSS-Cascaded-Value-Filter s) (Option CSS-Values) Positive-Index)
+                  (Positive-Index Positive-Index)
+                  (Listof s)))
+  (lambda [stylesheets stcejbus desc-parsers value-filter inherited-values count [start-idx 1] [total (+ (- start-idx 1) count)]]
+    (parameterize ([current-css-children-count (assert total index?)])
+      (define end-idx : Positive-Index (assert (+ (- start-idx 1) count) index?))
+      (let cascade-style ([idx : Positive-Fixnum start-idx]
+                          [rendlihc : (Listof s) null])
+        (cond [(> idx end-idx) (reverse rendlihc)]
+              [else (let-values ([(style _) (parameterize ([current-css-child-index idx])
+                                              (css-cascade stylesheets stcejbus desc-parsers value-filter inherited-values))])
+                      (cascade-style (add1 idx) (cons style rendlihc)))])))))
+
 (define css-cascade
   : (All (Preference Env)
          (case-> [-> (ListofU+ CSS-Stylesheet) (ListofU+ CSS-Subject) CSS-Declaration-Parsers

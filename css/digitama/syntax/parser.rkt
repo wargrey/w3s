@@ -505,7 +505,7 @@
             [(css:delim=<-? head '(#\| #\*)) (css-car-elemental-selector head heads namespaces)]
             [(or (not head) (css:comma? head)) (throw-exn:css:empty head)]
             [else (values #true (or (css-declared-namespace namespaces '||) #true) (cons head heads))]))
-    (define-values (:classes selector-components) (css-car-:class-selectors simple-selector-components))
+    (define-values (:classes :children selector-components) (css-car-:class-selectors simple-selector-components))
     (let extract-simple-selector ([sessalc : (Listof Symbol) null]
                                   [sdi : (Listof Keyword) null]
                                   [setubirtta : (Listof CSS-Attribute-Selector) null]
@@ -514,7 +514,7 @@
       (define-values (token tokens) (css-car/cdr selector-tokens))
       (cond [(or (not token) (css:comma? token) (css-selector-combinator? token))
              (values (CSS-Compound-Selector combinator namespace typename (reverse sdi) (reverse sessalc)
-                                            (reverse setubirtta) :classes pseudo-element)
+                                            (reverse setubirtta) :classes :children pseudo-element)
                      selector-tokens)]
             [(and pseudo-element) (throw-exn:css:overconsumption token)]
             [(css:delim=:=? token #\.)
@@ -522,9 +522,10 @@
              (cond [(not (css:ident? next)) (throw-exn:css:type:identifier next)]
                    [else (extract-simple-selector (cons (css:ident-datum next) sessalc) sdi setubirtta pseudo-element rest)])]
             [(css:colon? token)
-             (define-values (?pseudo-classes ?rest) (css-car-:class-selectors tokens))
+             (define-values (?pseudo-classes ?pseudo-children ?rest) (css-car-:class-selectors tokens))
              (define-values (next rest) (css-car/cdr ?rest))
              (cond [(null? ?pseudo-classes) (throw-exn:css:misplaced (list token (car tokens)))]
+                   [(pair? ?pseudo-children) (throw-exn:css:malformed token)]
                    [else (let ([pclass (car ?pseudo-classes)])
                            (define pelement : CSS-::Element-Selector
                              (CSS-::Element-Selector (css-:class-selector-name pclass)
@@ -577,37 +578,38 @@
                   (cond [(css:delim? token) (values #true ns tokens)]
                         [else (values (css:ident-datum token) ns tokens)]))])))
 
-(define css-car-:class-selectors : (-> (Listof CSS-Token) (Values (Listof CSS-:Class-Selector) (Listof CSS-Token)))
+(define css-car-:class-selectors : (-> (Listof CSS-Token) (Values (Listof CSS-:Class-Selector) (Listof CSS-:Child-Selector) (Listof CSS-Token)))
   ;;; https://drafts.csswg.org/selectors/#structure
   ;;; https://drafts.csswg.org/selectors/#elemental-selectors
   ;;; https://drafts.csswg.org/selectors/#pseudo-classes
   (lambda [components]
     (let extract-:class-selector ([srotceles : (Listof CSS-:Class-Selector) null]
+                                  [nerdlihc : (Listof CSS-:Child-Selector) null]
                                   [tokens : (Listof CSS-Token) components])
       (define-values (maybe: rest ?id rest2) (css-car/cadr tokens))
-      (cond [(or (not (css:colon? maybe:)) (css:colon? ?id)) (values (reverse srotceles) tokens)]
+      (cond [(or (not (css:colon? maybe:)) (css:colon? ?id)) (values (reverse srotceles) (reverse nerdlihc) tokens)]
             [(css:ident? ?id)
              (let ([name (css:ident-datum ?id)])
                (case name
-                 [(first-child) (extract-:class-selector (cons (CSS-:Child-Selector name (css-An+B-predicate 0 1 #false)) srotceles) rest2)]
-                 [(last-child) (extract-:class-selector (cons (CSS-:Child-Selector name (css-An+B-predicate 0 1 #true)) srotceles) rest2)]
-                 [(only-child) (extract-:class-selector (cons (CSS-:Child-Selector name :only-child) srotceles) rest2)]
-                 [else (extract-:class-selector (cons (CSS-:Class-Selector name) srotceles) rest2)]))]
+                 [(first-child) (extract-:class-selector srotceles (cons (CSS-:Child-Selector name (css-An+B-predicate 0 1 #false)) nerdlihc) rest2)]
+                 [(last-child) (extract-:class-selector srotceles (cons (CSS-:Child-Selector name (css-An+B-predicate 0 1 #true)) nerdlihc) rest2)]
+                 [(only-child) (extract-:class-selector srotceles (cons (CSS-:Child-Selector name :only-child) nerdlihc) rest2)]
+                 [else (extract-:class-selector (cons (CSS-:Class-Selector name) srotceles) nerdlihc rest2)]))]
             [(css:function=<-? ?id '(nth-child nth-of-type nth-col))
              (let ([A.B (css-extract-An+B (css:function-arguments ?id))])
                (cond [(not A.B) (throw-exn:css:type:An+B ?id)]
                      [else (let* ([predicate (css-An+B-predicate (car A.B) (cdr A.B) #false)]
                                   [selector (CSS-:Child-Selector (css:function-norm ?id) predicate)])
-                             (extract-:class-selector (cons selector srotceles) rest2))]))]
+                             (extract-:class-selector srotceles (cons selector nerdlihc) rest2))]))]
             [(css:function=<-? ?id '(nth-last-child nth-of-last-type nth-last-col))
              (let ([A.B (css-extract-An+B (css:function-arguments ?id))])
                (cond [(not A.B) (throw-exn:css:type:An+B ?id)]
                      [else (let* ([predicate (css-An+B-predicate (car A.B) (cdr A.B) #true)]
                                   [selector (CSS-:Child-Selector (css:function-norm ?id) predicate)])
-                             (extract-:class-selector (cons selector srotceles) rest2))]))]
+                             (extract-:class-selector srotceles (cons selector nerdlihc) rest2))]))]
             [(css:function? ?id)
              (let ([selector (CSS-:Function-Selector (css:function-norm ?id) (css:function-arguments ?id))])
-               (extract-:class-selector (cons selector srotceles) rest2))]
+               (extract-:class-selector (cons selector srotceles) nerdlihc rest2))]
             [else (throw-exn:css:type:identifier maybe:)]))))
   
 (define css-simple-block->attribute-selector : (-> CSS:Block CSS-Namespace-Hint CSS-Attribute-Selector)
