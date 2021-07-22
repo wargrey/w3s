@@ -1,6 +1,8 @@
 #lang racket/base
 
 (provide xml-indentation)
+(provide (rename-out [xml-indentation dtd-indentation]
+                     [xml-indentation rnc-indentation]))
 
 (require racket/class)
 

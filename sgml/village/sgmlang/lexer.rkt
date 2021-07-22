@@ -1,7 +1,8 @@
 #lang racket/base
 
 (provide xml-lexer)
-(provide (rename-out [xml-lexer dtd-lexer]))
+(provide (rename-out [xml-lexer dtd-lexer]
+                     [xml-lexer rnc-lexer]))
 
 (require sgml/digitama/digicore)
 (require sgml/digitama/tokenizer)

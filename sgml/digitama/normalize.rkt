@@ -30,8 +30,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type XML-XXE-Reader (All (E) (->* (Input-Port) ((U False Symbol String)) E)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type Open-Input-XML-XXE
   (-> Path-String (Option String) (Option String) (Option Index) (Boxof (U False String Symbol))
       (U False Input-Port (Pairof Input-Port Boolean))))
@@ -683,7 +681,7 @@
                                                 Open-Input-XML-XXE (Option Index) (Option Real) (XML-XXE-Reader E)
                                                 (Option E)))
   (lambda [content public system open-port topsize0 timeout read-entity]
-    (and (or public system) ; should not happen
+    (and (or public system) ; always true
          (parameterize ([current-custodian (make-custodian)])
            (define source : (U Symbol String) (w3s-token-source (or public system)))
            (define rootdir : Path-String

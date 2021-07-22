@@ -23,7 +23,6 @@
 (require "tokenizer.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-type XML-External-Doctype-Entity (U False XML-DTD))
 (define-type XML-External-Schema (U False Open-Input-XML-XXE XML-Schema))
 
 (struct xml-document
@@ -42,8 +41,7 @@
   #:type-name XML-Document*)
 
 (struct xml-document+schema xml-document*
-  ([external-entity : XML-External-Doctype-Entity]
-   [body : XML-Schema])
+  ([body : XML-Schema])
   #:type-name XML-Document+Schema)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -93,48 +91,48 @@
 
 (define xml-document*-normalize : (->* (XML-Document*)
                                        (XML-External-Schema
-                                        #:guard XML-DTD-Guard #:ignore-internal-dtd? Boolean
+                                        #:guard XML-DTD-Guard #:read-dtd (XML-XXE-Reader (U XML-DTD XML-Schema)) #:ignore-internal-dtd? Boolean
                                         #:xml:lang String #:xml:space Symbol #:xml:space-filter (Option XML:Space-Filter))
                                        XML-Document*)
   (lambda [doc [sch xml-load-relative-system-entity]
-               #:guard [dtdg default-dtd-guard] #:ignore-internal-dtd? [ignore-intsubset? #false]
+               #:guard [dtdg default-dtd-guard] #:read-dtd [read-dtd read-xml-type-definition] #:ignore-internal-dtd? [ignore-intsubset? #false]
                #:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false]]
     (define standalone? : Boolean (xml-prolog-standalone? (xml-document*-prolog doc)))
     (define stop-if-xxe-not-loaded? : Boolean (not standalone?))
+    (define content : (Listof XML-Content*) (xml-document*-contents doc))
     
-    (define external-dtd : (Option XML-DTD)
+    (define external-dtd : (Option (U XML-DTD XML-Schema))
       (let ([dt (xml-document*-doctype doc)])
         (and (not (xml-schema? sch))
              (xml-load-external-dtd sch (xml-doctype*-name dt) (xml-doctype*-external dt)
-                                    (xml-dtd-guard-xxe-guard dtdg)))))
+                                    (xml-dtd-guard-xxe-guard dtdg) read-dtd))))
     
     (define-values (schema contents)
-      (if (xml-schema? sch)
-          (xml-normalize*/schema sch (xml-document*-contents doc)
-                                 xml:lang xml:space xml:space-filter
-                                 stop-if-xxe-not-loaded? dtdg)
-          (let ([int-decls (if (not ignore-intsubset?) (xml-dtd-declarations (xml-document*-internal-dtd doc)) null)]
-                [ext-dtd (and (not standalone?) external-dtd)])
-            (xml-normalize* int-decls ext-dtd (xml-document*-contents doc)
-                            xml:lang xml:space xml:space-filter
-                            stop-if-xxe-not-loaded? dtdg))))
+      (cond [(xml-schema? sch) (xml-normalize*/schema sch content xml:lang xml:space xml:space-filter stop-if-xxe-not-loaded? dtdg)]
+            [(xml-schema? external-dtd) (values external-dtd content)]
+            [else ; xml-dtd? or #false
+             (let ([int-decls (if (not ignore-intsubset?) (xml-dtd-declarations (xml-document*-internal-dtd doc)) null)]
+                   [ext-dtd (and (not standalone?) external-dtd)])
+               (xml-normalize* int-decls ext-dtd content xml:lang xml:space xml:space-filter stop-if-xxe-not-loaded? dtdg))]))
     
-    (xml-document+schema (xml-document*-prolog doc) (xml-document*-doctype doc) (xml-document*-internal-dtd doc)
-                         contents external-dtd schema)))
+    (xml-document+schema (xml-document*-prolog doc) (xml-document*-doctype doc) (xml-document*-internal-dtd doc) contents schema)))
 
 (define xml-document*-valid? : (->* (XML-Document*)
                                     ((U False XML-Schema)
-                                     #:external-schema XML-External-Schema #:guard XML-DTD-Guard #:ignore-internal-dtd? Boolean
+                                     #:external-schema XML-External-Schema #:guard XML-DTD-Guard #:read-dtd (XML-XXE-Reader XML-DTD) #:ignore-internal-dtd? Boolean
                                      #:xml:lang String #:xml:space Symbol #:xml:space-filter (Option XML:Space-Filter))
                                     Boolean)
   (lambda [doc [sch #false]
-               #:external-schema [extsch xml-load-relative-system-entity] #:guard [dtdg default-dtd-guard] #:ignore-internal-dtd? [ignore-intsubset? #false]
+               #:external-schema [extsch xml-load-relative-system-entity]
+               #:guard [dtdg default-dtd-guard] #:read-dtd [read-dtd read-xml-type-definition] #:ignore-internal-dtd? [ignore-intsubset? #false]
                #:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false]]
     (define standalone? : Boolean (xml-prolog-standalone? (xml-document*-prolog doc)))
     (define schema : XML-Schema
       (cond [(xml-schema? sch) sch]
             [(xml-document+schema? doc) (xml-document+schema-body doc)]
-            [else (let ([ndoc (xml-document*-normalize doc extsch #:guard dtdg #:xml:lang xml:lang #:xml:space xml:space #:xml:space-filter xml:space-filter)])
+            [else (let ([ndoc (xml-document*-normalize #:guard dtdg #:read-dtd read-dtd #:ignore-internal-dtd? ignore-intsubset?
+                                                       #:xml:lang xml:lang #:xml:space xml:space #:xml:space-filter xml:space-filter
+                                                       doc extsch)])
                     (xml-document+schema-body (assert ndoc xml-document+schema?)))]))
 
     (xml-validate schema (xml-document*-contents doc) standalone?
@@ -229,12 +227,13 @@
                   [else (map xml:name-datum v)])))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-load-external-dtd : (-> (Option Open-Input-XML-XXE) (Option XML:Name) XML-External-ID* XML-XXE-Guard (Option XML-DTD))
-  (lambda [ext-dtd name external xxeg]
+(define xml-load-external-dtd : (-> (Option Open-Input-XML-XXE) (Option XML:Name) XML-External-ID* XML-XXE-Guard (XML-XXE-Reader (U XML-DTD XML-Schema))
+                                    (Option (U XML-DTD XML-Schema)))
+  (lambda [ext-dtd name external xxeg read-dtd]
     (define topsize (xml-xxe-guard-topsize xxeg))
     (define timeout (xml-xxe-guard-timeout xxeg))
     
     (cond [(not ext-dtd) #false]
           [(not external) #false]
-          [(pair? external) (xml-load-external-entity name (car external) (cdr external) ext-dtd topsize timeout read-xml-type-definition)]
-          [else (xml-load-external-entity name #false external ext-dtd topsize timeout read-xml-type-definition)])))
+          [(pair? external) (xml-load-external-entity name (car external) (cdr external) ext-dtd topsize timeout read-dtd)]
+          [else (xml-load-external-entity name #false external ext-dtd topsize timeout read-dtd)])))

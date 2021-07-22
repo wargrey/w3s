@@ -6,7 +6,7 @@
 
 (provide (all-defined-out) (all-from-out "dtd.rkt" "xexpr.rkt"))
 (provide (all-from-out "digitama/namespace.rkt" "digitama/whitespace.rkt"))
-(provide XML-DTD XML-External-Doctype-Entity xml-load-relative-system-entity)
+(provide XML-DTD xml-load-relative-system-entity)
 (provide (struct-out XML-Document) read-xml-document xml-document-normalize xml-document*->document)
 (provide (struct-out XML-Document*) read-xml-document* xml-document*-normalize xml-document*-valid?)
 (provide XML-DTD-Guard XML-XXE-Guard make-xml-dtd-guard xml-dtd-guard? xml-xxe-guard?)
