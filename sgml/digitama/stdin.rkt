@@ -52,6 +52,24 @@
     (let-values ([(version encoding standalone?) (xml-read-declaration /dev/rawin)])
       (xml-reencode-port /dev/rawin encoding))))
 
+(define rnc-open-input-port : (->* (SGML-StdIn) (Boolean (U String Symbol False)) Input-Port)
+  (lambda [/dev/stdin [enable-line-counting? #false] [port-name #false]]
+    (define /dev/rawin : Input-Port
+      (cond [(port? /dev/stdin) /dev/stdin]
+            [(path? /dev/stdin) (open-input-file /dev/stdin)]
+            [(regexp-match? #px"\\.t?rnc$" /dev/stdin) (open-input-file (~a /dev/stdin))]
+            [(string? /dev/stdin) (open-input-string /dev/stdin (or port-name '/dev/rncin/string))]
+            [(bytes? /dev/stdin) (open-input-bytes /dev/stdin (or port-name '/dev/rncin/bytes))]
+            [else (open-input-string (~s /dev/stdin) (or port-name '/dev/rncin/error))]))
+
+    (when (and enable-line-counting? (not (port-counts-lines? /dev/rawin)))
+      (port-count-lines! /dev/rawin))
+    
+    (css-skip-lang-line /dev/rawin)
+    
+    (let-values ([(version encoding standalone?) (xml-read-declaration /dev/rawin)])
+      (xml-reencode-port /dev/rawin encoding))))
+
 (define sgml-port-name : (-> Input-Port (U String Symbol))
   (lambda [/dev/xmlin]
     (let ([src (object-name /dev/xmlin)])

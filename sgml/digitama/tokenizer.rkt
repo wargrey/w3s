@@ -1,6 +1,6 @@
 #lang typed/racket/base
 
-(provide (all-defined-out))
+(provide (all-defined-out) port-next-location)
 
 (require css/digitama/syntax/w3s)
 

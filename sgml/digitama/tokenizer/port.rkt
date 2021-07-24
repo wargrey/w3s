@@ -60,7 +60,9 @@
               [(eq? ch #\&) (values (xml-consume-reference-token /dev/xmlin ch) xml-consume-token:* scope)]
               [(or (eq? ch #\?) (eq? ch #\])) (xml-consume-close-token /dev/xmlin ch xml-consume-token:* scope)] ; for PIs and CDATAs
               [else (values (xml-consume-contentchars /dev/xmlin ch) xml-consume-token:* scope)])
-        (cond [(char-whitespace? ch) (xml-skip-whitespace /dev/xmlin) (values xml-collapsed-whitespace xml-consume-token:* scope)]
+        (cond [(char-whitespace? ch)
+               (xml-skip-whitespace /dev/xmlin)
+               (values xml-collapsed-whitespace xml-consume-token:* scope)]
               [(or (xml-name-char? ch) (eq? ch #\#))
                (let ([kw (xml-consume-nmtoken /dev/xmlin ch)])
                  (case kw
@@ -215,28 +217,9 @@
 (define xml-consume-token:cdata : XML-Token-Consumer
   ;;; https://www.w3.org/TR/xml/#sec-cdata-sect
   ;;; https://www.w3.org/TR/xml/#sec-line-ends
-  (lambda [/dev/xmlin ch scope]
-    (define /dev/cdout : Output-Port (open-output-bytes '/dev/cdout))
-    
-    (let consume-cdata ([offset : Nonnegative-Fixnum 0])
-      (define ch : (U EOF Char) (peek-char /dev/xmlin offset))
-      
-      (cond [(eof-object? ch) (read-string offset /dev/xmlin)]
-            [(eq? ch #\return)
-             (let ([offset+1 (unsafe-fx+ offset 1)])
-               (write-char #\newline /dev/cdout)
-               (if (eq? (peek-char /dev/xmlin offset+1) #\newline)
-                   (consume-cdata (unsafe-fx+ offset+1 1))
-                   (consume-cdata offset+1)))]
-            [(not (eq? ch #\])) (write-char ch /dev/cdout) (consume-cdata (unsafe-fx+ offset (char-utf-8-length ch)))]
-            [else (let* ([offset+1 (unsafe-fx+ offset 1)]
-                         [ach (peek-char /dev/xmlin offset+1)])
-                    (cond [(not (eq? ach #\])) (consume-cdata offset+1)]
-                          [else (let ([aach (peek-char /dev/xmlin (unsafe-fx+ offset+1 1))])
-                                  (cond [(eq? aach #\>) (read-string offset /dev/xmlin)]
-                                        [else (consume-cdata offset+1)]))]))]))
-    
-    (values (get-output-string /dev/cdout) xml-consume-token:* scope)))
+  (lambda [/dev/xmlin ch scope]  
+    (values (xml-consume-cdata+tail /dev/xmlin #\] #\] #\> 0 #false)
+            xml-consume-token:* scope)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-consume-open-token : (-> Input-Port XML-Token-Consumer XML-Scope (Values (U Char Symbol XML-Comment XML-Error) XML-Token-Consumer XML-Scope))
@@ -456,6 +439,33 @@
                     (cond [(eof-object? ach) (read-char /dev/xmlin) (reverse (cons ch srahc))]
                           [(eq? ach #\>) (reverse srahc)]
                           [else (xml-drop-string /dev/xmlin 2) (consume-literal (list* ach ch srahc))]))]))))
+
+(define xml-consume-cdata+tail : (-> Input-Port Char Char Char Index Boolean String)
+  ;;; https://www.w3.org/TR/xml/#sec-cdata-sect
+  ;;; https://www.w3.org/TR/xml/#sec-line-ends
+  (lambda [/dev/xmlin boundary1 boundary2 boundary3 skip contain-tail?]
+    ;; NOTE: The CDATA might be large, in which case `cons`ing every chars would be inefficient
+    (define /dev/cdout : Output-Port (open-output-bytes '/dev/cdout))
+    
+    (let consume-cdata ([offset : Nonnegative-Fixnum skip])
+      (define ch : (U EOF Char) (peek-char /dev/xmlin offset))
+      
+      (cond [(eof-object? ch) (read-string offset /dev/xmlin)]
+            [(eq? ch #\return)
+             (let ([offset+1 (unsafe-fx+ offset 1)])
+               (write-char #\newline /dev/cdout)
+               (if (eq? (peek-char /dev/xmlin offset+1) #\newline)
+                   (consume-cdata (unsafe-fx+ offset+1 1))
+                   (consume-cdata offset+1)))]
+            [(not (eq? ch boundary1)) (write-char ch /dev/cdout) (consume-cdata (unsafe-fx+ offset (char-utf-8-length ch)))]
+            [else (let* ([offset+1 (unsafe-fx+ offset 1)]
+                         [ach (peek-char /dev/xmlin offset+1)])
+                    (cond [(not (eq? ach boundary2)) (consume-cdata offset+1)]
+                          [else (let ([aach (peek-char /dev/xmlin (unsafe-fx+ offset+1 1))])
+                                  (cond [(eq? aach boundary3) (read-string (+ offset (if (not contain-tail?) 0 3)) /dev/xmlin)]
+                                        [else (consume-cdata offset+1)]))]))]))
+    
+    (get-output-string /dev/cdout)))
 
 (define xml-read-string : (-> Input-Port Natural Char String)
   (lambda [/dev/xmlin tailsize leader]

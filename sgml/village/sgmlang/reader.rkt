@@ -90,10 +90,10 @@
     (sgml-read read-xml-document /dev/xmlin)))
 
 (define rnc-read-syntax
-  (lambda [[src #false] [/dev/dtdin (current-input-port)]]
+  (lambda [[src #false] [/dev/rncin (current-input-port)]]
     (parameterize ([xml-alternative-document-source (path->string src)])
-      (sgml-doc-read-syntax 'read-xml-type-definition 'sgml/dtd
-                            #px"\\.t?rnc$" ".rnc" src /dev/dtdin))))
+      (sgml-doc-read-syntax 'read-rnc-declaration 'sgml/rnc
+                            #px"\\.t?rnc$" ".rnc" src /dev/rncin))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (xml-info in mod line col pos)
@@ -101,7 +101,7 @@
     (case key
       [(drracket:default-filters) '(["XML Sources" "*.txml"])]
       [(drracket:default-extension) "txml"]
-      [(drracket:indentation) (dynamic-require 'sgml/village/sgmlang/indentation 'xml-indentation)]
+      ;[(drracket:indentation) (dynamic-require 'sgml/village/sgmlang/indentation 'xml-indentation)]
       [(color-lexer) (dynamic-require 'sgml/village/sgmlang/lexer 'xml-lexer)]
       [else default])))
 
@@ -110,7 +110,7 @@
     (case key
       [(drracket:default-filters) '(["DTD Sources" "*.tdtd"])]
       [(drracket:default-extension) "tdtd"]
-      [(drracket:indentation) (dynamic-require 'sgml/village/sgmlang/indentation 'dtd-indentation)]
+      ;[(drracket:indentation) (dynamic-require 'sgml/village/sgmlang/indentation 'dtd-indentation)]
       [(color-lexer) (dynamic-require 'sgml/village/sgmlang/lexer 'dtd-lexer)]
       [else default])))
 
@@ -119,6 +119,6 @@
     (case key
       [(drracket:default-filters) '(["RNC Sources" "*.trnc"])]
       [(drracket:default-extension) "trnc"]
-      [(drracket:indentation) (dynamic-require 'sgml/village/sgmlang/indentation 'rnc-indentation)]
+      ;[(drracket:indentation) (dynamic-require 'sgml/village/sgmlang/indentation 'rnc-indentation)]
       [(color-lexer) (dynamic-require 'sgml/village/sgmlang/lexer 'rnc-lexer)]
       [else default])))
