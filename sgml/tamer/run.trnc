@@ -1,12 +1,8 @@
 #lang sgml/rnc
 
-default namespace = """
-http://schemas.openxmlformats.org/drawingml/2006/main
-"""
+default namespace = "http://schemas.openxmlformats.org/drawingml/2006/main"
 
-namespace fn = "
-http://www.w3.org/2006/xpath-functions
-"
+namespace fn = "http://www.w3.org/2006/xpath-functions"
 
 namespace rng = "http://relaxng.org/ns/structure/1.0"
 namespace xs = "http://www.w3.org/2001/XMLSchema"

@@ -63,7 +63,7 @@
         (cond [(char-whitespace? ch)
                (xml-skip-whitespace /dev/xmlin)
                (values xml-collapsed-whitespace xml-consume-token:* scope)]
-              [(or (xml-name-char? ch) (eq? ch #\#))
+              [(or (xml-name-char? ch) (eq? ch #\# #| `#` is not special, but some keywords, like #REQUIRED, start with it |#))
                (let ([kw (xml-consume-nmtoken /dev/xmlin ch)])
                  (case kw
                    [(PUBLIC SYSTEM) (values kw xml-consume-token:* kw)]
@@ -217,9 +217,29 @@
 (define xml-consume-token:cdata : XML-Token-Consumer
   ;;; https://www.w3.org/TR/xml/#sec-cdata-sect
   ;;; https://www.w3.org/TR/xml/#sec-line-ends
-  (lambda [/dev/xmlin ch scope]  
-    (values (xml-consume-cdata+tail /dev/xmlin #\] #\] #\> 0 #false)
-            xml-consume-token:* scope)))
+  (lambda [/dev/xmlin ch scope]
+    ;; NOTE: The CDATA might be large, in which case `cons`ing every chars would be inefficient
+    (define /dev/cdout : Output-Port (open-output-bytes '/dev/cdout))
+    
+    (let consume-cdata ([offset : Nonnegative-Fixnum 0])
+      (define ch : (U EOF Char) (peek-char /dev/xmlin offset))
+      
+      (cond [(eof-object? ch) (read-string offset /dev/xmlin)]
+            [(eq? ch #\return)
+             (let ([offset+1 (unsafe-fx+ offset 1)])
+               (write-char #\newline /dev/cdout)
+               (if (eq? (peek-char /dev/xmlin offset+1) #\newline)
+                   (consume-cdata (unsafe-fx+ offset+1 1))
+                   (consume-cdata offset+1)))]
+            [(not (eq? ch #\])) (write-char ch /dev/cdout) (consume-cdata (unsafe-fx+ offset (char-utf-8-length ch)))]
+            [else (let* ([offset+1 (unsafe-fx+ offset 1)]
+                         [ach (peek-char /dev/xmlin offset+1)])
+                    (cond [(not (eq? ach #\])) (consume-cdata offset+1)]
+                          [else (let ([aach (peek-char /dev/xmlin (unsafe-fx+ offset+1 1))])
+                                  (cond [(eq? aach #\>) (read-string offset /dev/xmlin)]
+                                        [else (consume-cdata offset+1)]))]))]))
+    
+    (values (get-output-string /dev/cdout) xml-consume-token:* scope)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-consume-open-token : (-> Input-Port XML-Token-Consumer XML-Scope (Values (U Char Symbol XML-Comment XML-Error) XML-Token-Consumer XML-Scope))
@@ -267,8 +287,8 @@
           [(not (eq? ch #\#)) (xml-consume-entity-reference /dev/xmlin leader ch)]
           [else (let ([char-leader (read-char /dev/xmlin)])
                   (cond [(eof-object? char-leader) (cons (list leader ch) !eof)]
-                        [(eq? char-leader #\x) (xml-consume-char-reference /dev/xmlin #false)]
-                        [else (xml-consume-char-reference /dev/xmlin char-leader)]))])))
+                        [(eq? char-leader #\x) (xml-consume-char-reference /dev/xmlin #false #\;)]
+                        [else (xml-consume-char-reference /dev/xmlin char-leader #\;)]))])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-consume-whitespace : (-> Input-Port Char XML-White-Space)
@@ -327,9 +347,9 @@
             [(xml-content-char? ch) (consume-content (unsafe-fx+ span 1) (unsafe-fx+ skip (char-utf-8-length ch)))]
             [else (xml-read-string /dev/xmlin span leader)]))))
 
-(define xml-consume-char-reference : (-> Input-Port (Option Char) (U Index XML-Error))
+(define xml-consume-char-reference : (-> Input-Port (Option Char) Char (U Index XML-Error))
   ;;; https://www.w3.org/TR/xml/#NT-CharRef
-  (lambda [/dev/xmlin ?leader]
+  (lambda [/dev/xmlin ?leader stop-ch]
     (define-values (base char-digit?) (if (not ?leader) (values 16 char-hexdigit?) (values 10 char-numeric?)))
     
     (let read-char-reference ([ch : (U EOF Char) (or ?leader (read-char /dev/xmlin))]
@@ -337,8 +357,8 @@
                               [code : Fixnum 0])
       (cond [(eof-object? ch) (cons (reverse srahc) !eof)]
             [(char-digit? ch) (read-char-reference (read-char /dev/xmlin) (cons ch srahc) (unsafe-fx+ (unsafe-fx* code base) (char->hexadecimal ch)))]
-            [(eq? ch #\;) (or (natural->char-entity code) (cons (reverse (cons ch srahc)) !char))]
-            [else (cons (xml-consume-chars-literal /dev/xmlin #\; (cons ch srahc)) !char)]))))
+            [(eq? ch stop-ch) (or (natural->char-entity code) (cons (reverse (cons ch srahc)) !char))]
+            [else (cons (xml-consume-chars-literal /dev/xmlin stop-ch (cons ch srahc)) !char)]))))
 
 (define xml-consume-entity-reference : (-> Input-Port Char Char (U Symbol Keyword XML-Error))
   ;;; https://www.w3.org/TR/xml/#NT-EntityRef
@@ -355,49 +375,49 @@
 
 (define xml-consume-entity-value : (-> Input-Port Char (U String (Boxof String) XML-Error))
   ;;; https://www.w3.org/TR/xml/#NT-EntityValue
-  (lambda [/dev/xmlin quote]
+  (lambda [/dev/xmlin quote-char]
     (let consume-literal ([srahc : (Listof Char) null]
                           [ref? : Boolean #false])
       (define ch : (U EOF Char) (read-char /dev/xmlin))
-      (cond [(eq? ch quote) (let ([v (list->string (reverse srahc))]) (if (not ref?) v (box v)))]
+      (cond [(eq? ch quote-char) (let ([v (list->string (reverse srahc))]) (if (not ref?) v (box v)))]
             [(eof-object? ch) (cons (reverse srahc) !eof)]
             [else (consume-literal (cons ch srahc) (or ref? (eq? ch #\%) (eq? ch #\&)))]))))
 
 (define xml-consume-attribute-value : (-> Input-Port Char (U String (Boxof String) XML-Error))
   ;;; https://www.w3.org/TR/xml/#NT-AttValue
-  (lambda [/dev/xmlin quote]
+  (lambda [/dev/xmlin quote-char]
     (let consume-literal ([srahc : (Listof Char) null]
                           [unnormalized? : Boolean #false])
       (define ch : (U EOF Char) (read-char /dev/xmlin))
-      (cond [(eq? ch quote) (let ([v (list->string (reverse srahc))]) (if (not unnormalized?) v (box v)))]
+      (cond [(eq? ch quote-char) (let ([v (list->string (reverse srahc))]) (if (not unnormalized?) v (box v)))]
             [(eof-object? ch) (cons (reverse srahc) !eof)]
-            [(eq? ch #\<) (cons (xml-consume-chars-literal /dev/xmlin quote (cons ch srahc)) !char)]
+            [(eq? ch #\<) (cons (xml-consume-chars-literal /dev/xmlin quote-char (cons ch srahc)) !char)]
             [else (consume-literal (cons ch srahc)
                                    (or unnormalized? (eq? ch #\&)
                                        (char-whitespace? ch)))]))))
 
 (define xml-consume-system-literal : (-> Input-Port Char (U String XML-Error))
   ;;; https://www.w3.org/TR/xml/#NT-SystemLiteral
-  (lambda [/dev/xmlin quote]
+  (lambda [/dev/xmlin quote-char]
     (let consume-literal ([srahc : (Listof Char) null]
                           [space? : Boolean #false])
       (define ch : (U EOF Char) (read-char /dev/xmlin))
-      (cond [(eq? ch quote) (list->string (reverse srahc))]
+      (cond [(eq? ch quote-char) (list->string (reverse srahc))]
             [(eof-object? ch) (cons (reverse srahc) !eof)]
             [(char-whitespace? ch) (consume-literal srahc (or space? (pair? srahc)))]
             [else (consume-literal (if (not space?) (cons ch srahc) (list* ch #\space srahc)) #false)]))))
 
 (define xml-consume-pubid-literal : (-> Input-Port Char (U String XML-Error))
   ;;; https://www.w3.org/TR/xml/#NT-PubidLiteral
-  (lambda [/dev/xmlin quote]
+  (lambda [/dev/xmlin quote-char]
     (let consume-literal ([srahc : (Listof Char) null]
                           [space? : Boolean #false])
       (define ch : (U EOF Char) (read-char /dev/xmlin))
-      (cond [(eq? ch quote) (list->string (reverse srahc))]
+      (cond [(eq? ch quote-char) (list->string (reverse srahc))]
             [(eof-object? ch) (cons (reverse srahc) !eof)]
             [(xml-pubid-char/no-spaces? ch) (consume-literal (if (not space?) (cons ch srahc) (list* ch #\space srahc)) #false)]
             [(char-whitespace? ch) (consume-literal srahc (or space? (pair? srahc)))]
-            [else (cons (xml-consume-chars-literal /dev/xmlin quote (cons ch srahc)) !char)]))))
+            [else (cons (xml-consume-chars-literal /dev/xmlin quote-char (cons ch srahc)) !char)]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-consume-chars-literal : (->* (Input-Port Char (Listof Char)) ((Option Char)) (Listof Char))
@@ -409,8 +429,8 @@
             [(not ahead-boundary) (reverse srahc)]
             [else (let ([ach (read-char /dev/xmlin)])
                     (cond [(eof-object? ach) (reverse (cons ch srahc))]
-                          [(not (eq? ach ahead-boundary)) (consume-literal (list* ach ch srahc))]
-                          [else (reverse srahc)]))]))))
+                          [(eq? ach ahead-boundary) (reverse srahc)]
+                          [else (consume-literal (list* ach ch srahc))]))]))))
 
 (define xml-consume-chars-literal/exclusive : (->* (Input-Port Char (Listof Char)) ((Option Char)) (Listof Char))
   (lambda [/dev/xmlin boundary chars [ahead-boundary #false]]
@@ -421,8 +441,8 @@
             [(not ahead-boundary) (reverse srahc)]
             [else (let ([ach (peek-char /dev/xmlin 1)])
                     (cond [(eof-object? ach) (read-char /dev/xmlin) (reverse (cons ch srahc))]
-                          [(not (eq? ach ahead-boundary)) (xml-drop-string /dev/xmlin 2) (consume-literal (list* ach ch srahc))]
-                          [else (reverse srahc)]))]))))
+                          [(eq? ach ahead-boundary) (reverse srahc)]
+                          [else (xml-drop-string /dev/xmlin 2) (consume-literal (list* ach ch srahc))]))]))))
 
 (define xml-consume-chars-literal/within-tag : (->* (Input-Port (Pairof Char (Listof Char))) (Boolean) (Listof Char))
   (lambda [/dev/xmlin chars [stop-at-whitespace? #false]]
@@ -439,33 +459,6 @@
                     (cond [(eof-object? ach) (read-char /dev/xmlin) (reverse (cons ch srahc))]
                           [(eq? ach #\>) (reverse srahc)]
                           [else (xml-drop-string /dev/xmlin 2) (consume-literal (list* ach ch srahc))]))]))))
-
-(define xml-consume-cdata+tail : (-> Input-Port Char Char Char Index Boolean String)
-  ;;; https://www.w3.org/TR/xml/#sec-cdata-sect
-  ;;; https://www.w3.org/TR/xml/#sec-line-ends
-  (lambda [/dev/xmlin boundary1 boundary2 boundary3 skip contain-tail?]
-    ;; NOTE: The CDATA might be large, in which case `cons`ing every chars would be inefficient
-    (define /dev/cdout : Output-Port (open-output-bytes '/dev/cdout))
-    
-    (let consume-cdata ([offset : Nonnegative-Fixnum skip])
-      (define ch : (U EOF Char) (peek-char /dev/xmlin offset))
-      
-      (cond [(eof-object? ch) (read-string offset /dev/xmlin)]
-            [(eq? ch #\return)
-             (let ([offset+1 (unsafe-fx+ offset 1)])
-               (write-char #\newline /dev/cdout)
-               (if (eq? (peek-char /dev/xmlin offset+1) #\newline)
-                   (consume-cdata (unsafe-fx+ offset+1 1))
-                   (consume-cdata offset+1)))]
-            [(not (eq? ch boundary1)) (write-char ch /dev/cdout) (consume-cdata (unsafe-fx+ offset (char-utf-8-length ch)))]
-            [else (let* ([offset+1 (unsafe-fx+ offset 1)]
-                         [ach (peek-char /dev/xmlin offset+1)])
-                    (cond [(not (eq? ach boundary2)) (consume-cdata offset+1)]
-                          [else (let ([aach (peek-char /dev/xmlin (unsafe-fx+ offset+1 1))])
-                                  (cond [(eq? aach boundary3) (read-string (+ offset (if (not contain-tail?) 0 3)) /dev/xmlin)]
-                                        [else (consume-cdata offset+1)]))]))]))
-    
-    (get-output-string /dev/cdout)))
 
 (define xml-read-string : (-> Input-Port Natural Char String)
   (lambda [/dev/xmlin tailsize leader]

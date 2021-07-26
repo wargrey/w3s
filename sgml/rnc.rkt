@@ -1,6 +1,6 @@
 #lang typed/racket/base
 
-(provide (all-defined-out) SGML-StdIn)
+(provide (all-defined-out) SGML-StdIn default-rnc-error-literal)
 (provide #;(struct-out XML-DTD) read-rnc-declaration)
 ;(provide XML-Schema xml-schema? struct:xml-schema)
 ;(provide Open-Input-XML-XXE)
@@ -13,6 +13,7 @@
 (require "digitama/stdin.rkt")
 (require "digitama/schema.rkt")
 (require "digitama/normalize.rkt")
+(require "digitama/relaxng/rnc.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (module reader racket/base

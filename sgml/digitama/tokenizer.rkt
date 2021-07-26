@@ -43,8 +43,8 @@
               (cond [(eq? datum #\<) (xml-make-token source prev-env end xml:stag datum)]
                     [(eq? datum #\>) (xml-make-token source prev-env end xml:etag datum)] ; close delimiter for Decls and EndTags
                     [(eq? datum #\=) (xml-make-token source prev-env end xml:eq datum)]
-                    [(or (eq? datum #\() (eq? datum #\[)) (xml-make-token source prev-env end xml:open datum)]
-                    [(or (eq? datum #\)) (eq? datum #\])) (xml-make-token source prev-env end xml:close datum)]
+                    [(or (eq? datum #\() (eq? datum #\[) (eq? datum #\{)) (xml-make-token source prev-env end xml:open datum)]
+                    [(or (eq? datum #\)) (eq? datum #\]) (eq? datum #\})) (xml-make-token source prev-env end xml:close datum)]
                     [(eq? datum #\%) (xml-make-token source prev-env end xml:pe datum)]
                     [else (xml-make-token source prev-env end xml:delim datum) #| `>` for non-empty start tag |#])]
              [(symbol? datum)
