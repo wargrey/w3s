@@ -15,6 +15,7 @@
 
 (require "../tokenizer/port.rkt")
 (require "../tokenizer/errno.rkt")
+(require "../tokenizer/delimiter.rkt")
 (require "../tokenizer/characters.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -68,6 +69,7 @@
                   [(#\' #\") (values (rnc-consume-string /dev/rncin ch) scope)]
                   [(#\#) (values (rnc-consume-comment /dev/rncin) scope)]
                   [(#\\) (values (rnc-consume-identify-or-keyword /dev/rncin) scope)]
+                  [(#\| #\&) (values (rnc-consume-assign-method /dev/rncin ch) scope)]
                   [else (values ch scope)])])))
 
 (define rnc-consume-identify-or-keyword : (case-> [Input-Port -> (U Symbol Char)]
@@ -77,7 +79,7 @@
     [(/dev/rncin) ; for '\'identify
      (let-values ([(leader span) (peek-rnc-char /dev/rncin)])
        (cond [(or (not (char? leader)) (not (xml-name-char? leader))) #\\]
-             [else (read-rnc-char /dev/rncin) (string->symbol (rnc-consume-namechars /dev/rncin leader))]))]
+             [else (read-bytes span /dev/rncin) (string->symbol (rnc-consume-namechars /dev/rncin leader))]))]
     [(/dev/rncin ch)
      (let ([raw (rnc-consume-namechars /dev/rncin ch)])
        (define id : Symbol (string->symbol raw))
@@ -103,6 +105,15 @@
 
     ; check documentations when dealing with comments
     (xml-comment (if (string? body) body ""))))
+
+(define rnc-consume-assign-method : (-> Input-Port Char (U Symbol Char))
+  ;;; https://relaxng.org/compact-20021121.html#syntax
+  (lambda [/dev/rncin assign]
+    (define-values (eq size) (peek-rnc-char /dev/rncin 0))
+    
+    (cond [(not (eq? eq #\=)) assign]
+          [(eq? assign #\|) (xml-drop-string /dev/rncin size) /=]
+          [else (xml-drop-string /dev/rncin size) &=])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define rnc-consume-namechars : (-> Input-Port Char String)

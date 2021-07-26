@@ -11,6 +11,9 @@
 (define $$> : Symbol (string->uninterned-symbol "]]>"))
 (define /> : Symbol (string->uninterned-symbol "/>"))
 
+(define /= : Symbol (string->uninterned-symbol "|="))
+(define &= : Symbol (string->uninterned-symbol "&="))
+
 ;;; WARNING: `#\>` is the close delimiter for Decls and EndTags
 ;;    but these are not open and close delimiters 
 (define stag> : Symbol (string->uninterned-symbol ">"))

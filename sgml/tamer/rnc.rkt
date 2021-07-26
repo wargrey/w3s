@@ -2,7 +2,6 @@
 
 (require digimon/spec)
 
-(require sgml/digitama/stdin)
 (require sgml/digitama/digicore)
 (require sgml/digitama/tokenizer/port)
 (require sgml/digitama/relaxng/rnc)
@@ -68,6 +67,8 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (module+ main
+  (require sgml/digitama/tokenizer/delimiter)
+  
   (spec-begin RelaxNG #:do
               (describe "Compact Syntax" #:do
                         (describe "Read/Peek Char" #:do
@@ -90,4 +91,5 @@
                                   (it-check-token "'broken\r'literal" (list xml:bad? 'literal))
                                   (it-check-token "'\"'\"'\"" (list (string #\") "'"))
                                   (it-check-token "\\ \\\\" (list #\\ xml:whitespace? #\\ #\\))
-                                  (it-check-token "element\\element" (list '#:element 'element))))))
+                                  (it-check-token "element\\element" (list '#:element 'element))
+                                  (it-check-token "name|='value'" (list 'name /= "value"))))))

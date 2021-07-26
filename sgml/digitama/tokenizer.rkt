@@ -58,6 +58,8 @@
                     [(eq? datum csec&) (xml-make-token source prev-env end xml:csec$ datum)]
                     [(eq? datum <!&CDATA&) (xml-make-token source prev-env end xml:open datum)]
                     [(or (eq? datum ?>) (eq? datum $$>)) (xml-make-token source prev-env end xml:close datum)]
+                    [(eq? datum /=) (xml-make-token source prev-env end xml:/eq datum)] ; for RelaxNG
+                    [(eq? datum &=) (xml-make-token source prev-env end xml:&eq datum)] ; for RelaxNG
                     [else (xml-make-token source prev-env end xml:reference datum)])]
              [(string? datum) (xml-make-token source prev-env end xml:string datum)]
              [(box? datum) (xml-make-token source prev-env end xml:&string (assert (unbox datum) string?))]
