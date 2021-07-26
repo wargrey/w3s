@@ -87,4 +87,7 @@
                                   (it-check-token "# \\x{A}D" (list xml:comment?))
                                   (it-check-token "'''\\x{66}\r\\x{6f}\r\\x{6f}'''" (list "f\no\no"))
                                   (it-check-token "'\\x{6g}' token" (list (string (default-rnc-error-literal)) xml:whitespace? '#:token))
-                                  (it-check-token "'broken\r'literal" (list xml:bad? 'literal))))))
+                                  (it-check-token "'broken\r'literal" (list xml:bad? 'literal))
+                                  (it-check-token "'\"'\"'\"" (list (string #\") "'"))
+                                  (it-check-token "\\ \\\\" (list #\\ xml:whitespace? #\\ #\\))
+                                  (it-check-token "element\\element" (list '#:element 'element))))))

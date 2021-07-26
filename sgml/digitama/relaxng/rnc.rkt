@@ -67,17 +67,23 @@
           [else (case ch
                   [(#\' #\") (values (rnc-consume-string /dev/rncin ch) scope)]
                   [(#\#) (values (rnc-consume-comment /dev/rncin) scope)]
-                  [(#\\) (values (rnc-consume-escape-sequence /dev/rncin ch) scope)]
+                  [(#\\) (values (rnc-consume-identify-or-keyword /dev/rncin) scope)]
                   [else (values ch scope)])])))
 
-(define rnc-consume-identify-or-keyword : (-> Input-Port Char (Values (U Symbol Keyword) Symbol))
+(define rnc-consume-identify-or-keyword : (case-> [Input-Port -> (U Symbol Char)]
+                                                  [Input-Port Char -> (Values (U Symbol Keyword) Symbol)])
   ;;; https://relaxng.org/compact-20021121.html#nt-identifierOrKeyword
-  (lambda [/dev/rncin ch]
-    (define raw : String (rnc-consume-namechars /dev/rncin ch))
-    (define id : Symbol (string->symbol raw))
+  (case-lambda
+    [(/dev/rncin) ; for '\'identify
+     (let-values ([(leader span) (peek-rnc-char /dev/rncin)])
+       (cond [(or (not (char? leader)) (not (xml-name-char? leader))) #\\]
+             [else (read-rnc-char /dev/rncin) (string->symbol (rnc-consume-namechars /dev/rncin leader))]))]
+    [(/dev/rncin ch)
+     (let ([raw (rnc-consume-namechars /dev/rncin ch)])
+       (define id : Symbol (string->symbol raw))
 
-    (values (if (rnc-keyword? id) (string->keyword raw) id)
-            id #| the `scope` info is actually useless for RNC |#)))
+       (values (if (rnc-keyword? id) (string->keyword raw) id)
+               id #| the `scope` info is actually useless for RNC |#))]))
 
 (define rnc-consume-string : (-> Input-Port Char (U String XML-Error))
   ;;; https://relaxng.org/compact-20021121.html#syntax
@@ -98,14 +104,6 @@
     ; check documentations when dealing with comments
     (xml-comment (if (string? body) body ""))))
 
-(define rnc-consume-escape-sequence : (-> Input-Port Char (U Symbol Keyword))
-  ;;; https://relaxng.org/compact-20021121.html#nt-escapeSequence
-  (lambda [/dev/rncin ch]
-    (define raw : String (rnc-consume-namechars /dev/rncin ch))
-    (define id : Symbol (string->symbol raw))
-
-    (if (rnc-keyword? id) (string->keyword raw) id)))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define rnc-consume-namechars : (-> Input-Port Char String)
   (lambda [/dev/rncin leader]
@@ -114,7 +112,7 @@
       (define-values (ch skip++) (peek-rnc-char /dev/rncin skip))
       (cond [(or (eof-object? ch) (pair? ch)) (read-bytes skip /dev/rncin) (list->string (reverse srahc))]
             [(xml-name-char? ch) (consume-name (cons ch srahc) skip++)]
-            [else (read-bytes skip++ /dev/rncin) (list->string (reverse srahc))]))))
+            [else (read-bytes skip /dev/rncin) (list->string (reverse srahc))]))))
 
 (define rnc-consume-single-line-literal : (-> Input-Port Char (Listof Char) (U String XML-Error))
   (lambda [/dev/rncin quote-char chars]
