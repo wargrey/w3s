@@ -45,14 +45,17 @@
     (define prev-env : XML-Parser-ENV
       (cond [(xml-parser-env? env) env]
             [else (let-values ([(line column position) (port-next-location /dev/rncin)])
-                    (cond [(not env) (xml-parser-env xml-consume-token:* xml-initial-scope line column position)]
+                    (cond [(not env) (xml-parser-env xml-consume-token:* xml-default-scope line column position)]
                           [else (xml-parser-env (car env) (cdr env) line column position)]))]))
     (define ch : (U Char XML-Error EOF) (read-rnc-char /dev/rncin))
     (define-values (datum next-scope)
       (cond [(not (char? ch)) (values ch (xml-parser-env-scope prev-env))]
             [else (rnc-consume-token:* /dev/rncin ch (xml-parser-env-scope prev-env))]))
     (define-values (line column end) (port-next-location /dev/rncin))
-    (define env++ : XML-Parser-ENV (xml-parser-env xml-consume-token:* next-scope line column end))
+    (define env++ : XML-Parser-ENV
+      (xml-parser-env xml-consume-token:*
+                      (and next-scope xml-default-scope) ; tell the lexer that meanwhile the `scope` is useless for RNC
+                      line column end))
 
     (values (xml-datum->token source prev-env end datum) env++)))
 

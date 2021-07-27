@@ -1,19 +1,18 @@
 #lang typed/racket/base
 
+;;; RelaxNG(REgular LAnguage for XML, Next Generation) relies on both
+;     strong mathematical theory on regular expressions, and
+;     what adapts the hedge automata theory
+
 (provide (all-defined-out) SGML-StdIn default-rnc-error-literal)
-(provide #;(struct-out XML-DTD) read-rnc-declaration)
-;(provide XML-Schema xml-schema? struct:xml-schema)
-;(provide Open-Input-XML-XXE)
+(provide (struct-out rng-grammar) read-rnc-declaration)
+(provide XML-Schema xml-schema? struct:xml-schema)
 
-(require racket/path)
-(require racket/file)
-(require racket/port)
-
-(require "digitama/rnc.rkt")
-(require "digitama/stdin.rkt")
-(require "digitama/schema.rkt")
-(require "digitama/normalize.rkt")
+(require "digitama/relaxng.rkt")
 (require "digitama/relaxng/rnc.rkt")
+(require "digitama/relaxng/grammar.rkt")
+
+(require "digitama/schema.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (module reader racket/base

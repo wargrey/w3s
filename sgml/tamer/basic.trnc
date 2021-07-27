@@ -1,0 +1,692 @@
+#lang sgml/rnc
+
+default namespace =
+  "http://schemas.openxmlformats.org/drawingml/2006/main"
+namespace fn = "http://www.w3.org/2006/xpath-functions"
+namespace r =
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+namespace rng = "http://relaxng.org/ns/structure/1.0"
+namespace xs = "http://www.w3.org/2001/XMLSchema"
+namespace xsd = "http://www.w3.org/2001/XMLSchema"
+
+# ISO RELAX NG Schema
+include "shared-relationshipReference.rnc" inherit = r
+CT_OfficeArtExtension =
+  element * { BUILT_IN_ANY_TYPE },
+  attribute uri {
+    [ xs:documentation [ "Uniform Resource Identifier" ] ]
+    xsd:token
+    >> xs:documentation [ "Uniform Resource Identifier" ]
+  }
+ST_Coordinate =
+  [ xs:documentation [ "Coordinate" ] ]
+  xsd:long {
+    minInclusive = "-27273042329600"
+    maxInclusive = "27273042316900"
+  }
+ST_Coordinate32 = [ xs:documentation [ "Coordinate Point" ] ] xsd:int
+ST_PositiveCoordinate =
+  [ xs:documentation [ "Positive Coordinate" ] ]
+  xsd:long { minInclusive = "0" maxInclusive = "27273042316900" }
+ST_PositiveCoordinate32 = empty
+ST_Angle = [ xs:documentation [ "Angle" ] ] xsd:int
+CT_Angle = attribute val { text >> xs:documentation [ "Value" ] }
+ST_FixedAngle = empty
+ST_PositiveFixedAngle = empty
+CT_PositiveFixedAngle =
+  attribute val { text >> xs:documentation [ "Value" ] }
+ST_Percentage = [ xs:documentation [ "Percentage" ] ] xsd:int
+CT_Percentage = attribute val { text >> xs:documentation [ "Value" ] }
+ST_PositivePercentage = empty
+CT_PositivePercentage =
+  attribute val { text >> xs:documentation [ "Value" ] }
+ST_FixedPercentage = empty
+CT_FixedPercentage =
+  attribute val { text >> xs:documentation [ "Value" ] }
+ST_PositiveFixedPercentage = empty
+CT_PositiveFixedPercentage =
+  attribute val { text >> xs:documentation [ "Value" ] }
+CT_Ratio =
+  attribute n {
+    [ xs:documentation [ "Numerator" ] ]
+    xsd:long
+    >> xs:documentation [ "Numerator" ]
+  },
+  attribute d {
+    [ xs:documentation [ "Denominator" ] ]
+    xsd:long
+    >> xs:documentation [ "Denominator" ]
+  }
+CT_Point2D =
+  attribute x { text >> xs:documentation [ "X-Axis Coordinate" ] },
+  attribute y { text >> xs:documentation [ "Y-Axis Coordinate" ] }
+CT_PositiveSize2D =
+  attribute cx { text >> xs:documentation [ "Extent Length" ] },
+  attribute cy { text >> xs:documentation [ "Extent Width" ] }
+CT_ComplementTransform = empty
+CT_InverseTransform = empty
+CT_GrayscaleTransform = empty
+CT_GammaTransform = empty
+CT_InverseGammaTransform = empty
+EG_ColorTransform =
+  element tint { CT_PositiveFixedPercentage }
+  | element shade { CT_PositiveFixedPercentage }
+  | element comp { CT_ComplementTransform }
+  | element inv { CT_InverseTransform }
+  | element gray { CT_GrayscaleTransform }
+  | element alpha { CT_PositiveFixedPercentage }
+  | element alphaOff { CT_FixedPercentage }
+  | element alphaMod { CT_PositivePercentage }
+  | element hue { CT_PositiveFixedAngle }
+  | element hueOff { CT_Angle }
+  | element hueMod { CT_PositivePercentage }
+  | element sat { CT_Percentage }
+  | element satOff { CT_Percentage }
+  | element satMod { CT_Percentage }
+  | element lum { CT_Percentage }
+  | element lumOff { CT_Percentage }
+  | element lumMod { CT_Percentage }
+  | element red { CT_Percentage }
+  | element redOff { CT_Percentage }
+  | element redMod { CT_Percentage }
+  | element green { CT_Percentage }
+  | element greenOff { CT_Percentage }
+  | element greenMod { CT_Percentage }
+  | element blue { CT_Percentage }
+  | element blueOff { CT_Percentage }
+  | element blueMod { CT_Percentage }
+  | element gamma { CT_GammaTransform }
+  | element invGamma { CT_InverseGammaTransform }
+CT_ScRgbColor =
+  EG_ColorTransform*,
+  attribute r { text >> xs:documentation [ "Red" ] },
+  attribute g { text >> xs:documentation [ "Green" ] },
+  attribute b { text >> xs:documentation [ "Blue" ] }
+ST_HexBinary3 =
+  [ xs:documentation [ "Hex Binary of Length 3" ] ]
+  xsd:hexBinary { length = "3" }
+CT_SRgbColor =
+  EG_ColorTransform*,
+  attribute val { text >> xs:documentation [ "Value" ] }
+CT_HslColor =
+  EG_ColorTransform*,
+  attribute hue { text >> xs:documentation [ "Hue" ] },
+  attribute sat { text >> xs:documentation [ "Saturation" ] },
+  attribute lum { text >> xs:documentation [ "Luminance" ] }
+ST_SystemColorVal =
+  [ xs:documentation [ "System Color Value" ] ]
+  list {
+    # Scroll Bar System Color
+    "scrollBar"
+    | # Background System Color
+      "background"
+    | # Active Caption System Color
+      "activeCaption"
+    | # Inactive Caption System Color
+      "inactiveCaption"
+    | # Menu System Color
+      "menu"
+    | # Window System Color
+      "window"
+    | # Window Frame System Color
+      "windowFrame"
+    | # Menu Text System Color
+      "menuText"
+    | # Window Text System Color
+      "windowText"
+    | # Caption Text System Color
+      "captionText"
+    | # Active Border System Color
+      "activeBorder"
+    | # Inactive Border System Color
+      "inactiveBorder"
+    | # Application Workspace System Color
+      "appWorkspace"
+    | # Highlight System Color
+      "highlight"
+    | # Highlight Text System Color
+      "highlightText"
+    | # Button Face System Color
+      "btnFace"
+    | # Button Shadow System Color
+      "btnShadow"
+    | # Gray Text System Color
+      "grayText"
+    | # Button Text System Color
+      "btnText"
+    | # Inactive Caption Text System Color
+      "inactiveCaptionText"
+    | # Button Highlight System Color
+      "btnHighlight"
+    | # 3D Dark System Color
+      "3dDkShadow"
+    | # 3D Light System Color
+      "3dLight"
+    | # Info Text System Color
+      "infoText"
+    | # Info Back System Color
+      "infoBk"
+    | # Hot Light System Color
+      "hotLight"
+    | # Gradient Active Caption System Color
+      "gradientActiveCaption"
+    | # Gradient Inactive Caption System Color
+      "gradientInactiveCaption"
+    | # Menu Highlight System Color
+      "menuHighlight"
+    | # Menu Bar System Color
+      "menuBar"
+  }
+CT_SystemColor =
+  EG_ColorTransform*,
+  attribute val { text >> xs:documentation [ "Value" ] },
+  attribute lastClr { text >> xs:documentation [ "Last Color" ] }?
+ST_SchemeColorVal =
+  [ xs:documentation [ "Scheme Color" ] ]
+  list {
+    # Background Color 1
+    "bg1"
+    | # Text Color 1
+      "tx1"
+    | # Background Color 2
+      "bg2"
+    | # Text Color 2
+      "tx2"
+    | # Accent Color 1
+      "accent1"
+    | # Accent Color 2
+      "accent2"
+    | # Accent Color 3
+      "accent3"
+    | # Accent Color 4
+      "accent4"
+    | # Accent Color 5
+      "accent5"
+    | # Accent Color 6
+      "accent6"
+    | # Hyperlink Color
+      "hlink"
+    | # Followed Hyperlink Color
+      "folHlink"
+    | # Style Color
+      "phClr"
+    | # Dark Color 1
+      "dk1"
+    | # Light Color 1
+      "lt1"
+    | # Dark Color 2
+      "dk2"
+    | # Light Color 2
+      "lt2"
+  }
+CT_SchemeColor =
+  EG_ColorTransform*,
+  attribute val { text >> xs:documentation [ "Value" ] }
+ST_PresetColorVal =
+  [ xs:documentation [ "Preset Color Value" ] ]
+  list {
+    # Alice Blue Preset Color
+    "aliceBlue"
+    | # Antique White Preset Color
+      "antiqueWhite"
+    | # Aqua Preset Color
+      "aqua"
+    | # Aquamarine Preset Color
+      "aquamarine"
+    | # Azure Preset Color
+      "azure"
+    | # Beige Preset Color
+      "beige"
+    | # Bisque Preset Color
+      "bisque"
+    | # Black Preset Color
+      "black"
+    | # Blanched Almond Preset Color
+      "blanchedAlmond"
+    | # Blue Preset Color
+      "blue"
+    | # Blue Violet Preset Color
+      "blueViolet"
+    | # Brown Preset Color
+      "brown"
+    | # Burly Wood Preset Color
+      "burlyWood"
+    | # Cadet Blue Preset Color
+      "cadetBlue"
+    | # Chartreuse Preset Color
+      "chartreuse"
+    | # Chocolate Preset Color
+      "chocolate"
+    | # Coral Preset Color
+      "coral"
+    | # Cornflower Blue Preset Color
+      "cornflowerBlue"
+    | # Cornsilk Preset Color
+      "cornsilk"
+    | # Crimson Preset Color
+      "crimson"
+    | # Cyan Preset Color
+      "cyan"
+    | # Dark Blue Preset Color
+      "dkBlue"
+    | # Dark Cyan Preset Color
+      "dkCyan"
+    | # Dark Goldenrod Preset Color
+      "dkGoldenrod"
+    | # Dark Gray Preset Color
+      "dkGray"
+    | # Dark Green Preset Color
+      "dkGreen"
+    | # Dark Khaki Preset Color
+      "dkKhaki"
+    | # Dark Magenta Preset Color
+      "dkMagenta"
+    | # Dark Olive Green Preset Color
+      "dkOliveGreen"
+    | # Dark Orange Preset Color
+      "dkOrange"
+    | # Dark Orchid Preset Color
+      "dkOrchid"
+    | # Dark Red Preset Color
+      "dkRed"
+    | # Dark Salmon Preset Color
+      "dkSalmon"
+    | # Dark Sea Green Preset Color
+      "dkSeaGreen"
+    | # Dark Slate Blue Preset Color
+      "dkSlateBlue"
+    | # Dark Slate Gray Preset Color
+      "dkSlateGray"
+    | # Dark Turquoise Preset Color
+      "dkTurquoise"
+    | # Dark Violet Preset Color
+      "dkViolet"
+    | # Deep Pink Preset Color
+      "deepPink"
+    | # Deep Sky Blue Preset Color
+      "deepSkyBlue"
+    | # Dim Gray Preset Color
+      "dimGray"
+    | # Dodger Blue Preset Color
+      "dodgerBlue"
+    | # Firebrick Preset Color
+      "firebrick"
+    | # Floral White Preset Color
+      "floralWhite"
+    | # Forest Green Preset Color
+      "forestGreen"
+    | # Fuchsia Preset Color
+      "fuchsia"
+    | # Gainsboro Preset Color
+      "gainsboro"
+    | # Ghost White Preset Color
+      "ghostWhite"
+    | # Gold Preset Color
+      "gold"
+    | # Goldenrod Preset Color
+      "goldenrod"
+    | # Gray Preset Color
+      "gray"
+    | # Green Preset Color
+      "green"
+    | # Green Yellow Preset Color
+      "greenYellow"
+    | # Honeydew Preset Color
+      "honeydew"
+    | # Hot Pink Preset Color
+      "hotPink"
+    | # Indian Red Preset Color
+      "indianRed"
+    | # Indigo Preset Color
+      "indigo"
+    | # Ivory Preset Color
+      "ivory"
+    | # Khaki Preset Color
+      "khaki"
+    | # Lavender Preset Color
+      "lavender"
+    | # Lavender Blush Preset Color
+      "lavenderBlush"
+    | # Lawn Green Preset Color
+      "lawnGreen"
+    | # Lemon Chiffon Preset Color
+      "lemonChiffon"
+    | # Light Blue Preset Color
+      "ltBlue"
+    | # Light Coral Preset Color
+      "ltCoral"
+    | # Light Cyan Preset Color
+      "ltCyan"
+    | # Light Goldenrod Yellow Preset Color
+      "ltGoldenrodYellow"
+    | # Light Gray Preset Color
+      "ltGray"
+    | # Light Green Preset Color
+      "ltGreen"
+    | # Light Pink Preset Color
+      "ltPink"
+    | # Light Salmon Preset Color
+      "ltSalmon"
+    | # Light Sea Green Preset Color
+      "ltSeaGreen"
+    | # Light Sky Blue Preset Color
+      "ltSkyBlue"
+    | # Light Slate Gray Preset Color
+      "ltSlateGray"
+    | # Light Steel Blue Preset Color
+      "ltSteelBlue"
+    | # Light Yellow Preset Color
+      "ltYellow"
+    | # Lime Preset Color
+      "lime"
+    | # Lime Green Preset Color
+      "limeGreen"
+    | # Linen Preset Color
+      "linen"
+    | # Magenta Preset Color
+      "magenta"
+    | # Maroon Preset Color
+      "maroon"
+    | # Medium Aquamarine Preset Color
+      "medAquamarine"
+    | # Medium Blue Preset Color
+      "medBlue"
+    | # Medium Orchid Preset Color
+      "medOrchid"
+    | # Medium Purple Preset Color
+      "medPurple"
+    | # Medium Sea Green Preset Color
+      "medSeaGreen"
+    | # Medium Slate Blue Preset Color
+      "medSlateBlue"
+    | # Medium Spring Green Preset Color
+      "medSpringGreen"
+    | # Medium Turquoise Preset Color
+      "medTurquoise"
+    | # Medium Violet Red Preset Color
+      "medVioletRed"
+    | # Midnight Blue Preset Color
+      "midnightBlue"
+    | # Mint Cream Preset Color
+      "mintCream"
+    | # Misty Rose Preset Color
+      "mistyRose"
+    | # Moccasin Preset Color
+      "moccasin"
+    | # Navajo White Preset Color
+      "navajoWhite"
+    | # Navy Preset Color
+      "navy"
+    | # Old Lace Preset Color
+      "oldLace"
+    | # Olive Preset Color
+      "olive"
+    | # Olive Drab Preset Color
+      "oliveDrab"
+    | # Orange Preset Color
+      "orange"
+    | # Orange Red Preset Color
+      "orangeRed"
+    | # Orchid Preset Color
+      "orchid"
+    | # Pale Goldenrod Preset Color
+      "paleGoldenrod"
+    | # Pale Green Preset Color
+      "paleGreen"
+    | # Pale Turquoise Preset Color
+      "paleTurquoise"
+    | # Pale Violet Red Preset Color
+      "paleVioletRed"
+    | # Papaya Whip Preset Color
+      "papayaWhip"
+    | # Peach Puff Preset Color
+      "peachPuff"
+    | # Peru Preset Color
+      "peru"
+    | # Pink Preset Color
+      "pink"
+    | # Plum Preset Color
+      "plum"
+    | # Powder Blue Preset Color
+      "powderBlue"
+    | # Purple Preset Color
+      "purple"
+    | # Red Preset Color
+      "red"
+    | # Rosy Brown Preset Color
+      "rosyBrown"
+    | # Royal Blue Preset Color
+      "royalBlue"
+    | # Saddle Brown Preset Color
+      "saddleBrown"
+    | # Salmon Preset Color
+      "salmon"
+    | # Sandy Brown Preset Color
+      "sandyBrown"
+    | # Sea Green Preset Color
+      "seaGreen"
+    | # Sea Shell Preset Color
+      "seaShell"
+    | # Sienna Preset Color
+      "sienna"
+    | # Silver Preset Color
+      "silver"
+    | # Sky Blue Preset Color
+      "skyBlue"
+    | # Slate Blue Preset Color
+      "slateBlue"
+    | # Slate Gray Preset Color
+      "slateGray"
+    | # Snow Preset Color
+      "snow"
+    | # Spring Green Preset Color
+      "springGreen"
+    | # Steel Blue Preset Color
+      "steelBlue"
+    | # Tan Preset Color
+      "tan"
+    | # Teal Preset Color
+      "teal"
+    | # Thistle Preset Color
+      "thistle"
+    | # Tomato Preset Color
+      "tomato"
+    | # Turquoise Preset Color
+      "turquoise"
+    | # Violet Preset Color
+      "violet"
+    | # Wheat Preset Color
+      "wheat"
+    | # White Preset Color
+      "white"
+    | # White Smoke Preset Color
+      "whiteSmoke"
+    | # Yellow Preset Color
+      "yellow"
+    | # Yellow Green Preset Color
+      "yellowGreen"
+  }
+CT_PresetColor =
+  EG_ColorTransform*,
+  attribute val { text >> xs:documentation [ "Value" ] }
+EG_OfficeArtExtensionList = element ext { CT_OfficeArtExtension }*
+CT_OfficeArtExtensionList = EG_OfficeArtExtensionList
+CT_Scale2D =
+  element sx { CT_Ratio },
+  element sy { CT_Ratio }
+CT_Transform2D =
+  (element off { CT_Point2D }?,
+   element ext { CT_PositiveSize2D }?),
+  attribute rot { text >> xs:documentation [ "Rotation" ] }?,
+  attribute flipH {
+    [ xs:documentation [ "Horizontal Flip" ] ]
+    xsd:boolean
+    >> xs:documentation [ "Horizontal Flip" ]
+  }?,
+  attribute flipV {
+    [ xs:documentation [ "Vertical Flip" ] ]
+    xsd:boolean
+    >> xs:documentation [ "Vertical Flip" ]
+  }?
+CT_GroupTransform2D =
+  (element off { CT_Point2D }?,
+   element ext { CT_PositiveSize2D }?,
+   element chOff { CT_Point2D }?,
+   element chExt { CT_PositiveSize2D }?),
+  attribute rot { text >> xs:documentation [ "Rotation" ] }?,
+  attribute flipH {
+    [ xs:documentation [ "Horizontal Flip" ] ]
+    xsd:boolean
+    >> xs:documentation [ "Horizontal Flip" ]
+  }?,
+  attribute flipV {
+    [ xs:documentation [ "Vertical Flip" ] ]
+    xsd:boolean
+    >> xs:documentation [ "Vertical Flip" ]
+  }?
+CT_Point3D =
+  attribute x { text >> xs:documentation [ "X-Coordinate in 3D" ] },
+  attribute y { text >> xs:documentation [ "Y-Coordinate in 3D" ] },
+  attribute z { text >> xs:documentation [ "Z-Coordinate in 3D" ] }
+CT_Vector3D =
+  attribute dx {
+    text >> xs:documentation [ "Distance along X-axis in 3D" ]
+  },
+  attribute dy {
+    text >> xs:documentation [ "Distance along Y-axis in 3D" ]
+  },
+  attribute dz {
+    text >> xs:documentation [ "Distance along Z-axis in 3D" ]
+  }
+CT_SphereCoords =
+  attribute lat { text >> xs:documentation [ "Latitude" ] },
+  attribute lon { text >> xs:documentation [ "Longitude" ] },
+  attribute rev { text >> xs:documentation [ "Revolution" ] }
+CT_RelativeRect =
+  attribute l { text >> xs:documentation [ "Left Offset" ] }?,
+  attribute t { text >> xs:documentation [ "Top Offset" ] }?,
+  attribute r { text >> xs:documentation [ "Right Offset" ] }?,
+  attribute b { text >> xs:documentation [ "Bottom Offset" ] }?
+ST_RectAlignment =
+  [ xs:documentation [ "Rectangle Alignments" ] ]
+  list {
+    # Rectangle Alignment Enum ( Top Left )
+    "tl"
+    | # Rectangle Alignment Enum ( Top )
+      "t"
+    | # Rectangle Alignment Enum ( Top Right )
+      "tr"
+    | # Rectangle Alignment Enum ( Left )
+      "l"
+    | # Rectangle Alignment Enum ( Center )
+      "ctr"
+    | # Rectangle Alignment Enum ( Right )
+      "r"
+    | # Rectangle Alignment Enum ( Bottom Left )
+      "bl"
+    | # Rectangle Alignment Enum ( Bottom )
+      "b"
+    | # Rectangle Alignment Enum ( Bottom Right )
+      "br"
+  }
+ST_Guid =
+  [ xs:documentation [ "GUID Method" ] ]
+  xsd:token {
+    pattern =
+      "\{[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}\}"
+  }
+EG_ColorChoice =
+  element scrgbClr { CT_ScRgbColor }
+  | element srgbClr { CT_SRgbColor }
+  | element hslClr { CT_HslColor }
+  | element sysClr { CT_SystemColor }
+  | element schemeClr { CT_SchemeColor }
+  | element prstClr { CT_PresetColor }
+CT_Color = EG_ColorChoice
+CT_ColorMRU = EG_ColorChoice*
+ST_BlackWhiteMode =
+  [ xs:documentation [ "Black and White Mode" ] ]
+  list {
+    # Color
+    "clr"
+    | # Automatic
+      "auto"
+    | # Gray
+      "gray"
+    | # Light Gray
+      "ltGray"
+    | # Inverse Gray
+      "invGray"
+    | # Gray and White
+      "grayWhite"
+    | # Black and Gray
+      "blackGray"
+    | # Black and White
+      "blackWhite"
+    | # Black
+      "black"
+    | # White
+      "white"
+    | # Hidden
+      "hidden"
+  }
+AG_Blob =
+  attribute r:embed { text }?,
+  attribute r:link { text }?
+CT_EmbeddedWAVAudioFile =
+  attribute r:embed { text },
+  attribute name {
+    [ xs:documentation [ "Sound Name" ] ]
+    xsd:string
+    >> xs:documentation [ "Sound Name" ]
+  }?,
+  attribute builtIn {
+    [ xs:documentation [ "Recognized Built-In Sound" ] ]
+    xsd:boolean
+    >> xs:documentation [ "Recognized Built-In Sound" ]
+  }?
+CT_Hyperlink =
+  (element snd { CT_EmbeddedWAVAudioFile }?,
+   element extLst { CT_OfficeArtExtensionList }?),
+  attribute r:id { text }?,
+  attribute invalidUrl {
+    [ xs:documentation [ "Invalid URL" ] ]
+    xsd:string
+    >> xs:documentation [ "Invalid URL" ]
+  }?,
+  attribute action {
+    [ xs:documentation [ "Action Setting" ] ]
+    xsd:string
+    >> xs:documentation [ "Action Setting" ]
+  }?,
+  attribute tgtFrame {
+    [ xs:documentation [ "Target Frame" ] ]
+    xsd:string
+    >> xs:documentation [ "Target Frame" ]
+  }?,
+  attribute tooltip {
+    [ xs:documentation [ "Hyperlink Tooltip" ] ]
+    xsd:string
+    >> xs:documentation [ "Hyperlink Tooltip" ]
+  }?,
+  attribute history {
+    [ xs:documentation [ "Add Hyperlink to Page History" ] ]
+    xsd:boolean
+    >> xs:documentation [ "Add Hyperlink to Page History" ]
+  }?,
+  attribute highlightClick {
+    [ xs:documentation [ "Highlight Click" ] ]
+    xsd:boolean
+    >> xs:documentation [ "Highlight Click" ]
+  }?,
+  attribute endSnd {
+    [ xs:documentation [ "End Sounds" ] ]
+    xsd:boolean
+    >> xs:documentation [ "End Sounds" ]
+  }?
+ST_DrawingElementId =
+  [ xs:documentation [ "Drawing Element ID" ] ] xsd:unsignedInt
+BUILT_IN_ANY_TYPE =
+  (element * { BUILT_IN_ANY_TYPE }
+   | attribute * { text }
+   | text)*

@@ -31,15 +31,18 @@
      (syntax/loc stx (define (compound-filter) : (CSS:Filter RangeType) (CSS:<+> atom-filters ...)))]))
   
 (define-syntax (define-css-atomic-filter stx)
-  (syntax-case stx [:]
-    [(_ atom-filter #:-> RangeType #:with [[token : css:token?] [dom : DomType defval ...] ...] atom-body ... #:where [defaux ...])
+  (syntax-parse stx #:datum-literals [:]
+    [(_ atom-filter #:-> RangeType #:with [[token : token?] [dom : DomType defval ...] ...]
+        (~optional (~seq #:on-error make-exn) #:defaults ([make-exn #'#false]))
+        atom-body ...
+        #:where [defaux ...])
      (syntax/loc stx
        (define (atom-filter [dom : DomType defval ...] ...) : (CSS:Filter RangeType) defaux ...
          (λ [[token : CSS-Syntax-Any]] : (CSS-Option RangeType)
-           (cond [(css:token? token) atom-body ...]
-                 [else #false]))))]
-    [(defilter atom-filter #:-> RangeType #:with [[token : css:token?] [dom : DomType defval ...] ...] atom-body ...)
-     (syntax/loc stx (defilter atom-filter #:-> RangeType #:with [[token : css:token?] [dom : DomType defval ...] ...] atom-body ... #:where []))]))
+           (cond [(token? token) atom-body ...]
+                 [else (and make-exn (make-exn token))]))))]
+    [(defilter atom-filter #:-> RangeType #:with [[token : token?] [dom : DomType defval ...] ...] atom-body ...)
+     (syntax/loc stx (defilter atom-filter #:-> RangeType #:with [[token : token?] [dom : DomType defval ...] ...] atom-body ... #:where []))]))
 
 (define-syntax (define-css-function-filter stx)
   (define (parse-pattern <constructor> <matches>)
@@ -765,10 +768,8 @@
   (lambda [[multipliers '+] [string-filter (λ _ #true)]]
     (CSS<*> (CSS:<^> (<css:string> string-filter)) multipliers)))
 
-(define (<css-comma>) : (CSS:Filter Char)
-  (λ [[token : CSS-Syntax-Any]]
-    (cond [(css:comma? token) #\,]
-          [else (make-exn:css:missing-comma token)])))
+(define-css-atomic-filter <css-comma> #:-> Char #:with [[token : css:comma?]] #:on-error make-exn:css:missing-comma #\,)
+(define-css-atomic-filter <css-slash> #:-> Char #:with [[token : css:slash?]] #:on-error make-exn:css:missing-slash #\/)
 
 (define (<:css-skip-comma:> [omissible? : (Option '#:omissible) #false]) : (All (a) (CSS-Parser a))
   (λ [[data : a] [tokens : (Listof CSS-Token)]]
@@ -780,11 +781,6 @@
           [(or omissible?) (values data --tokens)]
           [(not ?comma) (values data --tokens)]
           [else (values (make-exn:css:missing-comma ?comma) tokens)])))
-
-(define (<css-slash>) : (CSS:Filter Char)
-  (λ [[token : CSS-Syntax-Any]]
-    (cond [(css:slash? token) #\/]
-          [else (make-exn:css:missing-slash token)])))
 
 (define (<css-keyword:to>) : (CSS:Filter Symbol) (CSS:<?> (<css:ident> 'to) make-exn:css:missing-keyword))
 (define (<css-keyword:at>) : (CSS:Filter Symbol) (CSS:<?> (<css:ident> 'at) make-exn:css:missing-keyword))

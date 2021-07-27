@@ -86,8 +86,8 @@
                             'xml-dtd-expand))))
 
 (define rnc-read
-  (lambda [[/dev/xmlin (current-input-port)]]
-    (sgml-read read-xml-document /dev/xmlin)))
+  (lambda [[/dev/rncin (current-input-port)]]
+    (sgml-read read-xml-document /dev/rncin)))
 
 (define rnc-read-syntax
   (lambda [[src #false] [/dev/rncin (current-input-port)]]
