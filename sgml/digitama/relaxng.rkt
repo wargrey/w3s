@@ -13,5 +13,7 @@
     (define /dev/dtdin : Input-Port (rnc-open-input-port /dev/rawin #true port-name))
     (define source : (U Symbol String) (or port-name (sgml-port-name /dev/dtdin)))
     (define tokens : (Listof XML-Token) (read-rnc-tokens* /dev/dtdin source))
+
+    ((<:rnc-namespace:>) null tokens)
     
     (rng-grammar source tokens)))

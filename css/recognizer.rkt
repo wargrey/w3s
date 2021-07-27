@@ -175,6 +175,14 @@
              [(not fexn-value) false-value]
              [else (fexn-value datum)]))]))
 
+(define CSS:<_> : (All (a) (-> (CSS:Filter Any) (CSS-Parser a)))
+  (lambda [atom-filter]
+    (λ [[data : a] [tokens : (Listof CSS-Token)]]
+      (define-values (head tail) (css-car/cdr tokens))
+      (define datum : (CSS-Option Any) (atom-filter head))
+      (cond [(or (exn:css? datum) (not datum)) (values datum tokens)]
+            [else (values data tail)]))))
+
 (define CSS:<$> : (-> (CSS:Filter Any) Symbol (-> CSS-Shorthand-Datum Any) CSS-Shorthand-Parser)
   (lambda [css:filter tag fdatum]
     (λ [[data : CSS-Shorthand-Datum] [tokens : (Listof CSS-Token)]]
@@ -386,12 +394,12 @@
                      (cond [(or (exn:css? rdatum) (false? rdatum)) (values rdatum tokens)]
                            [else (values (cons rdatum data) --tokens)]))]))))
 
-(define CSS<_> : (All (a) (-> (CSS-Parser a) (CSS-Parser a)))
+(define CSS<_> : (All (a) (-> (CSS-Parser (Listof Any)) (CSS-Parser a)))
   (lambda [css-parser]
     (λ [[data : a] [tokens : (Listof CSS-Token)]]
-      (define-values (++data --tokens) (css-parser data tokens))
+      (define-values (++data --tokens) (css-parser null tokens))
       (cond [(or (exn:css? ++data) (false? ++data)) (values ++data --tokens)]
-            [else (values data tokens)]))))
+            [else (values data --tokens)]))))
 
 (define CSS<++> : (All (a) (case-> [(Listof (CSS-Parser a)) -> (CSS-Parser a)]
                                    [(CSS-Parser a) * -> (CSS-Parser a)]))

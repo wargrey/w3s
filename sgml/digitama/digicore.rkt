@@ -14,7 +14,6 @@
 (require css/digitama/syntax/w3s)
 
 (require (for-syntax racket/base))
-(require (for-syntax racket/string))
 (require (for-syntax racket/syntax))
 (require (for-syntax syntax/parse))
 
@@ -173,52 +172,53 @@
 (define-syntax-error exn:xml #:as XML-Syntax-Error #:for XML-Token
   ;;; https://www.w3.org/TR/xml/#sec-terminology
   #:with [xml-make-syntax-error xml-log-syntax-error]
-  [exn:xml:error         #:-> exn:xml]
-  [exn:xml:fatal         #:-> exn:xml]
-  [exn:xml:defense       #:-> exn:xml]
-  [exn:xml:eof           #:-> exn:xml]
-  [exn:xml:reserved      #:-> exn:xml]
-  [exn:xml:multiple      #:-> exn:xml]
+  [exn:xml:error          #:-> exn:xml]
+  [exn:xml:fatal          #:-> exn:xml]
+  [exn:xml:defense        #:-> exn:xml]
+  [exn:xml:eof            #:-> exn:xml]
+  [exn:xml:reserved       #:-> exn:xml]
+  [exn:xml:multiple       #:-> exn:xml]
 
-  [exn:xml:bomb          #:-> exn:xml:defense]
-  [exn:xml:timeout       #:-> exn:xml:defense]
+  [exn:xml:bomb           #:-> exn:xml:defense]
+  [exn:xml:timeout        #:-> exn:xml:defense]
   
-  [exn:xml:vc            #:-> exn:xml:error]
-  [exn:xml:token         #:-> exn:xml:vc]
-  [exn:xml:duplicate     #:-> exn:xml:vc]
-  [exn:xml:type          #:-> exn:xml:vc]
-  [exn:xml:nest          #:-> exn:xml:vc]
-  [exn:xml:enum          #:-> exn:xml:vc]
-  [exn:xml:id            #:-> exn:xml:vc]
-  [exn:xml:fixed         #:-> exn:xml:vc]
-  [exn:xml:nonempty      #:-> exn:xml:vc]
-  [exn:xml:adoptee       #:-> exn:xml:vc]
-  [exn:xml:missing-attr  #:-> exn:xml:vc]
-  [exn:xml:parsed        #:-> exn:xml:vc]
-  [exn:xml:children      #:-> exn:xml:vc]
+  [exn:xml:vc             #:-> exn:xml:error]
+  [exn:xml:token          #:-> exn:xml:vc]
+  [exn:xml:duplicate      #:-> exn:xml:vc]
+  [exn:xml:type           #:-> exn:xml:vc]
+  [exn:xml:nest           #:-> exn:xml:vc]
+  [exn:xml:enum           #:-> exn:xml:vc]
+  [exn:xml:id             #:-> exn:xml:vc]
+  [exn:xml:fixed          #:-> exn:xml:vc]
+  [exn:xml:nonempty       #:-> exn:xml:vc]
+  [exn:xml:adoptee        #:-> exn:xml:vc]
+  [exn:xml:missing-attr   #:-> exn:xml:vc]
+  [exn:xml:parsed         #:-> exn:xml:vc]
+  [exn:xml:children       #:-> exn:xml:vc]
   
-  [exn:xml:wfc           #:-> exn:xml:fatal]
-  [exn:xml:multi-root    #:-> exn:xml:wfc]
-  [exn:xml:unique        #:-> exn:xml:wfc]
-  [exn:xml:external      #:-> exn:xml:wfc]
-  [exn:xml:char          #:-> exn:xml:wfc]
-  [exn:xml:loop          #:-> exn:xml:wfc]
-  [exn:xml:misplaced     #:-> exn:xml:wfc]
-  [exn:xml:undeclared    #:-> exn:xml:wfc]
-  [exn:xml:mismatch      #:-> exn:xml:wfc]
-  [exn:xml:malformed     #:-> exn:xml:wfc]
+  [exn:xml:wfc            #:-> exn:xml:fatal]
+  [exn:xml:multi-root     #:-> exn:xml:wfc]
+  [exn:xml:unique         #:-> exn:xml:wfc]
+  [exn:xml:external       #:-> exn:xml:wfc]
+  [exn:xml:char           #:-> exn:xml:wfc]
+  [exn:xml:loop           #:-> exn:xml:wfc]
+  [exn:xml:misplaced      #:-> exn:xml:wfc]
+  [exn:xml:undeclared     #:-> exn:xml:wfc]
+  [exn:xml:mismatch       #:-> exn:xml:wfc]
+  [exn:xml:malformed      #:-> exn:xml:wfc]
 
-  [exn:xml:foreign       #:-> exn:xml:external]
+  [exn:xml:foreign        #:-> exn:xml:external]
   
-  [exn:xml:missing-name  #:-> exn:xml:malformed]
-  [exn:xml:missing-value #:-> exn:xml:malformed]
-  [exn:xml:unrecognized  #:-> exn:xml:malformed]
-  [exn:xml:empty         #:-> exn:xml:malformed]
+  [exn:xml:missing-name   #:-> exn:xml:malformed]
+  [exn:xml:missing-value  #:-> exn:xml:malformed]
+  [exn:xml:unrecognized   #:-> exn:xml:malformed]
+  [exn:xml:empty          #:-> exn:xml:malformed]
   
-  [exn:xml:space         #:-> exn:xml:char]
+  [exn:xml:space          #:-> exn:xml:char]
 
   ; for RelaxNG
-  [exn:xml:range         #:-> exn:xml:unrecognized])
+  [exn:xml:missing-assign #:-> exn:xml:malformed]
+  [exn:xml:range          #:-> exn:xml:unrecognized])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-token->syntax : (-> XML-Token Syntax)
