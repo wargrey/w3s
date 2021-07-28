@@ -8,6 +8,13 @@
 (require "stdin.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(struct rng-grammar
+  ([location : (U String Symbol)]
+   [tokens : (Listof XML-Token)])
+  #:transparent
+  #:type-name RNG-Grammar)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define read-rnc-grammar : (->* (SGML-StdIn) ((U False String Symbol)) RNG-Grammar)
   (lambda [/dev/rawin [port-name #false]]
     (define /dev/dtdin : Input-Port (rnc-open-input-port /dev/rawin #true port-name))
@@ -16,6 +23,6 @@
     (define-values (rnc-decls pattern-tokens) ((<:rnc-declarations:>) null tokens))
 
     (when (list? rnc-decls)
-      (for-each displayln rnc-decls))
+      (for-each displayln (reverse rnc-decls)))
     
     (rng-grammar source pattern-tokens)))
