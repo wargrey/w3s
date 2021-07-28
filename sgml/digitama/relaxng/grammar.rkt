@@ -12,11 +12,17 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (struct rng-namespace
-  ([name : Symbol]
-   [literal : (U String Symbol)]
+  ([prefix : Symbol]
+   [uri : (U String Symbol)]
    [default? : Boolean])
   #:transparent
   #:type-name RNG-Namespace)
+
+(struct rng-datatype
+  ([prefix : Symbol]
+   [uri : String])
+  #:transparent
+  #:type-name RNG-Datatype)
 
 (struct rng-grammar
   ([location : (U String Symbol)]
@@ -25,20 +31,41 @@
   #:type-name RNG-Grammar)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define <:rnc-namespace:> : (-> (XML-Parser (Listof RNG-Namespace)))
-  (let ()
-    (define (xml->default-namespace [data : (Listof (U String Symbol))]) : RNG-Namespace
-      (cond [(null? data) '#:deadcode (rng-namespace '|| "" #true)]
-            [(null? (cdr data)) (rng-namespace '|| (car data) #true)]
-            [else (rng-namespace (assert (car data) symbol?) (cadr data) #true)]))
-    (define (xml->namespace [data : (Listof (U String Symbol))]) : RNG-Namespace
-      (cond [(or (null? data) (null? (cdr data))) '#:deadcode (rng-namespace '|| "" #false)]
-            [else (rng-namespace (assert (car data) symbol?) (cadr data) #false)]))
+(define <:rnc-declarations:> : (-> (XML-Parser (Listof (U RNG-Namespace RNG-Datatype))))
+  (let ([xml:uri "http://www.w3.org/XML/1998/namespace"]
+        [xsd:uri "http://www.w3.org/2001/XMLSchema-datatypes"]
+        [<default> (<rnc-keyword> '#:default)]
+        [<namespace> (<rnc-keyword> '#:namespace)]
+        [<datatypes> (<rnc-keyword> '#:datatypes)])
+
+    (define (prefix-filter [NS : (Listof (U RNG-Namespace RNG-Datatype))] [ns : (U RNG-Namespace RNG-Datatype)] [tokens : (Listof XML-Token)]) : (XML-Option True)
+      (define-values (prefix uri type)
+        (if (rng-namespace? ns)
+            (values (rng-namespace-prefix ns) (rng-namespace-uri ns) (if (rng-namespace-default? ns) 'default 'namespace))
+            (values (rng-datatype-prefix ns) (rng-datatype-uri ns) 'datatypes)))
+
+      (cond [(eq? prefix 'xml) (if (equal? uri xml:uri) #true (make-exn:rnc:uri tokens))]
+            [(eq? prefix 'xsd) (if (equal? uri xsd:uri) #true (make-exn:rnc:uri tokens))]
+            [(eq? prefix 'xmlns) (make-exn:rnc:prefix tokens)]
+            [(equal? uri xml:uri) (if (eq? prefix 'xml) #true (make-exn:rnc:prefix tokens))]
+            [else #true]))
+
+    (define (make-xml->namespace [default? : Boolean]) : (-> (Listof (U String Symbol)) (U RNG-Namespace RNG-Datatype))
+      (λ [data]
+        (cond [(null? data) '#:deadcode (rng-namespace '|| "" default?)]
+              [(null? (cdr data)) (rng-namespace '|| (car data) default?)]
+              [else (rng-namespace (assert (car data) symbol?) (cadr data) default?)])))
+
+    (define (xml->datatypes [data : (Listof (U String Symbol))]) : (U RNG-Namespace RNG-Datatype)
+      (cond [(or (null? data) (null? (cdr data))) '#:deadcode (rng-datatype '|| "")]
+            [else (rng-datatype (assert (car data) symbol?) (assert (cadr data) string?))]))
+
     (lambda []
-      (RNC<*> (RNC<+> (RNC<~> (RNC<&> ((inst RNC:<_> (Listof (U String Symbol))) (<rnc-keyword> '#:namespace))
-                                      (RNC:<^> (<rnc-identify-or-keyword>)) ((inst <:rnc-assign:> (Listof (U String Symbol)))) (RNC:<^> (<rnc-ns:literal>)))
-                              xml->namespace)
-                      (RNC<~> (RNC<&> ((inst RNC<_> (Listof (U String Symbol))) (RNC:<&> (<rnc-keyword> '#:default) (<rnc-keyword> '#:namespace)))
-                                      (RNC:<*> (<rnc-identify-or-keyword>) '?) ((inst <:rnc-assign:> (Listof (U String Symbol)))) (RNC:<^> (<rnc-ns:literal>)))
-                              xml->default-namespace))
+      (RNC<*> (RNC<?> [<namespace> (RNC<~> (RNC<&> (RNC:<^> (<rnc-id-or-keyword>)) ((inst <:=:> (Listof (U String Symbol)))) (<:rnc-ns:literal:>))
+                                           (make-xml->namespace #false) prefix-filter)]
+                      [<datatypes> (RNC<~> (RNC<&> (RNC:<^> (<rnc-id-or-keyword>)) ((inst <:=:> (Listof (U String Symbol)))) (<:rnc-literal:>))
+                                           xml->datatypes prefix-filter)]
+                      [<default>   (RNC<~> (RNC<&> ((inst RNC:<_> (Listof (U String Symbol))) <namespace>)
+                                                   (RNC:<*> (<rnc-id-or-keyword>) '?) ((inst <:=:> (Listof (U String Symbol)))) (<:rnc-ns:literal:>))
+                                           (make-xml->namespace #true) prefix-filter)])
               '*))))

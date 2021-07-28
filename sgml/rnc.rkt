@@ -5,7 +5,7 @@
 ;     what adapts the hedge automata theory
 
 (provide (all-defined-out) SGML-StdIn default-rnc-error-literal)
-(provide (struct-out rng-grammar) read-rnc-declaration)
+(provide (struct-out rng-grammar) read-rnc-grammar)
 (provide XML-Schema xml-schema? struct:xml-schema)
 
 (require "digitama/relaxng.rkt")

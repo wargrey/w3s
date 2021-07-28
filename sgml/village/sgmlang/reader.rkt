@@ -92,7 +92,7 @@
 (define rnc-read-syntax
   (lambda [[src #false] [/dev/rncin (current-input-port)]]
     (parameterize ([xml-alternative-document-source (path->string src)])
-      (sgml-doc-read-syntax 'read-rnc-declaration 'sgml/rnc
+      (sgml-doc-read-syntax 'read-rnc-grammar 'sgml/rnc
                             #px"\\.t?rnc$" ".rnc" src /dev/rncin))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

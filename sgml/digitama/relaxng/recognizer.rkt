@@ -7,6 +7,8 @@
 
 (require "../digicore.rkt")
 
+(require racket/string)
+
 (require css/digitama/syntax/misc)
 
 (require digimon/symbol)
@@ -56,12 +58,6 @@
     [(_ #:any rnc-parser rnc-parsers ...) (syntax/loc stx (rnc-disjoin (list rnc-parser rnc-parsers ...)))]
     [(_ rnc-parser) #'rnc-parser]
     [(_ rnc-parser rnc-parsers ...) (syntax/loc stx (rnc-disjoin rnc-parser (RNC<+> rnc-parsers ...)))]))
-  
-(define-syntax (RNC:<~> stx)
-  (syntax-case stx []
-    [(_ rnc-filter f) (syntax/loc stx (rnc:compose rnc-filter f))]
-    [(_ rnc-filter f g) (syntax/loc stx (rnc:compose (rnc:compose rnc-filter g) f))]
-    [(_ rnc-filter f g h ...) (syntax/loc stx (rnc:compose rnc-filter (compose f g h ...)))]))
 
 (define-syntax (RNC<&> stx)
   (syntax-case stx []
@@ -110,6 +106,22 @@
       (define datum : (XML-Option Any) (atom-filter head))
       (cond [(or (exn:xml? datum) (not datum)) (values datum tokens)]
             [else (values data tail)]))))
+
+(define RNC:<~> : (All (a b) (case-> [(XML:Filter a) (-> a b) -> (XML:Filter b)]
+                                     [(XML:Filter a) (-> a b) (-> b XML-Syntax-Any (XML-Option True)) -> (XML:Filter b)]))
+  (case-lambda
+    [(rnc-filter xml->racket)
+     (λ [[token : XML-Syntax-Any]]
+       (define datum : (XML-Option a) (rnc-filter token))
+       (if (exn:xml? datum) datum (and datum (xml->racket datum))))]
+    [(rnc-filter xml->racket datum-filter)
+     (λ [[token : XML-Syntax-Any]]
+       (define datum : (XML-Option a) (rnc-filter token))
+       (cond [(or (not datum) (exn:xml? datum)) datum]
+             [else (let* ([rdatum (xml->racket datum)]
+                          [okay? (datum-filter rdatum token)])
+                     (cond [(or (not okay?) (exn:xml? okay?)) okay?]
+                           [else rdatum]))]))]))
 
 (define RNC:<&> : (All (a) (-> (XML:Filter a) * (XML-Parser (Listof a))))
   ;;; https://drafts.csswg.org/css-values-4/#component-combinators [juxtaposing components]
@@ -185,14 +197,22 @@
        (cond [(pair? tokens) (rnc-parser data tokens)]
              [else (values (cons eof-value data) null)]))]))
 
-(define RNC<~> : (All (a b) (-> (XML-Parser (Listof a)) (-> (Listof a) (XML-Option b)) (XML-Parser (Listof b))))
-  (lambda [rnc-parser xml->racket]
+(define RNC<~> : (All (a b) (case-> [(XML-Parser (Listof a)) (-> (Listof a) b) -> (XML-Parser (Listof b))]
+                                    [(XML-Parser (Listof a)) (-> (Listof a) b) (-> (Listof b) b (Listof XML-Token) (XML-Option True)) -> (XML-Parser (Listof b))]))
+  (case-lambda
+    [(rnc-parser rnc->racket)
      (λ [[data : (Listof b)] [tokens : (Listof XML-Token)]]
        (define-values (datum --tokens) (rnc-parser null tokens))
-       (cond [(or (exn:xml? datum) (not datum)) (values datum --tokens)]
-             [else (let ([rdatum (xml->racket (reverse datum))])
-                     (cond [(or (exn:xml? rdatum) (not rdatum)) (values rdatum tokens)]
-                           [else (values (cons rdatum data) --tokens)]))]))))
+       (cond [(or (exn:xml? datum) (false? datum)) (values datum --tokens)]
+             [else (values (cons (rnc->racket (reverse datum)) data) --tokens)]))]
+    [(rnc-parser rnc->racket data-filter)
+     (λ [[data : (Listof b)] [tokens : (Listof XML-Token)]]
+       (define-values (datum --tokens) (rnc-parser null tokens))
+       (cond [(or (exn:xml? datum) (false? datum)) (values datum --tokens)]
+             [else (let* ([rdatum (rnc->racket (reverse datum))]
+                          [okay? (data-filter data rdatum (drop-right tokens (length --tokens)))])
+                     (cond [(or (not okay?) (exn:xml? okay?)) (values okay? tokens)]
+                           [else (values (cons rdatum data) --tokens)]))]))]))
 
 (define RNC<_> : (All (a) (-> (XML-Parser (Listof Any)) (XML-Parser a)))
   (lambda [rnc-parser]
@@ -260,16 +280,6 @@
              [else (let-values ([(datum --tokens) (atom-parser2 null tokens)])
                      (cond [(or (not datum) (exn:xml? datum)) (values datum --tokens)]
                            [else (values (append datum data) --tokens)]))]))]))
-  
-(define rnc:juxtapose : (All (a b) (case-> [(XML:Filter a) (XML:Filter b) -> (XML:Filter (List b a))]))
-  (case-lambda
-    [(rnc-filter1 rnc-filter2)
-     (λ [[token : XML-Syntax-Any]]
-       (define datum : (XML-Option a) (rnc-filter1 token))
-       (cond [(or (not datum) (exn:xml? datum)) datum]
-             [else (let ([datum2 (rnc-filter2 token)])
-                     (cond [(or (not datum2) (exn:xml? datum2)) datum2]
-                           [else (list datum2 datum)]))]))]))
 
 (define rnc-juxtapose : (All (a b) (case-> [(Listof (XML-Parser a)) -> (XML-Parser a)]
                                            [(XML-Parser (Listof a)) (XML-Parser (Listof b)) -> (XML-Parser (Listof (U a b)))]))
@@ -291,12 +301,6 @@
              [else (let-values ([(datum2 ----tokens) (atom-parser2 null --tokens)])
                      (cond [(or (not datum2) (exn:xml? datum2)) (values datum2 ----tokens)]
                            [else (values (append datum2 datum1 data) ----tokens)]))]))]))
-
-(define rnc:compose : (All (a b) (-> (XML:Filter a) (-> a b) (XML:Filter b)))
-  (lambda [rnc-filter xml->racket]
-    (λ [[token : XML-Syntax-Any]]
-      (define datum : (XML-Option a) (rnc-filter token))
-      (if (exn:xml? datum) datum (and datum (xml->racket datum))))))
 
 (define rnc:if : (All (a) (case-> [(Listof+ (Pairof (XML:Filter Any) (XML-Parser a))) (Option (XML-Parser a)) -> (XML-Parser a)]
                                   [(XML:Filter Any) (XML-Parser a) (Option (XML-Parser a)) -> (XML-Parser a)]))
@@ -334,27 +338,35 @@
                                 [else (values n n)]))])])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-rnc-atomic-filter <rnc-assign> #:-> Char #:with [[token : xml:eq?]] #:on-error make-exn:xml:missing-assign #\=)
-(define #:forall (a) (<:rnc-assign:>) : (XML-Parser a) ((inst RNC<_> a) (RNC:<^> (<rnc-assign>))))
+(define-rnc-atomic-filter <rnc-assign> #:-> Char #:with [[token : xml:eq?]] #:on-error make-exn:rnc:missing-delim #\=)
+(define #:forall (a) (<:=:>) : (XML-Parser a) ((inst RNC<_> a) (RNC:<^> (<rnc-assign>))))
+(define #:forall (a) (<:~:>) : (XML-Parser a) ((inst RNC<_> a) (RNC:<^> (<xml:delim> #\~))))
 
 (define-rnc-disjoint-filter <rnc-keyword> #:-> Keyword
   #:with [[options : (U (-> Keyword Boolean) (Listof Keyword) Keyword)]]
   (<xml:pereference> options))
 
-(define-rnc-disjoint-filter <rnc-identify> #:-> Symbol
+(define-rnc-disjoint-filter <rnc-id> #:-> Symbol
   (<xml:name>))
 
-(define-rnc-disjoint-filter <rnc-identify-or-keyword> #:-> Symbol
+(define-rnc-disjoint-filter <rnc-id-or-keyword> #:-> Symbol
   (<xml:name>)
   (RNC:<~> (<xml:pereference>) keyword->symbol))
-
-(define-rnc-disjoint-filter <rnc-ns:literal> #:-> (U String Symbol)
-  (<xml:string>)
-  (RNC:<=> (<xml:pereference> '#:inherit) 'inherit))
 
 (define-rnc-disjoint-filter <rnc-literal> #:-> String
   #:with [[options : (U (-> String Boolean) (Listof String) String)]]
   (<xml:string> options))
+
+(define (<:rnc-literal:>) : (XML-Parser (Listof String))
+  (RNC<~> (RNC<&> (RNC:<^> (<xml:string>))
+                  (RNC<*> (RNC<&> ((inst <:~:> (Listof String)))
+                                  (RNC:<^> (<xml:string>))) '*))
+          (λ [[segments : (Listof String)]] : String
+            (apply string-append segments))))
+
+(define (<:rnc-ns:literal:>) : (XML-Parser (Listof (U String Symbol)))
+  (RNC<+> (<:rnc-literal:>)
+          (RNC:<^> (RNC:<=> (<xml:pereference> '#:inherit) 'inherit))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define rnc-car/cdr : (All (a) (-> (Listof a) (Values (Option a) (Listof a))))

@@ -75,7 +75,7 @@
   (cons (CSS<+> #:any
                 (CSS:<^> (<css-system-font>) css-font->longhand-properties)
                 (CSS<&> #:any
-                        (CSS<*> (CSS<++> (CSS<_> (CSS:<^> (<css-keyword> 'normal) '|Ignoring, some properties use it as defaults|))
+                        (CSS<*> (CSS<++> (CSS:<^> (<css-keyword> 'normal) '|Ignoring, some properties use it as defaults|)
                                          (CSS:<^> (<font-weight>) 'font-weight)
                                          (CSS:<^> (<css-keyword> css-font-style-option?) 'font-style)
                                          (CSS:<^> (<css-keyword> css-font-variant-options/21) 'font-variant)

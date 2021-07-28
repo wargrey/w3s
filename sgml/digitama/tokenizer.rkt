@@ -46,7 +46,7 @@
                     [(or (eq? datum #\() (eq? datum #\[) (eq? datum #\{)) (xml-make-token source prev-env end xml:open datum)]
                     [(or (eq? datum #\)) (eq? datum #\]) (eq? datum #\})) (xml-make-token source prev-env end xml:close datum)]
                     [(eq? datum #\%) (xml-make-token source prev-env end xml:pe datum)]
-                    [else (xml-make-token source prev-env end xml:delim datum) #| `>` for non-empty start tag |#])]
+                    [else (xml-make-token source prev-env end xml:delim datum)])]
              [(symbol? datum)
               (cond [(symbol-interned? datum) (xml-make-token source prev-env end xml:name datum)]
                     [(eq? datum />) (xml-make-token source prev-env end xml:etag datum)] ; close delimiter for empty Elements

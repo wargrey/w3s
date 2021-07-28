@@ -39,17 +39,17 @@
                                      (λ [[t : XML-Syntax-Any]]
                                        (and (id? t)
                                             (or (let ([d : Type (id-datum t)]) (and (range? d) d))
-                                                (make-exn:xml:range t))))]
+                                                (make-exn:rnc:range t))))]
                                     [(list? range?)
                                      (λ [[t : XML-Syntax-Any]]
                                        (and (id? t)
                                             (let ([d : Type (id-datum t)])
                                               (cond [(member d range? type=?) d]
-                                                    [else (make-exn:xml:range t)]))))]
+                                                    [else (make-exn:rnc:range t)]))))]
                                     [else (λ [[t : XML-Syntax-Any]]
                                             (and (id? t)
                                                  (let ([d : Type (id-datum t)])
-                                                   (if (type=? d range?) d (make-exn:xml:range t)))))])]))
+                                                   (if (type=? d range?) d (make-exn:rnc:range t)))))])]))
 
                 (define id=:=? : (-> Any Type (Option Type) : #:+ XML:ID) #| for performance |#
                   (lambda [t v]
@@ -172,53 +172,60 @@
 (define-syntax-error exn:xml #:as XML-Syntax-Error #:for XML-Token
   ;;; https://www.w3.org/TR/xml/#sec-terminology
   #:with [xml-make-syntax-error xml-log-syntax-error]
-  [exn:xml:error          #:-> exn:xml]
-  [exn:xml:fatal          #:-> exn:xml]
-  [exn:xml:defense        #:-> exn:xml]
-  [exn:xml:eof            #:-> exn:xml]
-  [exn:xml:reserved       #:-> exn:xml]
-  [exn:xml:multiple       #:-> exn:xml]
+  [exn:xml:error         #:-> exn:xml]
+  [exn:xml:fatal         #:-> exn:xml]
+  [exn:xml:defense       #:-> exn:xml]
+  [exn:xml:eof           #:-> exn:xml]
+  [exn:xml:reserved      #:-> exn:xml]
+  [exn:xml:multiple      #:-> exn:xml]
 
-  [exn:xml:bomb           #:-> exn:xml:defense]
-  [exn:xml:timeout        #:-> exn:xml:defense]
+  [exn:xml:bomb          #:-> exn:xml:defense]
+  [exn:xml:timeout       #:-> exn:xml:defense]
   
-  [exn:xml:vc             #:-> exn:xml:error]
-  [exn:xml:token          #:-> exn:xml:vc]
-  [exn:xml:duplicate      #:-> exn:xml:vc]
-  [exn:xml:type           #:-> exn:xml:vc]
-  [exn:xml:nest           #:-> exn:xml:vc]
-  [exn:xml:enum           #:-> exn:xml:vc]
-  [exn:xml:id             #:-> exn:xml:vc]
-  [exn:xml:fixed          #:-> exn:xml:vc]
-  [exn:xml:nonempty       #:-> exn:xml:vc]
-  [exn:xml:adoptee        #:-> exn:xml:vc]
-  [exn:xml:missing-attr   #:-> exn:xml:vc]
-  [exn:xml:parsed         #:-> exn:xml:vc]
-  [exn:xml:children       #:-> exn:xml:vc]
+  [exn:xml:vc            #:-> exn:xml:error]
+  [exn:xml:token         #:-> exn:xml:vc]
+  [exn:xml:duplicate     #:-> exn:xml:vc]
+  [exn:xml:type          #:-> exn:xml:vc]
+  [exn:xml:nest          #:-> exn:xml:vc]
+  [exn:xml:enum          #:-> exn:xml:vc]
+  [exn:xml:id            #:-> exn:xml:vc]
+  [exn:xml:fixed         #:-> exn:xml:vc]
+  [exn:xml:nonempty      #:-> exn:xml:vc]
+  [exn:xml:adoptee       #:-> exn:xml:vc]
+  [exn:xml:missing-attr  #:-> exn:xml:vc]
+  [exn:xml:parsed        #:-> exn:xml:vc]
+  [exn:xml:children      #:-> exn:xml:vc]
   
-  [exn:xml:wfc            #:-> exn:xml:fatal]
-  [exn:xml:multi-root     #:-> exn:xml:wfc]
-  [exn:xml:unique         #:-> exn:xml:wfc]
-  [exn:xml:external       #:-> exn:xml:wfc]
-  [exn:xml:char           #:-> exn:xml:wfc]
-  [exn:xml:loop           #:-> exn:xml:wfc]
-  [exn:xml:misplaced      #:-> exn:xml:wfc]
-  [exn:xml:undeclared     #:-> exn:xml:wfc]
-  [exn:xml:mismatch       #:-> exn:xml:wfc]
-  [exn:xml:malformed      #:-> exn:xml:wfc]
+  [exn:xml:wfc           #:-> exn:xml:fatal]
+  [exn:xml:multi-root    #:-> exn:xml:wfc]
+  [exn:xml:unique        #:-> exn:xml:wfc]
+  [exn:xml:external      #:-> exn:xml:wfc]
+  [exn:xml:char          #:-> exn:xml:wfc]
+  [exn:xml:loop          #:-> exn:xml:wfc]
+  [exn:xml:misplaced     #:-> exn:xml:wfc]
+  [exn:xml:undeclared    #:-> exn:xml:wfc]
+  [exn:xml:mismatch      #:-> exn:xml:wfc]
+  [exn:xml:malformed     #:-> exn:xml:wfc]
 
-  [exn:xml:foreign        #:-> exn:xml:external]
+  [exn:xml:foreign       #:-> exn:xml:external]
   
-  [exn:xml:missing-name   #:-> exn:xml:malformed]
-  [exn:xml:missing-value  #:-> exn:xml:malformed]
-  [exn:xml:unrecognized   #:-> exn:xml:malformed]
-  [exn:xml:empty          #:-> exn:xml:malformed]
+  [exn:xml:missing-name  #:-> exn:xml:malformed]
+  [exn:xml:missing-value #:-> exn:xml:malformed]
+  [exn:xml:unrecognized  #:-> exn:xml:malformed]
+  [exn:xml:empty         #:-> exn:xml:malformed]
   
-  [exn:xml:space          #:-> exn:xml:char]
+  [exn:xml:space         #:-> exn:xml:char]
 
   ; for RelaxNG
-  [exn:xml:missing-assign #:-> exn:xml:malformed]
-  [exn:xml:range          #:-> exn:xml:unrecognized])
+  [exn:rnc:missing-delim #:-> exn:xml:malformed]
+  [exn:rnc:range         #:-> exn:xml:unrecognized]
+
+  [exn:rnc:vc            #:-> exn:xml:error]
+  [exn:rnc:prefix        #:-> exn:rnc:vc]
+  [exn:rnc:uri           #:-> exn:rnc:vc]
+  [exn:rnc:single        #:-> exn:rnc:vc]
+  [exn:rnc:unqualified   #:-> exn:rnc:vc]
+  [exn:rnc:annotation    #:-> exn:rnc:vc])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-token->syntax : (-> XML-Token Syntax)

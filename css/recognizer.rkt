@@ -134,12 +134,6 @@
     [(_ css-parser) #'css-parser]
     [(_ css-parser css-parser2) (syntax/loc stx (css-disjoin css-parser css-parser2))]
     [(_ css-parser css-parser2 css-parsers ...) (syntax/loc stx (css-disjoin css-parser css-parser2 (CSS<+> css-parsers ...)))]))
-  
-(define-syntax (CSS:<~> stx)
-  (syntax-case stx []
-    [(_ css-filter f) (syntax/loc stx (css:compose css-filter f))]
-    [(_ css-filter f g) (syntax/loc stx (css:compose (css:compose css-filter g) f))]
-    [(_ css-filter f g h ...) (syntax/loc stx (css:compose css-filter (compose f g h ...)))]))
 
 (define-syntax (CSS<&> stx)
   (syntax-case stx []
@@ -188,6 +182,22 @@
     (λ [[data : CSS-Shorthand-Datum] [tokens : (Listof CSS-Token)]]
       (cond [(pair? tokens) (let ([css-parser (CSS:<^> css:filter tag)]) (css-parser data tokens))]
             [else (values (css-shorthand-set data tag (fdatum data)) null)]))))
+
+(define CSS:<~> : (All (a b) (case-> [(CSS:Filter a) (-> a b) -> (CSS:Filter b)]
+                                     [(CSS:Filter a) (-> a b) (-> b CSS-Syntax-Any (CSS-Option True)) -> (CSS:Filter b)]))
+  (case-lambda
+    [(css-filter css->racket)
+     (λ [[token : CSS-Syntax-Any]]
+       (define datum : (CSS-Option a) (css-filter token))
+       (if (exn:css? datum) datum (and datum (css->racket datum))))]
+    [(css-filter css->racket datum-filter)
+     (λ [[token : CSS-Syntax-Any]]
+       (define datum : (CSS-Option a) (css-filter token))
+       (cond [(or (not datum) (exn:css? datum)) datum]
+             [else (let* ([rdatum (css->racket datum)]
+                          [okay? (datum-filter rdatum token)])
+                     (cond [(or (not okay?) (exn:css? okay?)) okay?]
+                           [else rdatum]))]))]))
 
 (define CSS:<^> : (All (a) (case-> [(U (CSS:Filter a) (Listof+ (CSS:Filter a))) -> (CSS-Parser (Listof a))]
                                    [(CSS:Filter a) (->* (a) (CSS-Shorthand-Datum) CSS-Shorthand-Datum) -> CSS-Shorthand-Parser]
@@ -385,14 +395,22 @@
        (cond [(pair? tokens) (let ([css-parser (CSS<^> css:filter tag)]) (css-parser data tokens))]
              [else (values (css-shorthand-set data tag (fdatum data)) null)]))]))
 
-(define CSS<~> : (All (a b) (-> (CSS-Parser (Listof a)) (-> (Listof a) (CSS-Option b)) (CSS-Parser (Listof b))))
-  (lambda [css-parser css->racket]
+(define CSS<~> : (All (a b) (case-> [(CSS-Parser (Listof a)) (-> (Listof a) b) -> (CSS-Parser (Listof b))]
+                                    [(CSS-Parser (Listof a)) (-> (Listof a) b) (-> (Listof b) b (Listof CSS-Token) (CSS-Option True)) -> (CSS-Parser (Listof b))]))
+  (case-lambda
+    [(css-parser css->racket)
      (λ [[data : (Listof b)] [tokens : (Listof CSS-Token)]]
        (define-values (datum --tokens) (css-parser null tokens))
        (cond [(or (exn:css? datum) (false? datum)) (values datum --tokens)]
-             [else (let ([rdatum (css->racket (reverse datum))])
-                     (cond [(or (exn:css? rdatum) (false? rdatum)) (values rdatum tokens)]
-                           [else (values (cons rdatum data) --tokens)]))]))))
+             [else (values (cons (css->racket (reverse datum)) data) --tokens)]))]
+    [(css-parser css->racket data-filter)
+     (λ [[data : (Listof b)] [tokens : (Listof CSS-Token)]]
+       (define-values (datum --tokens) (css-parser null tokens))
+       (cond [(or (exn:css? datum) (false? datum)) (values datum --tokens)]
+             [else (let* ([rdatum (css->racket (reverse datum))]
+                          [okay? (data-filter data rdatum (drop-right tokens (length --tokens)))])
+                     (cond [(or (not okay?) (exn:css? okay?)) (values okay? tokens)]
+                           [else (values (cons rdatum data) --tokens)]))]))]))
 
 (define CSS<_> : (All (a) (-> (CSS-Parser (Listof Any)) (CSS-Parser a)))
   (lambda [css-parser]
@@ -556,26 +574,6 @@
                            [else (let-values ([(datum --tokens) (atom-parser3 null tokens)])
                                    (cond [(or (false? datum) (exn:css? datum)) (values datum --tokens)]
                                          [else (values (append datum data) --tokens)]))]))]))]))
-  
-(define css:juxtapose : (All (a b c) (case-> [(CSS:Filter a) (CSS:Filter b) -> (CSS:Filter (List b a))]
-                                             [(CSS:Filter a) (CSS:Filter b) (CSS:Filter c) -> (CSS:Filter (List c b a))]))
-  (case-lambda
-    [(css-filter1 css-filter2)
-     (λ [[token : CSS-Syntax-Any]]
-       (define datum : (CSS-Option a) (css-filter1 token))
-       (cond [(or (false? datum) (exn:css? datum)) datum]
-             [else (let ([datum2 (css-filter2 token)])
-                     (cond [(or (false? datum2) (exn:css? datum2)) datum2]
-                           [else (list datum2 datum)]))]))]
-    [(css-filter1 css-filter2 css-filter3)
-     (λ [[token : CSS-Syntax-Any]]
-       (define datum : (CSS-Option a) (css-filter1 token))
-       (cond [(or (false? datum) (exn:css? datum)) datum]
-             [else (let ([datum2 (css-filter2 token)])
-                     (cond [(or (false? datum2) (exn:css? datum2)) datum2]
-                           [else (let ([datum3 (css-filter3 token)])
-                                   (cond [(or (false? datum3) (exn:css? datum3)) datum3]
-                                         [else (list datum3 datum2 datum)]))]))]))]))
 
 (define css-juxtapose : (All (a b c) (case-> [(Listof (CSS-Parser a)) -> (CSS-Parser a)]
                                              [(CSS-Parser (Listof a)) (CSS-Parser (Listof b)) -> (CSS-Parser (Listof (U a b)))]
@@ -607,12 +605,6 @@
                            [else (let-values ([(datum3 ------tokens) (atom-parser3 null ----tokens)])
                                    (cond [(or (false? datum3) (exn:css? datum3)) (values datum3 ------tokens)]
                                          [else (values (append datum3 datum2 datum1 data) ------tokens)]))]))]))]))
-
-(define css:compose : (All (a b) (-> (CSS:Filter a) (-> a b) (CSS:Filter b)))
-  (lambda [css-filter css->racket]
-    (λ [[token : CSS-Syntax-Any]]
-      (define datum : (CSS-Option a) (css-filter token))
-      (if (exn:css? datum) datum (and datum (css->racket datum))))))
 
 (define css:if : (All (a) (case-> [(Listof+ (Pairof (CSS:Filter Any) (CSS-Parser a))) (Option (CSS-Parser a)) -> (CSS-Parser a)]
                                   [(CSS:Filter Any) (CSS-Parser a) (Option (CSS-Parser a)) -> (CSS-Parser a)]))
