@@ -4,7 +4,9 @@
 
 (require sgml/digitama/digicore)
 (require sgml/digitama/tokenizer/port)
+
 (require sgml/digitama/relaxng/rnc)
+(require sgml/digitama/relaxng/grammar)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define open-tamer-input : (-> (U String (Listof Char)) Input-Port)
@@ -44,6 +46,12 @@
   (lambda [stream.rnc]
     (read-rnc-tokens* (open-tamer-input stream.rnc) '/dev/rncin)))
 
+(define tamer-env : (All (a) (-> (U String (Listof Char)) (XML-Parser (Listof a)) (Values (XML-Option (Listof a)) (Listof XML-Token))))
+  (lambda [stream.rnc <rng>]
+    (define-values (grammar rest) (<rng> null (tamer-tokens stream.rnc)))
+    (cond [(list? grammar) (values (reverse grammar) rest)]
+          [else (values grammar rest)])))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-behavior (it-check-io stream.rnc expected-values)
   (let-values ([(r:chars p:chars) (tamer-char-IO stream.rnc)])
@@ -65,9 +73,22 @@
       (cond [(procedure? v) (expect-satisfy (cast v (-> Any Boolean)) t)]
             [else (expect-equal (xml-token->datum t) v)]))))
 
+(define-behavior (it-check-parser stream.rnc logsrc <rng> expected-values)
+  #:it
+  ["should be parsed into ~s, when fed with ~s" expected-values stream.rnc]
+  #:do
+  (if (rng-env? expected-values)
+
+      (let-values ([(es rest) (tamer-env stream.rnc <rng>)])
+        (expect-satisfy list? es)
+        (expect-equal (car (assert es list?)) expected-values))
+
+      (expect-log-message logsrc expected-values
+                          (λ [] (tamer-env stream.rnc <rng>)))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (module+ main
-  (require sgml/digitama/tokenizer/delimiter)
+  (define logsrc : Log-Receiver (make-log-receiver (current-logger) 'warning 'exn:xml:syntax))
   
   (spec-begin RelaxNG #:do
               (describe "Compact Syntax" #:do
@@ -92,4 +113,11 @@
                                   (it-check-token "'\"'\"'\"" (list (string #\") "'"))
                                   (it-check-token "\\ \\\\" (list #\\ xml:whitespace? #\\ #\\))
                                   (it-check-token "element\\element" (list '#:element 'element))
-                                  (it-check-token "name|='value'" (list 'name /= "value"))))))
+                                  (it-check-token "name|='value'" (list 'name #\| "value"))
+                                  (it-check-token "nc:name" (list 'nc:name)))
+                        (describe "Environment" #:do
+                                  (it-check-parser "default namespace xml = 'uri'" logsrc (<:rnc-decl*:>) (rng-namespace 'xml "uri" #true))
+                                  (it-check-parser "default namespace = inherit" logsrc (<:rnc-decl*:>) (rng-namespace '|| 'inherit #true))
+                                  (it-check-parser "default namespace = inherit default namespace = inherit" logsrc (<:rnc-decl*:>) exn:xml:duplicate?)
+                                  (it-check-parser "default namespace dup = 'dup' namespace dup = 'dup'" logsrc (<:rnc-decl*:>) exn:xml:duplicate?)
+                                  (it-check-parser "namespace dup = 'is_okay' datatypes dup = 'yes'" logsrc (<:rnc-decl*:>) (vector))))))

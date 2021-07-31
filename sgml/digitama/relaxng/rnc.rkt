@@ -113,10 +113,11 @@
   ;;; https://relaxng.org/compact-20021121.html#syntax
   (lambda [/dev/rncin assign]
     (define-values (eq size) (peek-rnc-char /dev/rncin 0))
+
+    (when (eq? eq #\=)
+      (xml-drop-string /dev/rncin size))
     
-    (cond [(not (eq? eq #\=)) assign]
-          [(eq? assign #\|) (xml-drop-string /dev/rncin size) /=]
-          [else (xml-drop-string /dev/rncin size) &=])))
+    assign))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define rnc-consume-namechars : (-> Input-Port Char String)

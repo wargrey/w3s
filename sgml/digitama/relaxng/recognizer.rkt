@@ -357,6 +357,11 @@
   #:with [[options : (U (-> String Boolean) (Listof String) String)]]
   (<xml:string> options))
 
+(define-rnc-disjoint-filter <rnc-assign-method> #:-> Char
+  (<rnc-assign>)
+  (RNC:<=> (<xml:delim> #\&) #\&)
+  (RNC:<=> (<xml:delim> #\|) #\|))
+
 (define (<:rnc-literal:>) : (XML-Parser (Listof String))
   (RNC<~> (RNC<&> (RNC:<^> (<xml:string>))
                   (RNC<*> (RNC<&> ((inst <:~:> (Listof String)))

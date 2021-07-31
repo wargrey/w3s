@@ -20,9 +20,8 @@
     (define /dev/dtdin : Input-Port (rnc-open-input-port /dev/rawin #true port-name))
     (define source : (U Symbol String) (or port-name (sgml-port-name /dev/dtdin)))
     (define tokens : (Listof XML-Token) (read-rnc-tokens* /dev/dtdin source))
-    (define-values (rnc-decls pattern-tokens) ((<:rnc-declarations:>) null tokens))
+    (define-values (rnc-decls pattern-tokens) (rnc-grammar-parse (<:rnc-decl*:>) tokens))
 
-    (when (list? rnc-decls)
-      (for-each displayln (reverse rnc-decls)))
+    (for-each displayln rnc-decls)
     
     (rng-grammar source pattern-tokens)))
