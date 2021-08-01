@@ -67,24 +67,30 @@
     #:it
     ["should be parsed into ~s, when fed with ~s" expected-values stream.rnc]
     #:do
-    (expect-equal (length tokens) (length expected-values))
     (for ([t (in-list tokens)]
           [v (in-list expected-values)])
       (cond [(procedure? v) (expect-satisfy (cast v (-> Any Boolean)) t)]
-            [else (expect-equal (xml-token->datum t) v)]))))
+            [else (expect-equal (xml-token->datum t) v)]))
+    (expect-equal (length tokens) (length expected-values))))
 
 (define-behavior (it-check-parser stream.rnc logsrc <rng> expected-values)
-  #:it
-  ["should be parsed into ~s, when fed with ~s" expected-values stream.rnc]
-  #:do
-  (if (rng-env? expected-values)
+  (let ([rng-object? (or (rng-env? expected-values)
+                         (rng-pattern? expected-values)
+                         (rng-definition? expected-values))])
+    #:it
+    ["should be parsed into ~s, when fed with ~s" expected-values stream.rnc] #:when rng-object?
+    ["should report error due to `~a`, when fed with ~s" (object-name expected-values) stream.rnc] #:when (procedure? expected-values)
+    ["shouldn't report error, when fed with ~s" stream.rnc] #:when (and (vector? expected-values) (= (vector-length expected-values) 0))
+    ["should report error as in ~a, when fed with ~s" expected-values stream.rnc]
+    #:do
+    (if (not rng-object?)
 
-      (let-values ([(es rest) (tamer-env stream.rnc <rng>)])
-        (expect-satisfy list? es)
-        (expect-equal (car (assert es list?)) expected-values))
-
-      (expect-log-message logsrc expected-values
-                          (λ [] (tamer-env stream.rnc <rng>)))))
+        (expect-log-message logsrc expected-values
+                            (λ [] (tamer-env stream.rnc <rng>)))
+        
+        (let-values ([(es rest) (tamer-env stream.rnc <rng>)])
+          (expect-satisfy list? es)
+          (expect-equal (car (assert es list?)) expected-values)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (module+ main
@@ -114,10 +120,18 @@
                                   (it-check-token "\\ \\\\" (list #\\ xml:whitespace? #\\ #\\))
                                   (it-check-token "element\\element" (list '#:element 'element))
                                   (it-check-token "name|='value'" (list 'name #\| "value"))
+                                  (it-check-token "start&=grammar" (list '#:start #\& '#:grammar))
                                   (it-check-token "nc:name" (list 'nc:name)))
                         (describe "Environment" #:do
                                   (it-check-parser "default namespace xml = 'uri'" logsrc (<:rnc-decl*:>) (rng-namespace 'xml "uri" #true))
                                   (it-check-parser "default namespace = inherit" logsrc (<:rnc-decl*:>) (rng-namespace '|| 'inherit #true))
                                   (it-check-parser "default namespace = inherit default namespace = inherit" logsrc (<:rnc-decl*:>) exn:xml:duplicate?)
                                   (it-check-parser "default namespace dup = 'dup' namespace dup = 'dup'" logsrc (<:rnc-decl*:>) exn:xml:duplicate?)
-                                  (it-check-parser "namespace dup = 'is_okay' datatypes dup = 'yes'" logsrc (<:rnc-decl*:>) (vector))))))
+                                  (it-check-parser "namespace dup = 'is_okay' datatypes dup = 'yes'" logsrc (<:rnc-decl*:>) (vector))
+                                  (it-check-parser "datatypes cat = 'https://' ~ 'gyoudmon.org'" logsrc (<:rnc-decl*:>) (rng-datatype 'cat "https://gyoudmon.org")))
+                        (describe "Pattern" #:do
+                                  (it-check-parser "stupid-xml" logsrc (<:rnc-pattern:>) (rng-ref-pattern 'stupid-xml))
+                                  (it-check-parser "notAllowed" logsrc (<:rnc-pattern:>) (rng-simple-pattern '#:notAllowed))
+                                  (it-check-parser "parent p" logsrc (<:rnc-pattern:>) (rng-parent-pattern 'p))
+                                  (it-check-parser "start |= \\grammar" logsrc (<:rnc-start-define:>) (rng-definition '#:start #\| (rng-ref-pattern 'grammar)))
+                                  (it-check-parser "begin |= end" logsrc (<:rnc-start-define:>) (rng-definition 'begin #\| (rng-ref-pattern 'end)))))))

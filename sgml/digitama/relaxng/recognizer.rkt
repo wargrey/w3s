@@ -347,11 +347,15 @@
   (<xml:pereference> options))
 
 (define-rnc-disjoint-filter <rnc-id> #:-> Symbol
-  (<xml:name>))
+  (<xml:name>)
+  #;(RNC:<~> (<xml:pereference> null) keyword->symbol))
 
 (define-rnc-disjoint-filter <rnc-id-or-keyword> #:-> Symbol
   (<xml:name>)
   (RNC:<~> (<xml:pereference>) keyword->symbol))
+
+(define-rnc-disjoint-filter <rnc-inherit> #:-> Symbol
+  (RNC:<=> (<xml:pereference> '#:inherit) 'inherit))
 
 (define-rnc-disjoint-filter <rnc-literal> #:-> String
   #:with [[options : (U (-> String Boolean) (Listof String) String)]]
@@ -371,7 +375,7 @@
 
 (define (<:rnc-ns:literal:>) : (XML-Parser (Listof (U String Symbol)))
   (RNC<+> (<:rnc-literal:>)
-          (RNC:<^> (RNC:<=> (<xml:pereference> '#:inherit) 'inherit))))
+          (RNC:<^> (<rnc-inherit>))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define rnc-car/cdr : (All (a) (-> (Listof a) (Values (Option a) (Listof a))))
