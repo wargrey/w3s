@@ -7,13 +7,10 @@
 
 (require "../digicore.rkt")
 
-(require racket/string)
-
 (require css/digitama/syntax/misc)
 
 (require digimon/symbol)
 
-(require (for-syntax racket/syntax))
 (require (for-syntax syntax/parse))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -250,6 +247,11 @@
             (cond [(= n+1 most) (values (cons (reverse subdata) data) --tokens)]
                   [else (not-mult-req subdata --tokens (add1 n+1))]))))))
 
+(define RNC<λ> : (All (a) (-> (-> (XML-Parser (Listof a))) (XML-Parser (Listof a))))
+  (lambda [rnc-parser]
+    (λ [[data : (Listof a)] [tokens : (Listof XML-Token)]]
+      ((rnc-parser) data tokens))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define rnc:disjoin : (All (a b c) (case-> [(XML:Filter a) (XML:Filter b) -> (XML:Filter (U a b))]))
   (case-lambda
@@ -339,6 +341,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-rnc-atomic-filter <rnc-assign> #:-> Char #:with [[token : xml:eq?]] #:on-error make-exn:rnc:missing-delim #\=)
+
 (define #:forall (a) (<:=:>) : (XML-Parser a) ((inst RNC<_> a) (RNC:<^> (<rnc-assign>))))
 (define #:forall (a) (<:~:>) : (XML-Parser a) ((inst RNC<_> a) (RNC:<^> (<xml:delim> #\~))))
 
@@ -376,6 +379,12 @@
 (define (<:rnc-ns:literal:>) : (XML-Parser (Listof (U String Symbol)))
   (RNC<+> (<:rnc-literal:>)
           (RNC:<^> (<rnc-inherit>))))
+
+(define <:rnc-brace:> : (All (a) (-> (XML-Parser (Listof a)) (XML-Parser (Listof a))))
+  (lambda [body-parser]
+    (RNC<&> ((inst RNC:<_> (Listof a)) (<xml:delim> #\{))
+            body-parser
+            ((inst RNC:<_> (Listof a)) (<xml:delim> #\})))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define rnc-car/cdr : (All (a) (-> (Listof a) (Values (Option a) (Listof a))))
