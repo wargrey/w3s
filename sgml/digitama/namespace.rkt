@@ -17,9 +17,11 @@
     (define sqname : String (symbol->immutable-string qname))
     
     (cond [(not (string-contains? sqname ":")) (values qname qname)]
-          [else (let ([parts : (Listof String) (string-split sqname ":")])
-                  (cond [(or (null? parts) (null? (cdr parts)) (pair? (cddr parts))) (values qname qname)]
-                        [else (values (string->symbol (car parts)) (string->symbol (cadr parts)))]))])))
+          [else (let ([parts : (Listof Symbol) (map string->symbol (string-split sqname ":"))])
+                  (cond [(null? parts) #| input is just ': |# (values '|| '||)]
+                        [(null? (cdr parts)) (if (string-suffix? sqname ":") (values (car parts) '||) (values '|| (car parts)))]
+                        [(pair? (cddr parts)) (values qname qname)]
+                        [else (values (car parts) (cadr parts))]))])))
 
 (define xml-qname-xmlns? : (-> Symbol Boolean)
   (lambda [qname]

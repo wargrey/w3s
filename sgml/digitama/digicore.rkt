@@ -218,7 +218,6 @@
 
   ; for RelaxNG
   [exn:rnc:missing-delim #:-> exn:xml:malformed]
-  [exn:rnc:empty         #:-> exn:xml:malformed]
   [exn:rnc:range         #:-> exn:xml:unrecognized]
 
   [exn:rnc:vc            #:-> exn:xml:error]

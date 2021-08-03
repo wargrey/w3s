@@ -344,6 +344,8 @@
 
 (define #:forall (a) (<:=:>) : (XML-Parser a) ((inst RNC<_> a) (RNC:<^> (<rnc-assign>))))
 (define #:forall (a) (<:~:>) : (XML-Parser a) ((inst RNC<_> a) (RNC:<^> (<xml:delim> #\~))))
+(define #:forall (a) (<:-:>) : (XML-Parser a) ((inst RNC<_> a) (RNC:<^> (<xml:name> '-))))
+(define #:forall (a) (<:*:>) : (XML-Parser a) ((inst RNC<_> a) (RNC:<^> (<xml:delim> #\*))))
 
 (define-rnc-disjoint-filter <rnc-keyword> #:-> Keyword
   #:with [[options : (U (-> Keyword Boolean) (Listof Keyword) Keyword)]]
@@ -380,11 +382,15 @@
   (RNC<+> (<:rnc-literal:>)
           (RNC:<^> (<rnc-inherit>))))
 
-(define <:rnc-brace:> : (All (a) (-> (XML-Parser (Listof a)) (XML-Parser (Listof a))))
-  (lambda [body-parser]
-    (RNC<&> ((inst RNC:<_> (Listof a)) (<xml:delim> #\{))
-            body-parser
-            ((inst RNC:<_> (Listof a)) (<xml:delim> #\})))))
+(define <:rnc-brace:> : (All (a) (->* ((XML-Parser (Listof a))) ((U False (XML-Multiplier Index) '+ '? '*)) (XML-Parser (Listof a))))
+  (lambda [<:body:> [multiplier #false]]
+    (if (not multiplier)
+        (RNC<&> ((inst RNC:<_> (Listof a)) (<xml:delim> #\{))
+                <:body:>
+                ((inst RNC:<_> (Listof a)) (<xml:delim> #\})))
+        (RNC<&> ((inst RNC:<_> (Listof a)) (<xml:delim> #\{))
+                (RNC<*> <:body:> multiplier)
+                ((inst RNC:<_> (Listof a)) (<xml:delim> #\}))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define rnc-car/cdr : (All (a) (-> (Listof a) (Values (Option a) (Listof a))))

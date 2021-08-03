@@ -76,6 +76,7 @@
 (define-behavior (it-check-parser stream.rnc logsrc <rng> expected-values)
   (let ([rng-object? (or (rng-env? expected-values)
                          (rng-pattern? expected-values)
+                         (rng-name-class? expected-values)
                          (rng-grammar-content? expected-values))])
     #:it
     ["should be parsed into ~s, when fed with ~s" expected-values stream.rnc] #:when rng-object?
@@ -121,7 +122,7 @@
                                   (it-check-token "element\\element" (list '#:element 'element))
                                   (it-check-token "name|='value'" (list 'name #\| "value"))
                                   (it-check-token "start&=grammar" (list '#:start #\& '#:grammar))
-                                  (it-check-token "nc:name" (list 'nc:name)))
+                                  (it-check-token "ns:name" (list 'ns:name)))
                         (describe "Environment" #:do
                                   (it-check-parser "default namespace xml = 'uri'" logsrc (<:rnc-decl*:>) (rng-namespace 'xml "uri" #true))
                                   (it-check-parser "default namespace = inherit" logsrc (<:rnc-decl*:>) (rng-namespace '|| 'inherit #true))
@@ -129,6 +130,10 @@
                                   (it-check-parser "default namespace dup = 'dup' namespace dup = 'dup'" logsrc (<:rnc-decl*:>) exn:xml:duplicate?)
                                   (it-check-parser "namespace dup = 'is_okay' datatypes dup = 'yes'" logsrc (<:rnc-decl*:>) (vector))
                                   (it-check-parser "datatypes cat = 'https://' ~ 'gyoudmon.org'" logsrc (<:rnc-decl*:>) (rng-datatype 'cat "https://gyoudmon.org")))
+                        (describe "Name Class" #:do
+                                  (it-check-parser "ns:name" logsrc (<:rnc-name-class:>) (rng-name 'ns:name))
+                                  (it-check-parser "*" logsrc (<:rnc-name-class:>) (rng-any-name #false #false))
+                                  (it-check-parser "* - name" logsrc (<:rnc-name-class:>) (rng-any-name #false (rng-name 'name))))
                         (describe "Grammar Content" #:do
                                   (it-check-parser "start |= \\grammar" logsrc (<:rnc-grammar-content:>) (rng-start #\| (rng:ref 'grammar)))
                                   (it-check-parser "begin |= end" logsrc (<:rnc-grammar-content:>) (rng-define 'begin #\| (rng:ref 'end)))
@@ -142,5 +147,6 @@
                                   (it-check-parser "stupid-xml" logsrc (<:rnc-pattern:>) (rng:ref 'stupid-xml))
                                   (it-check-parser "notAllowed" logsrc (<:rnc-pattern:>) (rng:simple '#:notAllowed))
                                   (it-check-parser "parent mox" logsrc (<:rnc-pattern:>) (rng:parent 'mox))
-                                  (it-check-parser "grammar { start=br }" logsrc (<:rnc-pattern:>) (rng:grammar (list (rng-start #\= (rng:ref 'br)))))
-                                  ))))
+                                  (it-check-parser "grammar { target = mox }" logsrc (<:rnc-pattern:>) (rng:grammar (list (rng-define 'target #\= (rng:ref 'mox)))))
+                                  (it-check-parser "list { elem }" logsrc (<:rnc-pattern:>) (rng:element '#:list (list (rng:ref 'elem))))
+                                  #;(it-check-parser "stupid-xml+" logsrc (<:rnc-pattern:>) (rng:element '#:+ (list (rng:ref 'stupid-xml))))))))
