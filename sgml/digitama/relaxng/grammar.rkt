@@ -28,6 +28,7 @@
 
 (struct rng-name rng-name-class ([id : Symbol]) #:transparent #:type-name RNG-Name)
 (struct rng-any-name rng-name-class ([ns : (Option Symbol)] [except : (Option RNG-Name-Class)]) #:transparent #:type-name RNG-Any-Name)
+(struct rng-alt-name rng-name-class ([options : (Listof RNG-Name-Class)]) #:transparent #:type-name RNG-Alt-Name)
 
 (struct rng-start rng-grammar-content ([combine : (Option Char)] [pattern : RNG-Pattern]) #:transparent #:type-name RNG-Start)
 (struct rng-define rng-grammar-content ([name : Symbol] [combine : (Option Char)] [pattern : RNG-Pattern]) #:transparent #:type-name RNG-Define)
@@ -123,16 +124,17 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define <:rnc-name-class:> : (-> (XML-Parser (Listof RNG-Name-Class)))
   (let ()
-    (define (any-name-prefix [ns: : Symbol]) : Symbol
-      (define-values (prefix local) (xml-qname-split ns:))
-      prefix)
-    
     (define (rnc->any-name [data : (Listof (U Symbol RNG-Name-Class))]) : RNG-Name-Class
       (cond [(null? data) '#:livecode (rng-any-name #false #false)]
-            [(pair? (cdr data)) (rng-any-name (any-name-prefix (assert (car data) symbol?)) (assert (cadr data) rng-name-class?))]
+            [(pair? (cdr data)) (rng-any-name (xml-qname-prefix (assert (car data) symbol?)) (assert (cadr data) rng-name-class?))]
             [else (let ([datum (car data)])
-                    (cond [(symbol? datum) (rng-any-name (any-name-prefix datum) #false)]
+                    (cond [(symbol? datum) (rng-any-name (xml-qname-prefix datum) #false)]
                           [else (rng-any-name #false (assert datum rng-name-class?))]))]))
+
+    (define (rnc->name-choice [data : (Listof RNG-Name-Class)]) : RNG-Name-Class
+      (cond [(null? data) '#:deadcode (rng-name-class)]
+            [(null? (cdr data)) (car data)]
+            [else (rng-alt-name data)]))
 
     (define (any-name-filter [AN : (Listof RNG-Name-Class)] [an : RNG-Name-Class] [tokens : (Listof XML-Token)]) : (XML-Option True)
       (cond [(and (pair? tokens) (xml:name? (car tokens)))
@@ -143,10 +145,15 @@
 
     (define (<:except-name:>) : (XML-Parser (Listof RNG-Name-Class))
       (RNC<&> ((inst <:-:> (Listof RNG-Name-Class))) (RNC<λ> <:rnc-name-class:>)))
+
+    (define (<:simple-class-name:>) : (XML-Parser (Listof RNG-Name-Class))
+      (RNC<+> (RNC<~> (RNC<&> (RNC:<*> (<rnc-id>) '?) ((inst <:*:> (Listof Symbol))) (RNC<*> (<:except-name:>) '?)) rnc->any-name any-name-filter)
+              (RNC:<^> ((inst RNC:<~> Symbol RNG-Name-Class) (<rnc-id-or-keyword>) rng-name))))
     
     (lambda []
-      (RNC<+> (RNC<~> (RNC<&> (RNC:<*> (<rnc-id>) '?) ((inst <:*:> (Listof Symbol))) (RNC<*> (<:except-name:>) '?)) rnc->any-name any-name-filter)
-              (RNC:<^> ((inst RNC:<~> Symbol RNG-Name-Class) (<rnc-id-or-keyword>) rng-name))))))
+      (RNC<~> (RNC<&> (<:simple-class-name:>)
+                      (RNC<*> (RNC<&> ((inst <:/:> (Listof RNG-Name-Class))) (RNC<λ> <:simple-class-name:>)) '*))
+              rnc->name-choice))))
 
 (define <:rnc-grammar-content:> : (-> (XML-Parser (Listof RNG-Grammar-Content)))
   (let ([<div> (<rnc-keyword> '#:div)]

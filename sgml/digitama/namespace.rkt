@@ -23,6 +23,16 @@
                         [(pair? (cddr parts)) (values qname qname)]
                         [else (values (car parts) (cadr parts))]))])))
 
+(define xml-qname-prefix : (-> Symbol Symbol)
+  (lambda [qname]
+    (define-values (prefix _) (xml-qname-split qname))
+    prefix))
+
+(define xml-qname-local-part : (-> Symbol Symbol)
+  (lambda [qname]
+    (define-values (_ localpart) (xml-qname-split qname))
+    localpart))
+
 (define xml-qname-xmlns? : (-> Symbol Boolean)
   (lambda [qname]
     (or (eq? qname 'xmlns)

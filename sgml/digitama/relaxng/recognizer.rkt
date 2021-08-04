@@ -346,6 +346,7 @@
 (define #:forall (a) (<:~:>) : (XML-Parser a) ((inst RNC<_> a) (RNC:<^> (<xml:delim> #\~))))
 (define #:forall (a) (<:-:>) : (XML-Parser a) ((inst RNC<_> a) (RNC:<^> (<xml:name> '-))))
 (define #:forall (a) (<:*:>) : (XML-Parser a) ((inst RNC<_> a) (RNC:<^> (<xml:delim> #\*))))
+(define #:forall (a) (<:/:>) : (XML-Parser a) ((inst RNC<_> a) (RNC:<^> (<xml:delim> #\|))))
 
 (define-rnc-disjoint-filter <rnc-keyword> #:-> Keyword
   #:with [[options : (U (-> Keyword Boolean) (Listof Keyword) Keyword)]]
@@ -369,7 +370,7 @@
 (define-rnc-disjoint-filter <rnc-assign-method> #:-> Char
   (<rnc-assign>)
   (RNC:<=> (<xml:delim> #\&) #\&)
-  (RNC:<=> (<xml:delim> #\|) #\|))
+  (RNC:<=> (<xml:delim> #\λ #| not a typo |#) #\|))
 
 (define (<:rnc-literal:>) : (XML-Parser (Listof String))
   (RNC<~> (RNC<&> (RNC:<^> (<xml:string>))

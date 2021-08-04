@@ -113,11 +113,14 @@
   ;;; https://relaxng.org/compact-20021121.html#syntax
   (lambda [/dev/rncin assign]
     (define-values (eq size) (peek-rnc-char /dev/rncin 0))
+    (define compound? : Boolean (eq? eq #\=))
 
-    (when (eq? eq #\=)
+    (when (and compound?)
       (xml-drop-string /dev/rncin size))
-    
-    assign))
+
+    (cond [(not (eq? assign #\|)) assign]
+          [(not compound?) assign]
+          [else #\λ #| `#\|` itself is a valid char |#])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define rnc-consume-namechars : (-> Input-Port Char String)

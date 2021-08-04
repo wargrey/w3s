@@ -2,6 +2,8 @@
 
 (require digimon/spec)
 
+(require racket/port)
+
 (require sgml/digitama/digicore)
 (require sgml/digitama/tokenizer/port)
 
@@ -46,7 +48,7 @@
   (lambda [stream.rnc]
     (read-rnc-tokens* (open-tamer-input stream.rnc) '/dev/rncin)))
 
-(define tamer-env : (All (a) (-> (U String (Listof Char)) (XML-Parser (Listof a)) (Values (XML-Option (Listof a)) (Listof XML-Token))))
+(define tamer-parser : (All (a) (-> (U String (Listof Char)) (XML-Parser (Listof a)) (Values (XML-Option (Listof a)) (Listof XML-Token))))
   (lambda [stream.rnc <rng>]
     (define-values (grammar rest) (<rng> null (tamer-tokens stream.rnc)))
     (cond [(list? grammar) (values (reverse grammar) rest)]
@@ -87,15 +89,19 @@
     (if (not rng-object?)
 
         (expect-log-message logsrc expected-values
-                            (λ [] (tamer-env stream.rnc <rng>)))
+                            (λ [] (tamer-parser stream.rnc <rng>)))
         
-        (let-values ([(es rest) (tamer-env stream.rnc <rng>)])
+        (let-values ([(es rest) (tamer-parser stream.rnc <rng>)])
           (expect-satisfy list? es)
           (expect-equal (car (assert es list?)) expected-values)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (module+ main
-  (define logsrc : Log-Receiver (make-log-receiver (current-logger) 'warning 'exn:xml:syntax))
+  (require digimon/dtrace)
+  
+  (define logsrc : Log-Receiver (make-log-receiver /dev/dtrace 'warning 'exn:xml:syntax))
+
+  (current-logger /dev/dtrace)
   
   (spec-begin RelaxNG #:do
               (describe "Compact Syntax" #:do
@@ -120,7 +126,7 @@
                                   (it-check-token "'\"'\"'\"" (list (string #\") "'"))
                                   (it-check-token "\\ \\\\" (list #\\ xml:whitespace? #\\ #\\))
                                   (it-check-token "element\\element" (list '#:element 'element))
-                                  (it-check-token "name|='value'" (list 'name #\| "value"))
+                                  (it-check-token "name|='value'" (list 'name #\λ "value"))
                                   (it-check-token "start&=grammar" (list '#:start #\& '#:grammar))
                                   (it-check-token "ns:name" (list 'ns:name)))
                         (describe "Environment" #:do
@@ -131,9 +137,12 @@
                                   (it-check-parser "namespace dup = 'is_okay' datatypes dup = 'yes'" logsrc (<:rnc-decl*:>) (vector))
                                   (it-check-parser "datatypes cat = 'https://' ~ 'gyoudmon.org'" logsrc (<:rnc-decl*:>) (rng-datatype 'cat "https://gyoudmon.org")))
                         (describe "Name Class" #:do
-                                  (it-check-parser "ns:name" logsrc (<:rnc-name-class:>) (rng-name 'ns:name))
                                   (it-check-parser "*" logsrc (<:rnc-name-class:>) (rng-any-name #false #false))
-                                  (it-check-parser "* - name" logsrc (<:rnc-name-class:>) (rng-any-name #false (rng-name 'name))))
+                                  (it-check-parser "* - name" logsrc (<:rnc-name-class:>) (rng-any-name #false (rng-name 'name)))
+                                  (it-check-parser "mox:*" logsrc (<:rnc-name-class:>) (rng-any-name 'mox #false))
+                                  (it-check-parser "mox:* - ns:name" logsrc (<:rnc-name-class:>) (rng-any-name 'mox (rng-name 'ns:name)))
+                                  (it-check-parser "rng | xsd | dtd" logsrc (<:rnc-name-class:>) (rng-alt-name (list (rng-name 'rng) (rng-name 'xsd) (rng-name 'dtd))))
+                                  (it-check-parser "mox:rnc*" logsrc (<:rnc-name-class:>) exn:rnc:range?))
                         (describe "Grammar Content" #:do
                                   (it-check-parser "start |= \\grammar" logsrc (<:rnc-grammar-content:>) (rng-start #\| (rng:ref 'grammar)))
                                   (it-check-parser "begin |= end" logsrc (<:rnc-grammar-content:>) (rng-define 'begin #\| (rng:ref 'end)))
