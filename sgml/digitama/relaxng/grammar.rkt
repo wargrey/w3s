@@ -151,8 +151,9 @@
               (RNC:<^> ((inst RNC:<~> Symbol RNG-Name-Class) (<rnc-id-or-keyword>) rng-name))))
     
     (lambda []
-      (RNC<~> (RNC<&> (<:simple-class-name:>)
-                      (RNC<*> (RNC<&> ((inst <:/:> (Listof RNG-Name-Class))) (RNC<λ> <:simple-class-name:>)) '*))
+      (RNC<~> (RNC<+> (RNC<&> (<:simple-class-name:>)
+                              (RNC<*> (RNC<&> ((inst <:/:> (Listof RNG-Name-Class))) (RNC<λ> <:simple-class-name:>)) '*))
+                      (<:rnc-parenthesis:> (RNC<λ> <:rnc-name-class:>)))
               rnc->name-choice))))
 
 (define <:rnc-grammar-content:> : (-> (XML-Parser (Listof RNG-Grammar-Content)))

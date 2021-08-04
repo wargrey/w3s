@@ -383,15 +383,23 @@
   (RNC<+> (<:rnc-literal:>)
           (RNC:<^> (<rnc-inherit>))))
 
+(define <:rnc-bracket:> : (All (a) (->* ((XML-Parser (Listof a))) ((U False (XML-Multiplier Index) '+ '? '*) Char Char) (XML-Parser (Listof a))))
+  (lambda [<:body:> [multiplier #false] [open #\[] [close #\]]]
+    (if (not multiplier)
+        (RNC<&> ((inst RNC:<_> (Listof a)) (<xml:delim> open))
+                <:body:>
+                ((inst RNC:<_> (Listof a)) (<xml:delim> close)))
+        (RNC<&> ((inst RNC:<_> (Listof a)) (<xml:delim> open))
+                (RNC<*> <:body:> multiplier)
+                ((inst RNC:<_> (Listof a)) (<xml:delim> close))))))
+
+(define <:rnc-parenthesis:> : (All (a) (->* ((XML-Parser (Listof a))) ((U False (XML-Multiplier Index) '+ '? '*)) (XML-Parser (Listof a))))
+  (lambda [<:body:> [multiplier #false]]
+    (<:rnc-bracket:> <:body:> multiplier #\( #\))))
+
 (define <:rnc-brace:> : (All (a) (->* ((XML-Parser (Listof a))) ((U False (XML-Multiplier Index) '+ '? '*)) (XML-Parser (Listof a))))
   (lambda [<:body:> [multiplier #false]]
-    (if (not multiplier)
-        (RNC<&> ((inst RNC:<_> (Listof a)) (<xml:delim> #\{))
-                <:body:>
-                ((inst RNC:<_> (Listof a)) (<xml:delim> #\})))
-        (RNC<&> ((inst RNC:<_> (Listof a)) (<xml:delim> #\{))
-                (RNC<*> <:body:> multiplier)
-                ((inst RNC:<_> (Listof a)) (<xml:delim> #\}))))))
+    (<:rnc-bracket:> <:body:> multiplier #\{ #\})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define rnc-car/cdr : (All (a) (-> (Listof a) (Values (Option a) (Listof a))))
