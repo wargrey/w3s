@@ -6,6 +6,7 @@
 (provide (all-defined-out))
 
 (require "../digicore.rkt")
+(require "../namespace.rkt")
 
 (require css/digitama/syntax/misc)
 
@@ -353,11 +354,17 @@
   (<xml:pereference> options))
 
 (define-rnc-disjoint-filter <rnc-id> #:-> Symbol
-  (<xml:name>)
+  (<xml:name> xml-ncname?)
   #;(RNC:<~> (<xml:pereference> null) keyword->symbol))
 
+(define-rnc-disjoint-filter <rnc-cname> #:-> Symbol
+  (<xml:name> xml-cname?))
+
+(define-rnc-disjoint-filter <rnc-nsname> #:-> Symbol
+  (<xml:name> xml-nsname?))
+
 (define-rnc-disjoint-filter <rnc-id-or-keyword> #:-> Symbol
-  (<xml:name>)
+  (<xml:name> xml-ncname?)
   (RNC:<~> (<xml:pereference>) keyword->symbol))
 
 (define-rnc-disjoint-filter <rnc-inherit> #:-> Symbol

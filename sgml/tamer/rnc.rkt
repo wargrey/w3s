@@ -92,6 +92,7 @@
                             (λ [] (tamer-parser stream.rnc <rng>)))
         
         (let-values ([(es rest) (tamer-parser stream.rnc <rng>)])
+          (expect-satisfy null? rest)
           (expect-satisfy list? es)
           (expect-equal (car (assert es list?)) expected-values)))))
 
@@ -142,8 +143,7 @@
                                   (it-check-parser "mox:*" logsrc (<:rnc-name-class:>) (rng-any-name 'mox #false))
                                   (it-check-parser "mox:* - ns:name" logsrc (<:rnc-name-class:>) (rng-any-name 'mox (rng-name 'ns:name)))
                                   (it-check-parser "rng | xsd | dtd" logsrc (<:rnc-name-class:>) (rng-alt-name (list (rng-name 'rng) (rng-name 'xsd) (rng-name 'dtd))))
-                                  (it-check-parser "((rng | xsd))" logsrc (<:rnc-name-class:>) (rng-alt-name (list (rng-name 'rng) (rng-name 'xsd))))
-                                  (it-check-parser "mox:rnc*" logsrc (<:rnc-name-class:>) exn:rnc:range?))
+                                  (it-check-parser "((rng | xsd))" logsrc (<:rnc-name-class:>) (rng-alt-name (list (rng-name 'rng) (rng-name 'xsd)))))
                         (describe "Grammar Content" #:do
                                   (it-check-parser "start |= \\grammar" logsrc (<:rnc-grammar-content:>) (rng-start #\| (rng:ref 'grammar)))
                                   (it-check-parser "begin |= end" logsrc (<:rnc-grammar-content:>) (rng-define 'begin #\| (rng:ref 'end)))
@@ -157,6 +157,11 @@
                                   (it-check-parser "stupid-xml" logsrc (<:rnc-pattern:>) (rng:ref 'stupid-xml))
                                   (it-check-parser "notAllowed" logsrc (<:rnc-pattern:>) (rng:simple '#:notAllowed))
                                   (it-check-parser "parent mox" logsrc (<:rnc-pattern:>) (rng:parent 'mox))
+                                  (it-check-parser "'value only'" logsrc (<:rnc-pattern:>) (rng:value #false #false "value only"))
+                                  (it-check-parser "token 'a token type'" logsrc (<:rnc-pattern:>) (rng:value #false '#:token "a token type"))
+                                  (it-check-parser "mox:rnc 'a mox type'" logsrc (<:rnc-pattern:>) (rng:value 'mox 'rnc "a mox type"))
+                                  (it-check-parser "element * { target }" logsrc (<:rnc-pattern:>) (rng:element (rng-any-name #false #false) (rng:ref 'target)))
+                                  (it-check-parser "attribute * { name }" logsrc (<:rnc-pattern:>) (rng:attribute (rng-any-name #false #false) (rng:ref 'name)))
                                   (it-check-parser "grammar { target = mox }" logsrc (<:rnc-pattern:>) (rng:grammar (list (rng-define 'target #\= (rng:ref 'mox)))))
-                                  (it-check-parser "list { elem }" logsrc (<:rnc-pattern:>) (rng:element '#:list (list (rng:ref 'elem))))
-                                  #;(it-check-parser "stupid-xml+" logsrc (<:rnc-pattern:>) (rng:element '#:+ (list (rng:ref 'stupid-xml))))))))
+                                  (it-check-parser "list { elem }" logsrc (<:rnc-pattern:>) (rng:element '#:list (rng:ref 'elem)))
+                                  #;(it-check-parser "stupid-xml+" logsrc (<:rnc-pattern:>) (rng:element '#:+ (rng:ref 'stupid-xml)))))))

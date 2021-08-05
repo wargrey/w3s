@@ -3,11 +3,20 @@
 ;;; https://www.w3.org/TR/xml-names/#ns-qualnames
 
 (provide (all-defined-out))
+(provide (rename-out [xml-qname-has-namespace? xml-cname?]))
 
 (require racket/string)
 (require racket/symbol)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define xml-ncname? : (-> Symbol Boolean)
+  (lambda [qname]
+    (not (xml-qname-has-namespace? qname))))
+
+(define xml-nsname? : (-> Symbol Boolean)
+  (lambda [qname]
+    (string-suffix? (symbol->immutable-string qname) ":")))
+
 (define xml-qname-has-namespace? : (-> Symbol Boolean)
   (lambda [qname]
     (string-contains? (symbol->immutable-string qname) ":")))
