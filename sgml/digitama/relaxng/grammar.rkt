@@ -15,6 +15,7 @@
 (struct rng-pattern () #:transparent #:type-name RNG-Pattern)
 (struct rng-name-class () #:transparent #:type-name RNG-Name-Class)
 (struct rng-grammar-content () #:transparent #:type-name RNG-Grammar-Content)
+(struct rng-parameter ([name : Symbol] [value : String]) #:transparent #:type-name RNG-Parameter)
 
 (struct rng:simple rng-pattern ([element : Keyword]) #:transparent #:type-name RNG:Simple)
 (struct rng:ref rng-pattern ([element : Symbol]) #:transparent #:type-name RNG:Ref)
@@ -23,7 +24,7 @@
 (struct rng:element rng-pattern ([name : (U Keyword RNG-Name-Class)] [child : RNG-Pattern]) #:transparent #:type-name RNG:Element)
 (struct rng:attribute rng-pattern ([name : RNG-Name-Class] [child : RNG-Pattern]) #:transparent #:type-name RNG:Attribute)
 (struct rng:value rng-pattern ([ns : (Option Symbol)] [name : (U Symbol Keyword False)] [literal : String]) #:transparent #:type-name RNG:Value)
-(struct rng:data rng-pattern ([ns : (Option Symbol)] [name : (U Symbol Keyword False)] [params : (Listof (Pairof Symbol String))] [except : (Option RNG-Pattern)])
+(struct rng:data rng-pattern ([ns : (Option Symbol)] [name : (U Symbol Keyword)] [params : (Listof RNG-Parameter)] [except : (Option RNG-Pattern)])
   #:transparent #:type-name RNG:Data)
 
 (struct rng-name rng-name-class ([id : Symbol]) #:transparent #:type-name RNG-Name)
@@ -104,6 +105,11 @@
         [<grammar> (<rnc-keyword> '#:grammar)]
         [<element> (<rnc-keyword> '#:element)]
         [<attribute> (<rnc-keyword> '#:attribute)])
+    (define (rnc-qname-split [cname : Any]) : (Values (Option Symbol) (U Symbol Keyword))
+      (cond [(keyword? cname) (values #false cname)]
+            [else (let-values ([(ns name) (xml-qname-split (assert cname symbol?))])
+                    (values ns name))]))
+    
     (define (make-rnc->prefab-element [type : Keyword]) : (-> (Listof RNG-Pattern) RNG-Pattern)
       (λ [[data : (Listof RNG-Pattern)]]
         (cond [(null? data) '#:deadcode (rng-pattern)]
@@ -112,16 +118,19 @@
     (define (rnc->value [data : (Listof (U Symbol Keyword String))]) : RNG-Pattern
       (cond [(null? data) '#:deadcode (rng-pattern)]
             [(null? (cdr data)) (rng:value #false #false (assert (car data) string?))]
-            [(keyword? (car data)) (rng:value #false (car data) (assert (cadr data) string?))]
-            [else (let-values ([(ns name) (xml-qname-split (assert (car data) symbol?))])
+            [else (let-values ([(ns name) (rnc-qname-split (car data))])
                     (rng:value ns name (assert (cadr data) string?)))]))
 
-    (define (rnc->data [data : (Listof (U Symbol Keyword (Pairof Symbol String)))]) : RNG-Pattern
-      (cond [(null? data) '#:deadcode (rng-pattern)]
-            [(null? (cdr data)) (rng:value #false #false (assert (car data) string?))]
-            [(keyword? (car data)) (rng:value #false (car data) (assert (cadr data) string?))]
-            [else (let-values ([(ns name) (xml-qname-split (assert (car data) symbol?))])
-                    (rng:value ns name (assert (cadr data) string?)))]))
+    (define (rnc->param [data : (Listof (U Symbol String))]) : RNG-Parameter
+      (cond [(or (null? data) (null? (cdr data))) (rng-parameter 'dead "code")]
+            [else (rng-parameter (assert (car data) symbol?) (assert (cadr data) string?))]))
+
+    (define (rnc->data [data : (Listof (U Symbol Keyword RNG-Parameter RNG-Pattern))]) : RNG-Pattern
+      (define-values (params rest) (partition rng-parameter? data))
+      (cond [(null? rest) '#:deadcode (rng-pattern)]
+            [else (let-values ([(ns name) (rnc-qname-split (car rest))])
+                    (cond [(null? (cdr rest)) (rng:data ns name params #false)]
+                          [else (rng:data ns name params (assert (cadr rest) rng-pattern?))]))]))
 
     (define (rnc->element [data : (Listof (U RNG-Name-Class RNG-Pattern))]) : RNG-Pattern
       (cond [(or (null? data) (null? (cdr data))) '#:deadcode (rng-pattern)]
@@ -136,17 +145,21 @@
             [(null? (cdr data)) (assert (car data) rng-pattern?)]
             [else (rng:element (case (cadr data) [(#\+) '#:+] [(#\?) '#:?] [else '#:*]) (assert (car data) rng-pattern?))]))
 
-    (define (<:rng-datatype-name:>) : (XML-Parser (Listof (U Symbol Keyword)))
-      (RNC:<*> (RNC:<+> (<rnc-cname>) (<rnc-keyword> '(#:string #:token))) '?))
+    (define (<datatype:name>) : (XML:Filter (U Symbol Keyword))
+      (RNC:<+> (<rnc-cname>) (<rnc-keyword> '(#:string #:token))))
 
     (define (<:except-pattern:>) : (XML-Parser (Listof RNG-Pattern))
       (RNC<&> ((inst <:-:> (Listof RNG-Pattern))) (RNC<λ> <:rnc-pattern:>)))
+
+    (define (<:param:>) : (XML-Parser (Listof RNG-Parameter))
+      (RNC<~> (RNC<&> (RNC:<^> (<rnc-id-or-keyword>)) ((inst <:=:> (Listof (U String Symbol)))) (<:rnc-literal:>))
+              rnc->param))
     
     (lambda []
       (RNC<+> ((inst RNC:<^> RNG-Pattern) (RNC:<~> (<rnc-keyword> '(#:empty #:text #:notAllowed)) rng:simple))
               ((inst RNC:<^> RNG-Pattern) (RNC:<~> (<rnc-id>) rng:ref))
-              (RNC<~> (RNC<&> (<:rng-datatype-name:>) (<:rnc-literal:>)) rnc->value)
-              
+              (RNC<~> (RNC<&> (RNC:<*> (<datatype:name>) '?) (<:rnc-literal:>)) rnc->value)
+              (RNC<~> (RNC<&> (RNC:<^> (<datatype:name>)) (RNC<*> (<:rnc-brace:> (<:param:>) '+) '?) (RNC<*> (<:except-pattern:>) '?)) rnc->data)
               
               (RNC<?> [<element>   (RNC<~> (RNC<&> (<:rnc-name-class:>) (<:rnc-brace:> (RNC<λ> <:rnc-pattern:>))) rnc->element)]
                       [<attribute> (RNC<~> (RNC<&> (<:rnc-name-class:>) (<:rnc-brace:> (RNC<λ> <:rnc-pattern:>))) rnc->attribute)]
