@@ -15,7 +15,6 @@
 
 (require "../tokenizer/port.rkt")
 (require "../tokenizer/errno.rkt")
-(require "../tokenizer/delimiter.rkt")
 (require "../tokenizer/characters.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

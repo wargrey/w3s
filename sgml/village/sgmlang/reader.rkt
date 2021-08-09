@@ -45,13 +45,19 @@
          (w3s-doc-process #,sgml-normalize #,lang*.sgml MB* cpu* real* gc* #,lang.sgml)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define sgml-path->string
+  (lambda [src]
+    (cond [(symbol? src) src]
+          [(path? src) (path->string src)]
+          [else (format "~a" src)])))
+
 (define sgml-lang-names
   (lambda [src px.sgml .ext]
     (define lang.sgml
       (cond [(path? src)
              (let* ([src.sgml (path-replace-extension (file-name-from-path src) #"")]
                     [path.sgml (if (regexp-match? px.sgml src.sgml) src.sgml (path-replace-extension src.sgml .ext))])
-               (string->symbol (path->string path.sgml)))]
+               (string->symbol (sgml-path->string path.sgml)))]
             [else '|this should not happen| (string->symbol (format "lang~a" .ext))]))
 
     (define lang*.sgml
@@ -69,7 +75,7 @@
 
 (define xml-read-syntax
   (lambda [[src #false] [/dev/xmlin (current-input-port)]]
-    (parameterize ([xml-alternative-document-source (path->string src)])
+    (parameterize ([xml-alternative-document-source (sgml-path->string src)])
       (sgml-doc-read-syntax 'read-xml-document* 'sgml/xml
                             #px"\\.t?xml$" ".xml" src /dev/xmlin
                             'xml-document*-normalize))))
@@ -80,7 +86,7 @@
 
 (define dtd-read-syntax
   (lambda [[src #false] [/dev/dtdin (current-input-port)]]
-    (parameterize ([xml-alternative-document-source (path->string src)])
+    (parameterize ([xml-alternative-document-source (sgml-path->string src)])
       (sgml-doc-read-syntax 'read-xml-type-definition 'sgml/dtd
                             #px"\\.t?dtd$" ".dtd" src /dev/dtdin
                             'xml-dtd-expand))))
@@ -91,7 +97,7 @@
 
 (define rnc-read-syntax
   (lambda [[src #false] [/dev/rncin (current-input-port)]]
-    (parameterize ([xml-alternative-document-source (path->string src)])
+    (parameterize ([xml-alternative-document-source (sgml-path->string src)])
       (sgml-doc-read-syntax 'read-rnc-grammar 'sgml/rnc
                             #px"\\.t?rnc$" ".rnc" src /dev/rncin))))
 

@@ -80,7 +80,8 @@
                          (rng-pattern? expected-values)
                          (rng-name-class? expected-values)
                          (rng-grammar-content? expected-values)
-                         (rng-annotation? expected-values))])
+                         (rng-annotation? expected-values)
+                         (rng-annotation-element? expected-values))])
     #:it
     ["should be parsed into ~s, when fed with ~s" expected-values stream.rnc] #:when rng-object?
     ["should report error due to `~a`, when fed with ~s" (object-name expected-values) stream.rnc] #:when (procedure? expected-values)
@@ -134,12 +135,12 @@
                                   (it-check-token "ns:name" (list 'ns:name)))
 
                         (describe "Environment" #:do
-                                  (it-check-parser "default namespace xml = 'uri'" logsrc (<:rnc-decl*:>) (rng-namespace 'xml "uri" #true))
-                                  (it-check-parser "default namespace = inherit" logsrc (<:rnc-decl*:>) (rng-namespace '|| 'inherit #true))
-                                  (it-check-parser "default namespace = inherit default namespace = inherit" logsrc (<:rnc-decl*:>) exn:xml:duplicate?)
-                                  (it-check-parser "default namespace dup = 'dup' namespace dup = 'dup'" logsrc (<:rnc-decl*:>) exn:xml:duplicate?)
-                                  (it-check-parser "namespace dup = 'is_okay' datatypes dup = 'yes'" logsrc (<:rnc-decl*:>) (vector))
-                                  (it-check-parser "datatypes cat = 'https://' ~ 'gyoudmon.org'" logsrc (<:rnc-decl*:>) (rng-datatype 'cat "https://gyoudmon.org")))
+                                  (it-check-parser "default namespace xml = 'uri'" logsrc (<:rnc-preamble:>) (rng-namespace 'xml "uri" #true))
+                                  (it-check-parser "default namespace = inherit" logsrc (<:rnc-preamble:>) (rng-namespace '|| 'inherit #true))
+                                  (it-check-parser "default namespace = inherit default namespace = inherit" logsrc (<:rnc-preamble:>) exn:xml:duplicate?)
+                                  (it-check-parser "default namespace dup = 'dup' namespace dup = 'dup'" logsrc (<:rnc-preamble:>) exn:xml:duplicate?)
+                                  (it-check-parser "namespace dup = 'is_okay' datatypes dup = 'yes'" logsrc (<:rnc-preamble:>) (vector))
+                                  (it-check-parser "datatypes cat = 'https://' ~ 'gyoudmon.org'" logsrc (<:rnc-preamble:>) (rng-datatype 'cat "https://gyoudmon.org")))
 
                         (describe "Name Class" #:do
                                   (it-check-parser "*" logsrc (<:rnc-name-class:>) (rng-any-name #false #false))
@@ -173,7 +174,12 @@
                                   (it-check-parser "parent mox" logsrc (<:rnc-pattern:>) (rng:parent 'mox))
                                   (it-check-parser "'value only'" logsrc (<:rnc-pattern:>) (rng:value #false #false "value only"))
                                   (it-check-parser "element * { target }" logsrc (<:rnc-pattern:>) (rng:element (rng-any-name #false #false) (rng:ref 'target)))
-                                  (it-check-parser "attribute * { name }" logsrc (<:rnc-pattern:>) (rng:attribute (rng-any-name #false #false) (rng:ref 'name)))
+                                  (it-check-parser "element rng:text { empty }" logsrc (<:rnc-pattern:>) (rng:element (rng-name 'rng:text) (rng:simple '#:empty)))
+                                  (it-check-parser "attribute bar { string }" logsrc (<:rnc-pattern:>)
+                                                   (rng:attribute (rng-name 'bar) (rng:data #false '#:string null #false)))
+                                  (it-check-parser "attribute * - local:* { string }*" logsrc (<:rnc-pattern:>)
+                                                   (rng:element '#:zeroOrMore (rng:attribute (rng-any-name #false (rng-any-name 'local #false))
+                                                                                             (rng:data #false '#:string null #false))))
                                   (it-check-parser "grammar { target = mox }" logsrc (<:rnc-pattern:>) (rng:grammar (list (rng-define 'target #\= (rng:ref 'mox)))))
                                   (it-check-parser "list { elem }" logsrc (<:rnc-pattern:>) (rng:element '#:list (rng:ref 'elem)))
                                   (it-check-parser "external 'uri'" logsrc (<:rnc-pattern:>) (rng:external "uri" #false))
@@ -187,9 +193,15 @@
                         (describe "Particle Pattern" #:do
                                   (it-check-parser "c1 | c2 | c3" logsrc (<:rnc-pattern:>) (rng:particle '#:choice (list (rng:ref 'c1) (rng:ref 'c2) (rng:ref 'c3))))
                                   (it-check-parser "g1 , g2 , g3" logsrc (<:rnc-pattern:>) (rng:particle '#:group (list (rng:ref 'g1) (rng:ref 'g2) (rng:ref 'g3))))
-                                  (it-check-parser "i1 & i2" logsrc (<:rnc-pattern:>) (rng:particle '#:interleave (list (rng:ref 'i1) (rng:ref 'i2)))))
+                                  (it-check-parser "(nameQName | nameClass), (common & pattern+)" logsrc (<:rnc-pattern:>)
+                                                   (rng:particle '#:group (list (rng:particle '#:choice
+                                                                                              (list (rng:ref 'nameQName)
+                                                                                                    (rng:ref 'nameClass)))
+                                                                                (rng:particle '#:interleave
+                                                                                              (list (rng:ref 'common)
+                                                                                                    (rng:element '#:oneOrMore (rng:ref 'pattern))))))))
 
                         (describe "Annotation" #:do
-                                  (it-check-parser "[a:docs='##']" logsrc (<:rnc-annotation:>) (rng-annotation (list (rng-parameter 'a:docs "##"))))
-                                  (it-check-parser "[x:entity [ notation='svg']]" logsrc (<:rnc-annotation:>)
-                                                   (rng-annotation (list (rng-annotation-element 'x:entity (list (rng-parameter 'notation "svg")) null))))))))
+                                  (it-check-parser "[a:docs='##']" logsrc (<:rnc-initial-annotation:>) (rng-annotation (list (rng-parameter 'a:docs "##"))))
+                                  (it-check-parser ">> x:entity [ notation='svg']" logsrc (<:rnc-follow-annotation:>)
+                                                   (rng-annotation-element 'x:entity (list (rng-parameter 'notation "svg")) null))))))

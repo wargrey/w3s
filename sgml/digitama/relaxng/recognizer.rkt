@@ -341,52 +341,53 @@
                                 [else (values n n)]))])])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-rnc-atomic-filter <rnc-assign> #:-> Char #:with [[token : xml:eq?]] #:on-error make-exn:rnc:missing-delim #\=)
+(define-rnc-atomic-filter <rnc:assign> #:-> Char #:with [[token : xml:eq?]] #:on-error make-exn:rnc:missing-delim #\=)
 
-(define #:forall (a) (<:=:>) : (XML-Parser a) ((inst RNC<_> a) (RNC:<^> (<rnc-assign>))))
+(define #:forall (a) (<:=:>) : (XML-Parser a) ((inst RNC<_> a) (RNC:<^> (<rnc:assign>))))
 (define #:forall (a) (<:~:>) : (XML-Parser a) ((inst RNC<_> a) (RNC:<^> (<xml:delim> #\~))))
 (define #:forall (a) (<:-:>) : (XML-Parser a) ((inst RNC<_> a) (RNC:<^> (<xml:name> '-))))
 (define #:forall (a) (<:*:>) : (XML-Parser a) ((inst RNC<_> a) (RNC:<^> (<xml:delim> #\*))))
 (define #:forall (a) (<:/:>) : (XML-Parser a) ((inst RNC<_> a) (RNC:<^> (<xml:delim> #\|))))
+(define #:forall (a) (<:>:>) : (XML-Parser a) ((inst RNC<_> a) (RNC:<^> (<xml:delim> #\>))))
 
-(define-rnc-disjoint-filter <rnc-keyword> #:-> Keyword
+(define-rnc-disjoint-filter <rnc:keyword> #:-> Keyword
   #:with [[options : (U (-> Keyword Boolean) (Listof Keyword) Keyword)]]
   (<xml:pereference> options))
 
-(define-rnc-disjoint-filter <rnc-id> #:-> Symbol
+(define-rnc-disjoint-filter <rnc:id> #:-> Symbol
   (<xml:name> xml-ncname?)
   #;(RNC:<~> (<xml:pereference> null) keyword->symbol))
 
-(define-rnc-disjoint-filter <rnc-cname> #:-> Symbol
+(define-rnc-disjoint-filter <rnc:cname> #:-> Symbol
   (<xml:name> xml-cname?))
 
-(define-rnc-disjoint-filter <rnc-nsname> #:-> Symbol
+(define-rnc-disjoint-filter <rnc:nsname> #:-> Symbol
   (<xml:name> xml-nsname?))
 
-(define-rnc-disjoint-filter <rnc-id-or-keyword> #:-> Symbol
+(define-rnc-disjoint-filter <rnc:id-or-keyword> #:-> Symbol
   (<xml:name> xml-ncname?)
   (RNC:<~> (<xml:pereference>) keyword->symbol))
 
-(define-rnc-disjoint-filter <rnc-inherit> #:-> Symbol
+(define-rnc-disjoint-filter <rnc:inherit> #:-> Symbol
   (RNC:<=> (<xml:pereference> '#:inherit) 'inherit))
 
-(define-rnc-disjoint-filter <rnc-name> #:-> Symbol
+(define-rnc-disjoint-filter <rnc:name> #:-> Symbol
   (<xml:name>)
-  (<rnc-id-or-keyword>))
+  (<rnc:id-or-keyword>))
 
-(define-rnc-disjoint-filter <rnc-literal> #:-> String
+(define-rnc-disjoint-filter <rnc:literal> #:-> String
   #:with [[options : (U (-> String Boolean) (Listof String) String)]]
   (<xml:string> options))
 
-(define-rnc-disjoint-filter <rnc-assign-method> #:-> Char
-  (<rnc-assign>)
+(define-rnc-disjoint-filter <rnc:assign-method> #:-> Char
+  (<rnc:assign>)
   (RNC:<=> (<xml:delim> #\&) #\&)
   (RNC:<=> (<xml:delim> #\λ #| not a typo |#) #\|))
 
 (define (<:inherit:>) : (XML-Parser (Listof Symbol))
   (RNC<&> ((inst RNC<_> (Listof Symbol)) (RNC:<^> (<xml:pereference> '#:inherit)))
           ((inst <:=:> (Listof Symbol)))
-          (RNC:<^> (<rnc-id-or-keyword>))))
+          (RNC:<^> (<rnc:id-or-keyword>))))
 
 (define (<:rnc-literal:>) : (XML-Parser (Listof String))
   (RNC<~> (RNC<&> (RNC:<^> (<xml:string>))
@@ -397,7 +398,7 @@
 
 (define (<:rnc-ns:literal:>) : (XML-Parser (Listof (U String Symbol)))
   (RNC<+> (<:rnc-literal:>)
-          (RNC:<^> (<rnc-inherit>))))
+          (RNC:<^> (<rnc:inherit>))))
 
 (define <:rnc-name=value:> : (All (a) (-> (XML:Filter Symbol) (-> Symbol String a) (XML-Parser (Listof a))))
   (lambda [<name> rnc->racket]

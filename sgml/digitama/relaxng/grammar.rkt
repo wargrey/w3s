@@ -55,17 +55,22 @@
           [else (values (reverse grammar) rest)])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define <:rnc-decl*:> : (-> (XML-Parser (Listof RNG-ENV)))
+(define <:rnc-preamble:> : (-> (XML-Parser (Listof RNG-ENV)))
   (lambda []
     (RNC<*> (<:rnc-declaration:>) '*)))
+
+(define <:rnc-body:> : (-> (XML-Parser (Listof (U RNG-Pattern RNG-Grammar-Content))))
+  (lambda []
+    (RNC<+> (RNC<*> (<:rnc-grammar-content:>) '*)
+            (<:rnc-pattern:>))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define <:rnc-declaration:> : (-> (XML-Parser (Listof RNG-ENV)))
   (let (;[xml:uri "http://www.w3.org/XML/1998/namespace"]
         ;[xsd:uri "http://www.w3.org/2001/XMLSchema-datatypes"]
-        [<default> (<rnc-keyword> '#:default)]
-        [<namespace> (<rnc-keyword> '#:namespace)]
-        [<datatypes> (<rnc-keyword> '#:datatypes)])
+        [<default> (<rnc:keyword> '#:default)]
+        [<namespace> (<rnc:keyword> '#:namespace)]
+        [<datatypes> (<rnc:keyword> '#:datatypes)])
 
     (define (prefix-filter [NS : (Listof RNG-ENV)] [ns : RNG-ENV] [tokens : (Listof XML-Token)]) : (XML-Option True)
       (define-values (prefix uri default?)
@@ -99,16 +104,16 @@
             [else (rng-datatype (assert (car data) symbol?) (assert (cadr data) string?))]))
 
     (lambda []
-      (RNC<?> [<namespace> (RNC<~> (RNC<&> (RNC:<^> (<rnc-id-or-keyword>)) ((inst <:=:> (Listof (U String Symbol)))) (<:rnc-ns:literal:>))
+      (RNC<?> [<namespace> (RNC<~> (RNC<&> (RNC:<^> (<rnc:id-or-keyword>)) ((inst <:=:> (Listof (U String Symbol)))) (<:rnc-ns:literal:>))
                                    (make-xml->namespace #false) prefix-filter)]
-              [<datatypes> (RNC<~> (RNC<&> (RNC:<^> (<rnc-id-or-keyword>)) ((inst <:=:> (Listof (U String Symbol)))) (<:rnc-literal:>))
+              [<datatypes> (RNC<~> (RNC<&> (RNC:<^> (<rnc:id-or-keyword>)) ((inst <:=:> (Listof (U String Symbol)))) (<:rnc-literal:>))
                                    xml->datatypes prefix-filter)]
               [<default>   (RNC<~> (RNC<&> ((inst RNC:<_> (Listof (U String Symbol))) <namespace>)
-                                           (RNC:<*> (<rnc-id-or-keyword>) '?) ((inst <:=:> (Listof (U String Symbol)))) (<:rnc-ns:literal:>))
+                                           (RNC:<*> (<rnc:id-or-keyword>) '?) ((inst <:=:> (Listof (U String Symbol)))) (<:rnc-ns:literal:>))
                                    (make-xml->namespace #true) prefix-filter)]))))
 
-(define <:rnc-annotation:> : (-> (XML-Parser (Listof RNG-Annotation)))
-  (let ([<:rnc-annotation-attribute:> (<:rnc-name=value:> (<rnc-name>) rng-parameter)])
+(define-values (<:rnc-initial-annotation:> <:rnc-follow-annotation:>)
+  (let ([<:rnc-annotation-attribute:> (<:rnc-name=value:> (<rnc:name>) rng-parameter)])
     (define (rnc->annotation-element [data : (Listof (U Symbol String RNG-Parameter RNG-Annotation-Element))]) : RNG-Annotation-Element
       (let dispatch ([name : Symbol '||]
                      [attributes : (Listof RNG-Parameter) null]
@@ -123,23 +128,27 @@
                             [else (dispatch name attributes contents rest)]))])))
     
     (define (<:rnc-element:>) : (XML-Parser (Listof RNG-Annotation-Element))
-      (RNC<~> (RNC<&> (RNC:<^> (<rnc-name>))
+      (RNC<~> (RNC<&> (RNC:<^> (<rnc:name>))
                       (<:rnc-bracket:> (RNC<&> (RNC<*> <:rnc-annotation-attribute:> '*)
                                                (RNC<*> (RNC<+> (RNC<λ> <:rnc-element:>) (<:rnc-literal:>)) '*))))
               rnc->annotation-element))
-    (lambda []
-      (<:rnc-bracket:> (RNC<~> (RNC<&> (RNC<*> <:rnc-annotation-attribute:> '*)
-                                       (RNC<*> (<:rnc-element:>) '*))
-                               rng-annotation)))))
+
+    (values (lambda [] : (XML-Parser (Listof RNG-Annotation))
+              (<:rnc-bracket:> (RNC<~> (RNC<&> (RNC<*> <:rnc-annotation-attribute:> '*)
+                                               (RNC<*> (<:rnc-element:>) '*))
+                                       rng-annotation)))
+            (lambda [] : (XML-Parser (Listof RNG-Annotation-Element))
+              (RNC<&> ((inst <:>:> (Listof RNG-Annotation-Element))) ((inst <:>:> (Listof RNG-Annotation-Element)))
+                      (<:rnc-element:>))))))
 
 (define <:rnc-pattern:> : (-> (XML-Parser (Listof RNG-Pattern)))
-  (let ([<list> (<rnc-keyword> '#:list)]
-        [<mixed> (<rnc-keyword> '#:mixed)]
-        [<parent> (<rnc-keyword> '#:parent)]
-        [<grammar> (<rnc-keyword> '#:grammar)]
-        [<element> (<rnc-keyword> '#:element)]
-        [<external> (<rnc-keyword> '#:external)]
-        [<attribute> (<rnc-keyword> '#:attribute)])
+  (let ([<list> (<rnc:keyword> '#:list)]
+        [<mixed> (<rnc:keyword> '#:mixed)]
+        [<parent> (<rnc:keyword> '#:parent)]
+        [<grammar> (<rnc:keyword> '#:grammar)]
+        [<element> (<rnc:keyword> '#:element)]
+        [<external> (<rnc:keyword> '#:external)]
+        [<attribute> (<rnc:keyword> '#:attribute)])
     (define (rnc-qname-split [cname : Any]) : (Values (Option Symbol) (U Symbol Keyword))
       (cond [(keyword? cname) (values #false cname)]
             [else (let-values ([(ns name) (xml-qname-split (assert cname symbol?))])
@@ -183,24 +192,24 @@
             [else (rng:external (assert (car data) string?) (assert (cadr data) symbol?))]))
 
     (define (<datatype:name>) : (XML:Filter (U Symbol Keyword))
-      (RNC:<+> (<rnc-cname>) (<rnc-keyword> '(#:string #:token))))
+      (RNC:<+> (<rnc:cname>) (<rnc:keyword> '(#:string #:token))))
 
     (define (<:except-pattern:>) : (XML-Parser (Listof RNG-Pattern))
       (RNC<&> ((inst <:-:> (Listof RNG-Pattern))) (RNC<λ> <:rnc-pattern:>)))
 
     (define (<:primary:>) : (XML-Parser (Listof RNG-Pattern))
-      (RNC<+> ((inst RNC:<^> RNG-Pattern) (RNC:<~> (<rnc-keyword> '(#:empty #:text #:notAllowed)) rng:simple))
-              ((inst RNC:<^> RNG-Pattern) (RNC:<~> (<rnc-id>) rng:ref))
+      (RNC<+> ((inst RNC:<^> RNG-Pattern) (RNC:<~> (<rnc:keyword> '(#:empty #:text #:notAllowed)) rng:simple))
+              ((inst RNC:<^> RNG-Pattern) (RNC:<~> (<rnc:id>) rng:ref))
               (RNC<~> (RNC<&> (RNC:<*> (<datatype:name>) '?) (<:rnc-literal:>)) rnc->value)
               (RNC<~> (RNC<&> (RNC:<^> (<datatype:name>))
-                              (RNC<*> (<:rnc-brace:> (<:rnc-name=value:> (<rnc-id-or-keyword>) rng-parameter) '+) '?)
+                              (RNC<*> (<:rnc-brace:> (<:rnc-name=value:> (<rnc:id-or-keyword>) rng-parameter) '+) '?)
                               (RNC<*> (<:except-pattern:>) '?)) rnc->data)
               
               (RNC<?> [<element>   (RNC<~> (RNC<&> (<:rnc-name-class:>) (<:rnc-brace:> (RNC<λ> <:rnc-pattern:>))) rnc->element)]
                       [<attribute> (RNC<~> (RNC<&> (<:rnc-name-class:>) (<:rnc-brace:> (RNC<λ> <:rnc-pattern:>))) rnc->attribute)]
                       [<list>      (RNC<~> (<:rnc-brace:> (RNC<λ> <:rnc-pattern:>)) (make-rnc->prefab-element '#:list))]
                       [<mixed>     (RNC<~> (<:rnc-brace:> (RNC<λ> <:rnc-pattern:>)) (make-rnc->prefab-element '#:mixed))]
-                      [<parent>    ((inst RNC:<^> RNG-Pattern) (RNC:<~> (<rnc-id>) rng:parent))]
+                      [<parent>    ((inst RNC:<^> RNG-Pattern) (RNC:<~> (<rnc:id>) rng:parent))]
                       [<grammar>   ((inst RNC<~> RNG-Grammar-Content RNG-Pattern) (<:rnc-brace:> (RNC<λ> <:rnc-grammar-content:>) '+) rng:grammar)]
                       [<external>  (RNC<~> (RNC<&> (<:rnc-literal:>) (RNC<*> (<:inherit:>) '?)) rnc->external)])
 
@@ -251,8 +260,8 @@
       (RNC<&> ((inst <:-:> (Listof RNG-Name-Class))) (RNC<λ> <:rnc-name-class:>)))
 
     (define (<:simple-class-name:>) : (XML-Parser (Listof RNG-Name-Class))
-      (RNC<+> (RNC<~> (RNC<&> (RNC:<*> (<rnc-nsname>) '?) ((inst <:*:> (Listof Symbol))) (RNC<*> (<:except-name:>) '?)) rnc->any-name)
-              (RNC:<^> ((inst RNC:<~> Symbol RNG-Name-Class) (RNC:<+> (<rnc-id-or-keyword>) (<rnc-cname>)) rng-name))))
+      (RNC<+> (RNC<~> (RNC<&> (RNC:<*> (<rnc:nsname>) '?) ((inst <:*:> (Listof Symbol))) (RNC<*> (<:except-name:>) '?)) rnc->any-name)
+              (RNC:<^> ((inst RNC:<~> Symbol RNG-Name-Class) (RNC:<+> (<rnc:id-or-keyword>) (<rnc:cname>)) rng-name))))
     
     (lambda []
       (RNC<~> (RNC<+> (RNC<&> (<:simple-class-name:>)
@@ -261,9 +270,9 @@
               rnc->name-choice))))
 
 (define <:rnc-grammar-content:> : (-> (XML-Parser (Listof RNG-Grammar-Content)))
-  (let ([<div> (<rnc-keyword> '#:div)]
-        [<start> (<rnc-keyword> '#:start)]
-        [<include> (<rnc-keyword> '#:include)])
+  (let ([<div> (<rnc:keyword> '#:div)]
+        [<start> (<rnc:keyword> '#:start)]
+        [<include> (<rnc:keyword> '#:include)])
     (define (rnc->definition [data : (Listof (U Symbol Char RNG-Pattern))]) : RNG-Grammar-Content
       (cond [(or (null? data) (null? (cdr data))) (rng-start #\= (rng:ref 'deadcode))]
             [(null? (cddr data)) (rng-start (assert (car data) char?) (assert (cadr data) rng-pattern?))]
@@ -276,8 +285,8 @@
             [else (rng-include (assert (car datum) string?) (assert (cadr datum) symbol?) contents)]))
     
     (define (<:start+define:>) : (XML-Parser (Listof RNG-Grammar-Content))
-      (RNC<?> [<start> (RNC<~> (RNC<&> (RNC:<^> (<rnc-assign-method>)) (<:rnc-pattern:>)) rnc->definition)]
-              [else (RNC<~> (RNC<&> (RNC:<^> (<rnc-id>)) (RNC:<^> (<rnc-assign-method>)) (<:rnc-pattern:>)) rnc->definition)]))
+      (RNC<?> [<start> (RNC<~> (RNC<&> (RNC:<^> (<rnc:assign-method>)) (<:rnc-pattern:>)) rnc->definition)]
+              [else (RNC<~> (RNC<&> (RNC:<^> (<rnc:id>)) (RNC:<^> (<rnc:assign-method>)) (<:rnc-pattern:>)) rnc->definition)]))
 
     (define (<:include-content:>) : (XML-Parser (Listof RNG-Grammar-Content))
       (RNC<+> (<:start+define:>)
