@@ -379,6 +379,11 @@
   (RNC:<=> (<xml:delim> #\&) #\&)
   (RNC:<=> (<xml:delim> #\λ #| not a typo |#) #\|))
 
+(define (<:inherit:>) : (XML-Parser (Listof Symbol))
+      (RNC<&> ((inst RNC<_> (Listof Symbol)) (RNC:<^> (<xml:pereference> '#:inherit)))
+              ((inst <:=:> (Listof Symbol)))
+              (RNC:<^> (<rnc-id-or-keyword>))))
+
 (define (<:rnc-literal:>) : (XML-Parser (Listof String))
   (RNC<~> (RNC<&> (RNC:<^> (<xml:string>))
                   (RNC<*> (RNC<&> ((inst <:~:> (Listof String)))

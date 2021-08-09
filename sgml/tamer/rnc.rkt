@@ -158,9 +158,9 @@
                                   (it-check-parser "mox:rnc 'a mox type'" logsrc (<:rnc-pattern:>) (rng:value 'mox 'rnc "a mox type"))
                                   (it-check-parser "string { name = 'literal' } - token" logsrc (<:rnc-pattern:>)
                                                    (rng:data #false '#:string (list (rng-parameter 'name "literal")) (rng:data #false '#:token null #false)))
-                                  (it-check-parser "xml:verification - mox:rng - mox:rnc" logsrc (<:rnc-pattern:>)
+                                  (it-check-parser "xml:verification - mox:rng - (mox:rnc)" logsrc (<:rnc-pattern:>)
                                                    (rng:data 'xml 'verification null (rng:data 'mox 'rng null (rng:data 'mox 'rnc null #false)))))
-                        (describe "Pattern" #:do
+                        (describe "Primary Pattern" #:do
                                   (it-check-parser "stupid-xml" logsrc (<:rnc-pattern:>) (rng:ref 'stupid-xml))
                                   (it-check-parser "notAllowed" logsrc (<:rnc-pattern:>) (rng:simple '#:notAllowed))
                                   (it-check-parser "parent mox" logsrc (<:rnc-pattern:>) (rng:parent 'mox))
@@ -169,4 +169,15 @@
                                   (it-check-parser "attribute * { name }" logsrc (<:rnc-pattern:>) (rng:attribute (rng-any-name #false #false) (rng:ref 'name)))
                                   (it-check-parser "grammar { target = mox }" logsrc (<:rnc-pattern:>) (rng:grammar (list (rng-define 'target #\= (rng:ref 'mox)))))
                                   (it-check-parser "list { elem }" logsrc (<:rnc-pattern:>) (rng:element '#:list (rng:ref 'elem)))
-                                  #;(it-check-parser "stupid-xml+" logsrc (<:rnc-pattern:>) (rng:element '#:+ (rng:ref 'stupid-xml)))))))
+                                  (it-check-parser "external 'uri'" logsrc (<:rnc-pattern:>) (rng:external "uri" #false))
+                                  (it-check-parser "external 'uri' inherit = include" logsrc (<:rnc-pattern:>) (rng:external "uri" 'include)))
+
+                        (describe "Repeated Primary Pattern" #:do
+                                  (it-check-parser "primary+" logsrc (<:rnc-pattern:>) (rng:element '#:oneOrMore (rng:ref 'primary)))
+                                  (it-check-parser "primary*" logsrc (<:rnc-pattern:>) (rng:element '#:zeroOrMore (rng:ref 'primary)))
+                                  (it-check-parser "primary?" logsrc (<:rnc-pattern:>) (rng:element '#:optional (rng:ref 'primary))))
+                        
+                        (describe "Particle Pattern" #:do
+                                  (it-check-parser "c1 | c2 | c3" logsrc (<:rnc-pattern:>) (rng:particle '#:choice (list (rng:ref 'c1) (rng:ref 'c2) (rng:ref 'c3))))
+                                  (it-check-parser "g1 , g2 , g3" logsrc (<:rnc-pattern:>) (rng:particle '#:group (list (rng:ref 'g1) (rng:ref 'g2) (rng:ref 'g3))))
+                                  (it-check-parser "i1 & i2" logsrc (<:rnc-pattern:>) (rng:particle '#:interleave (list (rng:ref 'i1) (rng:ref 'i2))))))))
