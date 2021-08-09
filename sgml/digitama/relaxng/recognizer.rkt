@@ -263,7 +263,7 @@
              [else (rnc-filter2 token)]))]))
 
 (define rnc-disjoin : (All (a b) (case-> [(Listof (XML-Parser a)) -> (XML-Parser a)]
-                                           [(XML-Parser (Listof a)) (XML-Parser (Listof b)) -> (XML-Parser (Listof (U a b)))]))
+                                         [(XML-Parser (Listof a)) (XML-Parser (Listof b)) -> (XML-Parser (Listof (U a b)))]))
   ;;; https://drafts.csswg.org/css-values/#comb-one
   (case-lambda
     [(atom-parsers)
@@ -370,6 +370,10 @@
 (define-rnc-disjoint-filter <rnc-inherit> #:-> Symbol
   (RNC:<=> (<xml:pereference> '#:inherit) 'inherit))
 
+(define-rnc-disjoint-filter <rnc-name> #:-> Symbol
+  (<xml:name>)
+  (<rnc-id-or-keyword>))
+
 (define-rnc-disjoint-filter <rnc-literal> #:-> String
   #:with [[options : (U (-> String Boolean) (Listof String) String)]]
   (<xml:string> options))
@@ -380,9 +384,9 @@
   (RNC:<=> (<xml:delim> #\λ #| not a typo |#) #\|))
 
 (define (<:inherit:>) : (XML-Parser (Listof Symbol))
-      (RNC<&> ((inst RNC<_> (Listof Symbol)) (RNC:<^> (<xml:pereference> '#:inherit)))
-              ((inst <:=:> (Listof Symbol)))
-              (RNC:<^> (<rnc-id-or-keyword>))))
+  (RNC<&> ((inst RNC<_> (Listof Symbol)) (RNC:<^> (<xml:pereference> '#:inherit)))
+          ((inst <:=:> (Listof Symbol)))
+          (RNC:<^> (<rnc-id-or-keyword>))))
 
 (define (<:rnc-literal:>) : (XML-Parser (Listof String))
   (RNC<~> (RNC<&> (RNC:<^> (<xml:string>))
@@ -394,6 +398,13 @@
 (define (<:rnc-ns:literal:>) : (XML-Parser (Listof (U String Symbol)))
   (RNC<+> (<:rnc-literal:>)
           (RNC:<^> (<rnc-inherit>))))
+
+(define <:rnc-name=value:> : (All (a) (-> (XML:Filter Symbol) (-> Symbol String a) (XML-Parser (Listof a))))
+  (lambda [<name> rnc->racket]
+    (RNC<~> (RNC<&> (RNC:<^> <name>) ((inst <:=:> (Listof (U String Symbol)))) (<:rnc-literal:>))
+            (λ [[data : (Listof (U Symbol String))]] : a
+              (cond [(or (null? data) (null? (cdr data))) (rnc->racket 'dead "code")]
+                    [else (rnc->racket (assert (car data) symbol?) (assert (cadr data) string?))])))))
 
 (define <:rnc-bracket:> : (All (a) (->* ((XML-Parser (Listof a))) ((U False (XML-Multiplier Index) '+ '? '*) Char Char) (XML-Parser (Listof a))))
   (lambda [<:body:> [multiplier #false] [open #\[] [close #\]]]
