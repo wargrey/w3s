@@ -2,8 +2,6 @@
 
 (require digimon/spec)
 
-(require racket/port)
-
 (require sgml/digitama/digicore)
 (require sgml/digitama/tokenizer/port)
 
@@ -157,8 +155,11 @@
                                   (it-check-parser "include 'target-only'" logsrc (<:rnc-grammar-content:>) (rng-include "target-only" #false null))
                                   (it-check-parser "include 'uri' { start = begin }" logsrc (<:rnc-grammar-content:>)
                                                    (rng-include "uri" #false (list (rng-start #\= (rng:ref 'begin)))))
-                                  (it-check-parser "include 'uri' inherit = inherit { start = begin }" logsrc (<:rnc-grammar-content:>)
-                                                   (rng-include "uri" 'inherit (list (rng-start #\= (rng:ref 'begin))))))
+                                  (it-check-parser "include 'uri' inherit = inherit { start = begin t:sub [ name='test'] }" logsrc (<:rnc-grammar-content:>)
+                                                   (let ([ae (rng-annotation-element 't:sub (list (rng-parameter 'name "test")) null)])
+                                                     (rng-include "uri" 'inherit (list (rng-start #\= (rng:ref 'begin)) (rng-grammar-annotation ae)))))
+                                  (it-check-parser "x:entity [ systemId='picture.svg' ]" logsrc (<:rnc-grammar-content:>)
+                                                   (rng-grammar-annotation (rng-annotation-element 'x:entity (list (rng-parameter 'systemId "picture.svg")) null))))
 
                         (describe "Data/Values" #:do
                                   (it-check-parser "token 'a token type'" logsrc (<:rnc-pattern:>) (rng:value #false '#:token "a token type"))
@@ -202,6 +203,7 @@
                                                                                                     (rng:element '#:oneOrMore (rng:ref 'pattern))))))))
 
                         (describe "Annotation" #:do
-                                  (it-check-parser "[a:docs='##']" logsrc (<:rnc-initial-annotation:>) (rng-annotation (list (rng-parameter 'a:docs "##"))))
+                                  (it-check-parser "## documentations []" logsrc (<:rnc-initial-annotation:>) (rng-annotation null (list "# documentations []") null))
+                                  (it-check-parser "[a:docs='##']" logsrc (<:rnc-initial-annotation:>) (rng-annotation (list (rng-parameter 'a:docs "##")) null null))
                                   (it-check-parser ">> x:entity [ notation='svg']" logsrc (<:rnc-follow-annotation:>)
                                                    (rng-annotation-element 'x:entity (list (rng-parameter 'notation "svg")) null))))))

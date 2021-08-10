@@ -11,6 +11,13 @@
 (require (for-syntax racket/base))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(struct rng-annotation ([attributes : (Listof RNG-Parameter)] [documentations : (Listof String)] [elements : (Listof RNG-Annotation-Element)])
+  #:transparent #:type-name RNG-Annotation)
+(struct rng-annotation-element ([name : Symbol] [attributes : (Listof RNG-Parameter)] [content : (Listof (U RNG-Annotation-Element String))])
+  #:transparent #:type-name RNG-Annotation-Element)
+
+(struct rng-annotatable ([initial : RNG-Annotation]) #:transparent #:type-name RNG-Annotatable)
+
 (struct rng-env ([prefix : Symbol]) #:transparent #:type-name RNG-ENV)
 (struct rng-namespace rng-env ([uri : (U String Symbol)] [default? : Boolean]) #:transparent #:type-name RNG-Namespace)
 (struct rng-datatype rng-env ([uri : String]) #:transparent #:type-name RNG-Datatype)
@@ -41,9 +48,12 @@
 (struct rng-div rng-grammar-content ([contents : (Listof RNG-Grammar-Content)]) #:transparent #:type-name RNG-Div)
 (struct rng-include rng-grammar-content ([href : String] [inherit : (Option Symbol)] [contents : (Listof RNG-Grammar-Content)]) #:transparent #:type-name RNG-Include)
 
-(struct rng-annotation ([content : (Listof (U RNG-Parameter RNG-Annotation-Element))]) #:transparent #:type-name RNG-Annotation)
-(struct rng-annotation-element ([name : Symbol] [attributes : (Listof RNG-Parameter)] [content : (Listof (U RNG-Annotation-Element String))])
-  #:transparent #:type-name RNG-Annotation-Element)
+;; stupid design or bad-written specs
+; https://relaxng.org/compact-20021121.html#d0e377
+(struct rng-follow-annotation rng-pattern ([element : RNG-Annotation-Element]) #:transparent #:type-name RNG-Follow-Annotation)
+
+; https://relaxng.org/compact-20021121.html#d0e385
+(struct rng-grammar-annotation rng-grammar-content ([element : RNG-Annotation-Element]) #:transparent #:type-name RNG-Grammar-Annotation)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define rnc-grammar-parse : (All (a) (-> (XML-Parser (Listof a)) (Listof XML-Token) (Values (Listof a) (Listof XML-Token))))
@@ -112,8 +122,19 @@
                                            (RNC:<*> (<rnc:id-or-keyword>) '?) ((inst <:=:> (Listof (U String Symbol)))) (<:rnc-ns:literal:>))
                                    (make-xml->namespace #true) prefix-filter)]))))
 
-(define-values (<:rnc-initial-annotation:> <:rnc-follow-annotation:>)
+(define-values (<:rnc-initial-annotation:> <:rnc-grammar-annotation:> <:rnc-follow-annotation:>)
   (let ([<:rnc-annotation-attribute:> (<:rnc-name=value:> (<rnc:name>) rng-parameter)])
+    (define (rnc->annotation [data : (Listof (U RNG-Parameter String RNG-Annotation-Element))]) : RNG-Annotation
+      (let dispatch ([attributes : (Listof RNG-Parameter) null]
+                     [documentations : (Listof String) null]
+                     [elements : (Listof RNG-Annotation-Element) null]
+                     [source : (Listof (U String RNG-Parameter RNG-Annotation-Element)) data])
+        (cond [(null? source) (rng-annotation (reverse attributes) (reverse documentations) (reverse elements))]
+              [else (let-values ([(self rest) (values (car source) (cdr source))])
+                      (cond [(rng-parameter? self) (dispatch (cons self attributes) documentations elements rest)]
+                            [(rng-annotation-element? self) (dispatch attributes documentations (cons self elements) rest)]
+                            [else self (dispatch attributes (cons self documentations) elements rest)]))])))
+    
     (define (rnc->annotation-element [data : (Listof (U Symbol String RNG-Parameter RNG-Annotation-Element))]) : RNG-Annotation-Element
       (let dispatch ([name : Symbol '||]
                      [attributes : (Listof RNG-Parameter) null]
@@ -126,6 +147,12 @@
                             [(rng-annotation-element? self) (dispatch name attributes (cons self contents) rest)]
                             [(string? self) (dispatch name attributes (cons self contents) rest)]
                             [else (dispatch name attributes contents rest)]))])))
+
+    (define (rnc-annotation-filter [A : (Listof RNG-Annotation)] [a : RNG-Annotation] [tokens : (Listof XML-Token)]) : (XML-Option True)
+      (and (or (pair? (rng-annotation-attributes a))
+               (pair? (rng-annotation-documentations a))
+               (pair? (rng-annotation-elements a)))
+           #true))
     
     (define (<:rnc-element:>) : (XML-Parser (Listof RNG-Annotation-Element))
       (RNC<~> (RNC<&> (RNC:<^> (<rnc:name>))
@@ -134,9 +161,13 @@
               rnc->annotation-element))
 
     (values (lambda [] : (XML-Parser (Listof RNG-Annotation))
-              (<:rnc-bracket:> (RNC<~> (RNC<&> (RNC<*> <:rnc-annotation-attribute:> '*)
-                                               (RNC<*> (<:rnc-element:>) '*))
-                                       rng-annotation)))
+              (RNC<~> (RNC<&> (RNC:<*> (<xml:whitespace>) '*)
+                              (RNC<*> (<:rnc-bracket:> (RNC<&> (RNC<*> <:rnc-annotation-attribute:> '*)
+                                                               (RNC<*> (<:rnc-element:>) '*))) '?))
+                      rnc->annotation rnc-annotation-filter))
+
+            <:rnc-element:>
+
             (lambda [] : (XML-Parser (Listof RNG-Annotation-Element))
               (RNC<&> ((inst <:>:> (Listof RNG-Annotation-Element))) ((inst <:>:> (Listof RNG-Annotation-Element)))
                       (<:rnc-element:>))))))
@@ -191,6 +222,10 @@
             [(null? (cdr data)) (rng:external (assert (car data) string?) #false)]
             [else (rng:external (assert (car data) string?) (assert (cadr data) symbol?))]))
 
+    (define (rnc->follow-annotation [data : (Listof RNG-Annotation-Element)]) : RNG-Pattern
+      (cond [(null? data) '#:deadcode (rng-pattern)]
+            [else (rng-follow-annotation (car data))]))
+
     (define (<datatype:name>) : (XML:Filter (U Symbol Keyword))
       (RNC:<+> (<rnc:cname>) (<rnc:keyword> '(#:string #:token))))
 
@@ -221,25 +256,28 @@
 
     (define (<:particle:> [type : Char]) : (XML-Parser (Listof RNG-Pattern))
       (RNC<*> (RNC<?> [(<xml:delim> type) (<:repeated-primary:>)]) '+))
+
+    (define (<:pattern:> [data : (Listof RNG-Pattern)] [tokens : (Listof XML-Token)]) : (Values (XML-Option (Listof RNG-Pattern)) (Listof XML-Token))
+      (define-values (data++ tokens--) ((<:repeated-primary:>) null tokens))
+      
+      (cond [(not (pair? data++)) (values data++ tokens--)]
+            [else (let-values ([(self rest) (rnc-car/cdr tokens--)])                      
+                    (cond [(not (xml:delim? self)) (values (append data data++) tokens--)]
+                          [else (case (xml:delim-datum self)
+                                  [(#\,) (let-values ([(options rest--) ((<:particle:> #\,) null tokens--)])
+                                           (cond [(not (list? options)) (values options rest--)]
+                                                 [else (values (append data (list (rng:particle '#:group (cons (car data++) (reverse options))))) rest--)]))]
+                                  [(#\|) (let-values ([(options rest--) ((<:particle:> #\|) null tokens--)])
+                                           (cond [(not (list? options)) (values options rest--)]
+                                                 [else (values (append data (list (rng:particle '#:choice (cons (car data++) (reverse options))))) rest--)]))]
+                                  [(#\&) (let-values ([(options rest--) ((<:particle:> #\&) null tokens--)])
+                                           (cond [(not (list? options)) (values options rest--)]
+                                                 [else (values (append data (list (rng:particle '#:interleave (cons (car data++) (reverse options))))) rest--)]))]
+                                  [else (values (append data data++) tokens--)])]))]))
     
     (lambda []
-      (λ [[data : (Listof RNG-Pattern)] [tokens : (Listof XML-Token)]] : (Values (XML-Option (Listof RNG-Pattern)) (Listof XML-Token))
-        (define-values (data++ tokens--) ((<:repeated-primary:>) null tokens))
-
-        (cond [(not (pair? data++)) (values data++ tokens--)]
-              [else (let-values ([(self rest) (rnc-car/cdr tokens--)])                      
-                      (cond [(not (xml:delim? self)) (values (append data data++) tokens--)]
-                            [else (case (xml:delim-datum self)
-                                    [(#\,) (let-values ([(options rest--) ((<:particle:> #\,) null tokens--)])
-                                             (cond [(not (list? options)) (values options rest--)]
-                                                   [else (values (append data (list (rng:particle '#:group (cons (car data++) (reverse options))))) rest--)]))]
-                                    [(#\|) (let-values ([(options rest--) ((<:particle:> #\|) null tokens--)])
-                                             (cond [(not (list? options)) (values options rest--)]
-                                                   [else (values (append data (list (rng:particle '#:choice (cons (car data++) (reverse options))))) rest--)]))]
-                                    [(#\&) (let-values ([(options rest--) ((<:particle:> #\&) null tokens--)])
-                                             (cond [(not (list? options)) (values options rest--)]
-                                                   [else (values (append data (list (rng:particle '#:interleave (cons (car data++) (reverse options))))) rest--)]))]
-                                    [else (values (append data data++) tokens--)])]))])))))
+      (RNC<&> <:pattern:>
+              (RNC<*> (RNC<~> (<:rnc-follow-annotation:>) rnc->follow-annotation) '*)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define <:rnc-name-class:> : (-> (XML-Parser (Listof RNG-Name-Class)))
@@ -265,7 +303,7 @@
     
     (lambda []
       (RNC<~> (RNC<+> (RNC<&> (<:simple-class-name:>)
-                              (RNC<*> (RNC<&> ((inst <:/:> (Listof RNG-Name-Class))) (RNC<λ> <:simple-class-name:>)) '*))
+                              (RNC<*> (RNC<?> [(<xml:delim> #\|) (RNC<λ> <:simple-class-name:>)]) '*))
                       (<:rnc-parenthesis:> (RNC<λ> <:rnc-name-class:>)))
               rnc->name-choice))))
 
@@ -283,6 +321,10 @@
       (cond [(null? datum) (rng-include "deadcode" #false contents)]
             [(null? (cdr datum)) (rng-include (assert (car datum) string?) #false contents)]
             [else (rng-include (assert (car datum) string?) (assert (cadr datum) symbol?) contents)]))
+
+    (define (rnc->grammar-annotation [data : (Listof RNG-Annotation-Element)]) : RNG-Grammar-Content
+      (cond [(null? data) '#:deadcode (rng-grammar-content)]
+            [else (rng-grammar-annotation (car data))]))
     
     (define (<:start+define:>) : (XML-Parser (Listof RNG-Grammar-Content))
       (RNC<?> [<start> (RNC<~> (RNC<&> (RNC:<^> (<rnc:assign-method>)) (<:rnc-pattern:>)) rnc->definition)]
@@ -290,10 +332,12 @@
 
     (define (<:include-content:>) : (XML-Parser (Listof RNG-Grammar-Content))
       (RNC<+> (<:start+define:>)
-              (RNC<?> [<div> (RNC<~> (<:rnc-brace:> (RNC<λ> <:include-content:>) '+) rng-div)])))
+              (RNC<?> [<div> (RNC<~> (<:rnc-brace:> (RNC<λ> <:include-content:>) '+) rng-div)])
+              (RNC<~> (<:rnc-grammar-annotation:>) rnc->grammar-annotation)))
     
     (lambda []
       (RNC<+> (<:start+define:>)
               (RNC<?> [<div>     ((inst RNC<~> RNG-Grammar-Content RNG-Grammar-Content) (<:rnc-brace:> (RNC<λ> <:rnc-grammar-content:>) '+) rng-div)]
                       [<include> (RNC<~> (RNC<&> (<:rnc-literal:>) (RNC<*> (<:inherit:>) '?) (RNC<*> (<:rnc-brace:> (RNC<λ> <:include-content:>) '+) '?))
-                                         rnc->include-content)])))))
+                                         rnc->include-content)])
+              (RNC<~> (<:rnc-grammar-annotation:>) rnc->grammar-annotation)))))

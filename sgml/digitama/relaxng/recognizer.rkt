@@ -10,6 +10,7 @@
 
 (require css/digitama/syntax/misc)
 
+(require racket/string)
 (require digimon/symbol)
 
 (require (for-syntax syntax/parse))
@@ -347,7 +348,6 @@
 (define #:forall (a) (<:~:>) : (XML-Parser a) ((inst RNC<_> a) (RNC:<^> (<xml:delim> #\~))))
 (define #:forall (a) (<:-:>) : (XML-Parser a) ((inst RNC<_> a) (RNC:<^> (<xml:name> '-))))
 (define #:forall (a) (<:*:>) : (XML-Parser a) ((inst RNC<_> a) (RNC:<^> (<xml:delim> #\*))))
-(define #:forall (a) (<:/:>) : (XML-Parser a) ((inst RNC<_> a) (RNC:<^> (<xml:delim> #\|))))
 (define #:forall (a) (<:>:>) : (XML-Parser a) ((inst RNC<_> a) (RNC:<^> (<xml:delim> #\>))))
 
 (define-rnc-disjoint-filter <rnc:keyword> #:-> Keyword
@@ -431,5 +431,7 @@
     (let skip-whitespace ([rest dirty])
       (cond [(null? rest) (values #false null)]
             [else (let-values ([(head tail) (values (car rest) (cdr rest))])
-                    (cond [(xml:whitespace? head) (skip-whitespace tail)]
-                          [else (values head tail)]))]))))
+                    (cond [(not (xml:whitespace? head)) (values head tail)]
+                          [(not (xml:comment? head)) (skip-whitespace tail)]
+                          [(string-prefix? (xml:whitespace-datum head) "#") (values head tail)]
+                          [else (skip-whitespace tail)]))]))))
