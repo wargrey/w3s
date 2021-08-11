@@ -209,7 +209,7 @@
        (define-values (datum --tokens) (rnc-parser null tokens))
        (cond [(or (exn:xml? datum) (false? datum)) (values datum --tokens)]
              [else (let* ([rdatum (rnc->racket (reverse datum))]
-                          [okay? (data-filter data rdatum (drop-right tokens (length --tokens)))])
+                          [okay? (data-filter data rdatum (if (eq? tokens --tokens) null (drop-right tokens (length --tokens))))])
                      (cond [(or (not okay?) (exn:xml? okay?)) (values okay? tokens)]
                            [else (values (cons rdatum data) --tokens)]))]))]))
 

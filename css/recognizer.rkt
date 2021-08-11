@@ -408,7 +408,7 @@
        (define-values (datum --tokens) (css-parser null tokens))
        (cond [(or (exn:css? datum) (false? datum)) (values datum --tokens)]
              [else (let* ([rdatum (css->racket (reverse datum))]
-                          [okay? (data-filter data rdatum (drop-right tokens (length --tokens)))])
+                          [okay? (data-filter data rdatum (if (eq? tokens --tokens) null (drop-right tokens (length --tokens))))])
                      (cond [(or (not okay?) (exn:css? okay?)) (values okay? tokens)]
                            [else (values (cons rdatum data) --tokens)]))]))]))
 

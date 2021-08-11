@@ -49,6 +49,10 @@
 (struct rng-include rng-grammar-content ([href : String] [inherit : (Option Symbol)] [contents : (Listof RNG-Grammar-Content)]) #:transparent #:type-name RNG-Include)
 
 ;; stupid design or bad-written specs
+; https://relaxng.org/compact-20021121.html#d0e331
+(struct rng-annotated-pattern rng-pattern ([initial : (Option RNG-Annotation)] [primary : RNG-Pattern] [follows : (Listof RNG-Annotation-Element)])
+  #:transparent #:type-name RNG-Annotated-Pattern)
+
 ; https://relaxng.org/compact-20021121.html#d0e377
 (struct rng-follow-annotation rng-pattern ([element : RNG-Annotation-Element]) #:transparent #:type-name RNG-Follow-Annotation)
 
@@ -149,10 +153,7 @@
                             [else (dispatch name attributes contents rest)]))])))
 
     (define (rnc-annotation-filter [A : (Listof RNG-Annotation)] [a : RNG-Annotation] [tokens : (Listof XML-Token)]) : (XML-Option True)
-      (and (or (pair? (rng-annotation-attributes a))
-               (pair? (rng-annotation-documentations a))
-               (pair? (rng-annotation-elements a)))
-           #true))
+      (and (pair? tokens) #true))
     
     (define (<:rnc-element:>) : (XML-Parser (Listof RNG-Annotation-Element))
       (RNC<~> (RNC<&> (RNC:<^> (<rnc:name>))
@@ -179,7 +180,8 @@
         [<grammar> (<rnc:keyword> '#:grammar)]
         [<element> (<rnc:keyword> '#:element)]
         [<external> (<rnc:keyword> '#:external)]
-        [<attribute> (<rnc:keyword> '#:attribute)])
+        [<attribute> (<rnc:keyword> '#:attribute)]
+        [deadcode (rng-pattern)])
     (define (rnc-qname-split [cname : Any]) : (Values (Option Symbol) (U Symbol Keyword))
       (cond [(keyword? cname) (values #false cname)]
             [else (let-values ([(ns name) (xml-qname-split (assert cname symbol?))])
@@ -187,50 +189,72 @@
     
     (define (make-rnc->prefab-element [type : Keyword]) : (-> (Listof RNG-Pattern) RNG-Pattern)
       (λ [[data : (Listof RNG-Pattern)]]
-        (cond [(null? data) '#:deadcode (rng-pattern)]
+        (cond [(null? data) deadcode]
               [else (rng:element type (car data))])))
 
+    (define #:forall (a) (make-rnc->annotated-object [object? : (-> Any Boolean : a)] [make-object : (-> (Option RNG-Annotation) a (Listof RNG-Annotation-Element) a)])
+      : (-> (Listof (U RNG-Annotation a RNG-Annotation-Element)) a)
+      (λ [[data : (Listof (U RNG-Annotation a RNG-Annotation-Element))]]
+        (let dispatch ([initial : (Option RNG-Annotation) #false]
+                       [primary : (Option a) #false]
+                       [follows : (Listof RNG-Annotation-Element) null]
+                       [rest : (Listof (U RNG-Annotation a RNG-Annotation-Element)) data])
+          (cond [(null? rest) (if (or initial (pair? follows)) (make-object initial (assert primary) (reverse follows)) (assert primary))]
+                [else (let-values ([(head tail) (values (car rest) (cdr rest))])
+                        (cond [(rng-annotation? head) (dispatch head primary follows tail)]
+                              [(object? head) (dispatch initial head follows tail)]
+                              [else (dispatch initial primary (cons head follows) tail)]))]))))
+
     (define (rnc->value [data : (Listof (U Symbol Keyword String))]) : RNG-Pattern
-      (cond [(null? data) '#:deadcode (rng-pattern)]
+      (cond [(null? data) deadcode]
             [(null? (cdr data)) (rng:value #false #false (assert (car data) string?))]
             [else (let-values ([(ns name) (rnc-qname-split (car data))])
                     (rng:value ns name (assert (cadr data) string?)))]))
 
     (define (rnc->data [data : (Listof (U Symbol Keyword RNG-Parameter RNG-Pattern))]) : RNG-Pattern
       (define-values (params rest) (partition rng-parameter? data))
-      (cond [(null? rest) '#:deadcode (rng-pattern)]
+      (cond [(null? rest) deadcode]
             [else (let-values ([(ns name) (rnc-qname-split (car rest))])
                     (cond [(null? (cdr rest)) (rng:data ns name params #false)]
                           [else (rng:data ns name params (assert (cadr rest) rng-pattern?))]))]))
 
     (define (rnc->element [data : (Listof (U RNG-Name-Class RNG-Pattern))]) : RNG-Pattern
-      (cond [(or (null? data) (null? (cdr data))) '#:deadcode (rng-pattern)]
+      (cond [(or (null? data) (null? (cdr data))) deadcode]
             [else (rng:element (assert (car data) rng-name-class?) (assert (cadr data) rng-pattern?))]))
 
     (define (rnc->attribute [data : (Listof (U RNG-Name-Class RNG-Pattern))]) : RNG-Pattern
-      (cond [(or (null? data) (null? (cdr data))) '#:deadcode (rng-pattern)]
+      (cond [(or (null? data) (null? (cdr data))) deadcode]
             [else (rng:attribute (assert (car data) rng-name-class?) (assert (cadr data) rng-pattern?))]))
 
-    (define (rnc->repeated-primary [data : (Listof (U RNG-Pattern Char Symbol))]) : RNG-Pattern
-      (cond [(null? data) '#:deadcode (rng-pattern)]
-            [(null? (cdr data)) (assert (car data) rng-pattern?)]
-            [else (rng:element (case (cadr data) [(#\+) '#:oneOrMore] [(#\?) '#:optional] [else '#:zeroOrMore])
-                               (assert (car data) rng-pattern?))]))
+    (define (rnc->inner-particle [data : (Listof (U RNG-Pattern Char Symbol RNG-Annotation-Element))]) : RNG-Pattern
+      (let dispatch ([pattern : RNG-Pattern deadcode]
+                     [particle : (Option Keyword) #false]
+                     [follows : (Listof RNG-Annotation-Element) null]
+                     [rest : (Listof (U RNG-Pattern Char Symbol RNG-Annotation-Element)) data])
+          (if (null? rest)
+              (cond [(not particle) pattern]
+                    [(pair? follows) (rng-annotated-pattern #false (rng:element particle pattern) (reverse follows))]
+                    [else (rng:element particle pattern)])
+
+              (let-values ([(head tail) (values (car rest) (cdr rest))])
+                (cond [(rng-pattern? head) (dispatch head particle follows tail)]
+                      [(char? head) (dispatch pattern (case head [(#\+) '#:oneOrMore] [(#\?) '#:optional] [else '#:zeroOrMore]) follows tail)]
+                      [(rng-annotation-element? head) (dispatch pattern particle (cons head follows) tail)]
+                      [else '#:deadcode (dispatch pattern particle follows tail)])))))
 
     (define (rnc->external [data : (Listof (U String Symbol))]) : RNG-Pattern
-      (cond [(null? data) (rng:external "deadcode" #false)]
+      (cond [(null? data) deadcode]
             [(null? (cdr data)) (rng:external (assert (car data) string?) #false)]
             [else (rng:external (assert (car data) string?) (assert (cadr data) symbol?))]))
-
-    (define (rnc->follow-annotation [data : (Listof RNG-Annotation-Element)]) : RNG-Pattern
-      (cond [(null? data) '#:deadcode (rng-pattern)]
-            [else (rng-follow-annotation (car data))]))
 
     (define (<datatype:name>) : (XML:Filter (U Symbol Keyword))
       (RNC:<+> (<rnc:cname>) (<rnc:keyword> '(#:string #:token))))
 
-    (define (<:except-pattern:>) : (XML-Parser (Listof RNG-Pattern))
-      (RNC<&> ((inst <:-:> (Listof RNG-Pattern))) (RNC<λ> <:rnc-pattern:>)))
+    (define (<:data-except:>) : (XML-Parser (Listof RNG-Pattern))
+      (RNC<~> (RNC<&> (RNC:<^> (<datatype:name>))
+                      (RNC<*> (<:rnc-brace:> (<:rnc-name=value:> (<rnc:id-or-keyword>) rng-parameter) '+) '?)
+                      ((inst <:-:> (Listof RNG-Pattern)))
+                      (RNC<λ> <:annotated-primary:>) #| should be initial annotation only |#) rnc->data))
 
     (define (<:primary:>) : (XML-Parser (Listof RNG-Pattern))
       (RNC<+> ((inst RNC:<^> RNG-Pattern) (RNC:<~> (<rnc:keyword> '(#:empty #:text #:notAllowed)) rng:simple))
@@ -238,7 +262,7 @@
               (RNC<~> (RNC<&> (RNC:<*> (<datatype:name>) '?) (<:rnc-literal:>)) rnc->value)
               (RNC<~> (RNC<&> (RNC:<^> (<datatype:name>))
                               (RNC<*> (<:rnc-brace:> (<:rnc-name=value:> (<rnc:id-or-keyword>) rng-parameter) '+) '?)
-                              (RNC<*> (<:except-pattern:>) '?)) rnc->data)
+                              #;(RNC<*> (<:except-pattern:>) '?) #| dataExcept is not here |#) rnc->data)
               
               (RNC<?> [<element>   (RNC<~> (RNC<&> (<:rnc-name-class:>) (<:rnc-brace:> (RNC<λ> <:rnc-pattern:>))) rnc->element)]
                       [<attribute> (RNC<~> (RNC<&> (<:rnc-name-class:>) (<:rnc-brace:> (RNC<λ> <:rnc-pattern:>))) rnc->attribute)]
@@ -248,36 +272,54 @@
                       [<grammar>   ((inst RNC<~> RNG-Grammar-Content RNG-Pattern) (<:rnc-brace:> (RNC<λ> <:rnc-grammar-content:>) '+) rng:grammar)]
                       [<external>  (RNC<~> (RNC<&> (<:rnc-literal:>) (RNC<*> (<:inherit:>) '?)) rnc->external)])
 
-              (<:rnc-parenthesis:> (RNC<λ> <:rnc-pattern:>))))
+              (<:rnc-parenthesis:> (RNC<λ> <:inner-pattern:>))))
 
-    (define (<:repeated-primary:>) : (XML-Parser (Listof RNG-Pattern))
-      (RNC<~> (RNC<&> (<:primary:>) (RNC:<*> (<xml:delim> '(#\? #\+ #\*)) '?))
-              rnc->repeated-primary))
+    (define (<:annotated-primary:>) : (XML-Parser (Listof RNG-Pattern))
+      (RNC<~> (RNC<&> (RNC<*> (<:rnc-initial-annotation:>) '?)
+                      (<:primary:>)
+                      (RNC<*> (<:rnc-follow-annotation:>) '*))
+              (make-rnc->annotated-object rng-pattern? rng-annotated-pattern)))
 
-    (define (<:particle:> [type : Char]) : (XML-Parser (Listof RNG-Pattern))
-      (RNC<*> (RNC<?> [(<xml:delim> type) (<:repeated-primary:>)]) '+))
+    (define (<:annotated-data-except:>) : (XML-Parser (Listof RNG-Pattern))
+      (RNC<~> (RNC<&> (RNC<*> (<:rnc-initial-annotation:>) '?)
+                      (<:data-except:>)
+                      (RNC<*> (<:rnc-follow-annotation:>) '*))
+              (make-rnc->annotated-object rng-pattern? rng-annotated-pattern)))
 
-    (define (<:pattern:> [data : (Listof RNG-Pattern)] [tokens : (Listof XML-Token)]) : (Values (XML-Option (Listof RNG-Pattern)) (Listof XML-Token))
-      (define-values (data++ tokens--) ((<:repeated-primary:>) null tokens))
-      
-      (cond [(not (pair? data++)) (values data++ tokens--)]
-            [else (let-values ([(self rest) (rnc-car/cdr tokens--)])                      
-                    (cond [(not (xml:delim? self)) (values (append data data++) tokens--)]
-                          [else (case (xml:delim-datum self)
-                                  [(#\,) (let-values ([(options rest--) ((<:particle:> #\,) null tokens--)])
-                                           (cond [(not (list? options)) (values options rest--)]
-                                                 [else (values (append data (list (rng:particle '#:group (cons (car data++) (reverse options))))) rest--)]))]
-                                  [(#\|) (let-values ([(options rest--) ((<:particle:> #\|) null tokens--)])
-                                           (cond [(not (list? options)) (values options rest--)]
-                                                 [else (values (append data (list (rng:particle '#:choice (cons (car data++) (reverse options))))) rest--)]))]
-                                  [(#\&) (let-values ([(options rest--) ((<:particle:> #\&) null tokens--)])
-                                           (cond [(not (list? options)) (values options rest--)]
-                                                 [else (values (append data (list (rng:particle '#:interleave (cons (car data++) (reverse options))))) rest--)]))]
-                                  [else (values (append data data++) tokens--)])]))]))
+    (define (<:inner-particle:>) : (XML-Parser (Listof RNG-Pattern))
+      (RNC<~> (RNC<&> (<:annotated-primary:>)
+                      (RNC<*> (RNC<&> (RNC:<^> (<xml:delim> '(#\? #\+ #\*)))
+                                      (RNC<*> (<:rnc-follow-annotation:>) '*)) '?))
+              rnc->inner-particle))
+
+    (define (<:particle-list-tail:> [type : Char]) : (XML-Parser (Listof RNG-Pattern))
+      (RNC<*> (RNC<?> [(<xml:delim> type) (<:inner-particle:>)]) '+))
+
+    (define (<:pattern-list:>) : (XML-Parser (Listof RNG-Pattern))
+      (λ [[data : (Listof RNG-Pattern)] [tokens : (Listof XML-Token)]]
+        (define-values (data++ tokens--) ((<:inner-particle:>) null tokens))
+        
+        (cond [(not (pair? data++)) (values data++ tokens--)]
+              [else (let-values ([(self rest) (rnc-car/cdr tokens--)])                      
+                      (cond [(not (xml:delim? self)) (values (append data data++) tokens--)]
+                            [else (case (xml:delim-datum self)
+                                    [(#\,) (let-values ([(options rest--) ((<:particle-list-tail:> #\,) null tokens--)])
+                                             (cond [(not (list? options)) (values options rest--)]
+                                                   [else (values (append data (list (rng:particle '#:group (cons (car data++) (reverse options))))) rest--)]))]
+                                    [(#\|) (let-values ([(options rest--) ((<:particle-list-tail:> #\|) null tokens--)])
+                                             (cond [(not (list? options)) (values options rest--)]
+                                                   [else (values (append data (list (rng:particle '#:choice (cons (car data++) (reverse options))))) rest--)]))]
+                                    [(#\&) (let-values ([(options rest--) ((<:particle-list-tail:> #\&) null tokens--)])
+                                             (cond [(not (list? options)) (values options rest--)]
+                                                   [else (values (append data (list (rng:particle '#:interleave (cons (car data++) (reverse options))))) rest--)]))]
+                                    [else (values (append data data++) tokens--)])]))])))
+
+    (define (<:inner-pattern:>) : (XML-Parser (Listof RNG-Pattern))
+      (RNC<+> (<:annotated-data-except:>)
+              (<:pattern-list:>)))
     
     (lambda []
-      (RNC<&> <:pattern:>
-              (RNC<*> (RNC<~> (<:rnc-follow-annotation:>) rnc->follow-annotation) '*)))))
+       (<:inner-pattern:>))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define <:rnc-name-class:> : (-> (XML-Parser (Listof RNG-Name-Class)))
