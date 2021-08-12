@@ -146,7 +146,10 @@
                                   (it-check-parser "mox:*" logsrc (<:rnc-name-class:>) (rng-any-name 'mox #false))
                                   (it-check-parser "mox:* - ns:name" logsrc (<:rnc-name-class:>) (rng-any-name 'mox (rng-name 'ns:name)))
                                   (it-check-parser "rng | xsd | dtd" logsrc (<:rnc-name-class:>) (rng-alt-name (list (rng-name 'rng) (rng-name 'xsd) (rng-name 'dtd))))
-                                  (it-check-parser "((rng | xsd))" logsrc (<:rnc-name-class:>) (rng-alt-name (list (rng-name 'rng) (rng-name 'xsd)))))
+                                  (it-check-parser "((rng | xsd))" logsrc (<:rnc-name-class:>) (rng-alt-name (list (rng-name 'rng) (rng-name 'xsd))))
+                                  (it-check-parser "* - name >> follow-nothing []" logsrc (<:rnc-name-class:>)
+                                                   (rng-annotated-class #false (rng-any-name #false (rng-name 'name))
+                                                                        (list (rng-annotation-element 'follow-nothing null null)))))
 
                         (describe "Grammar Content" #:do
                                   (it-check-parser "start |= \\grammar" logsrc (<:rnc-grammar-content:>) (rng-start #\| (rng:ref 'grammar)))

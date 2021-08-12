@@ -407,6 +407,24 @@
               (cond [(or (null? data) (null? (cdr data))) (rnc->racket 'dead "code")]
                     [else (rnc->racket (assert (car data) symbol?) (assert (cadr data) string?))])))))
 
+(define <:rnc-annotation:> : (All (d a b c) (-> (Option (XML-Parser (Listof a))) (XML-Parser (Listof b)) (Option (XML-Parser (Listof c)))
+                                                (-> (Option a) b (Listof c) d) (XML-Parser (Listof (U b d)))))
+  (lambda [<:initial:> <:body:> <:follow:> rnc->racket]
+    (define <:initial?:> (if (not <:initial:>) values <:initial:>)) ; we won't check the result, so no need using of `RNC<*>`
+    (define <:follow*:> (and <:follow:> (RNC<*> <:follow:> '*)))
+    
+    (λ [[data : (Listof (U b d))] [tokens : (Listof XML-Token)]]
+      (define-values (initial body-tokens) (<:initial?:> null tokens))
+      (define-values (body follow-tokens) (<:body:> null body-tokens))
+      
+      (cond [(not (pair? body)) (values body follow-tokens)]
+            [(not <:follow*:>) (values (cons (if (pair? initial) (rnc->racket (car initial) (car body) null) (car body)) data) follow-tokens)]
+            [else (let-values ([(follows rest) (<:follow*:> null follow-tokens)])
+                    (values (cons (cond [(not (or (pair? initial) (pair? follows))) (car body)]
+                                        [else (rnc->racket (and (pair? initial) (car initial)) (car body) (if (list? follows) follows null))])
+                                  data)
+                            rest))]))))
+
 (define <:rnc-bracket:> : (All (a) (->* ((XML-Parser (Listof a))) ((U False (XML-Multiplier Index) '+ '? '*) Char Char) (XML-Parser (Listof a))))
   (lambda [<:body:> [multiplier #false] [open #\[] [close #\]]]
     (if (not multiplier)
