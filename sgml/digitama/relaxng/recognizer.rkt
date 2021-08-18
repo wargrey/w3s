@@ -318,14 +318,14 @@
          (define if:datum : (XML-Option Any) (if:filter token))
          (cond [(nor (not if:datum) (exn:xml? if:datum)) (then-parser data --tokens)]
                [(pair? branches--) (else-if (car branches--) (cdr branches--))]
-               [(not else-parser) (values if:datum tokens)]
+               [(not else-parser) (values if:datum --tokens)]
                [else (else-parser data tokens)])))]
     [(if:filter then-parser else-parser)
      (λ [[data : a] [tokens : (Listof XML-Token)]]
        (define-values (token --tokens) (rnc-car/cdr tokens))
        (define if:datum : (XML-Option Any) (if:filter token))
        (cond [(nor (not if:datum) (exn:xml? if:datum)) (then-parser data --tokens)]
-             [(not else-parser) (values if:datum tokens)]
+             [(not else-parser) (values if:datum --tokens)]
              [else (else-parser data tokens)]))]))
 
 (define rnc:multiplier-range : (-> (U (XML-Multiplier Index) '+ '? '*) Index (Values Natural (U Natural +inf.0)))

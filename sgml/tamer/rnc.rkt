@@ -74,7 +74,7 @@
     (expect-equal (length tokens) (length expected-values))))
 
 (define-behavior (it-check-parser stream.rnc logsrc <rng> expected-values)
-  (let ([rng-object? (or (rng-env? expected-values)
+  (let ([rng-object? (or (rng-decl? expected-values)
                          (rng-pattern? expected-values)
                          (rng-name-class? expected-values)
                          (rng-grammar-content? expected-values)
