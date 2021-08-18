@@ -14,8 +14,8 @@
 (struct rng-grammar
   ([location : (U String Symbol)]
    [default-namespace : (Option (U Symbol String))] ; `#false` implies `inherit`
-   [namespaces : (Immutable-HashTable Symbol (Option String))]
-   [datatypes : (Immutable-HashTable Symbol String)]
+   [namespaces : RNG-Preamble-Namespaces]
+   [datatypes : RNG-Preamble-Datatypes]
    [body : (Listof (U RNG-Pattern RNG-Grammar-Content))])
   #:transparent
   #:type-name RNG-Grammar)

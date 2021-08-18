@@ -10,8 +10,8 @@
 
 (require css/digitama/syntax/misc)
 
-(require racket/string)
 (require digimon/symbol)
+(require digimon/string)
 
 (require (for-syntax syntax/parse))
 
@@ -389,12 +389,14 @@
           ((inst <:=:> (Listof Symbol)))
           (RNC:<^> (<rnc:id-or-keyword>))))
 
-(define (<:rnc-literal:>) : (XML-Parser (Listof String))
-  (RNC<~> (RNC<&> (RNC:<^> (<xml:string>))
+(define (<:rnc-literal:> [filter : (Option (-> (Listof String) String (Listof XML-Token) (XML-Option True))) #false]) : (XML-Parser (Listof String))
+  (define <:literal:>
+    (RNC<&> (RNC:<^> (<xml:string>))
                   (RNC<*> (RNC<&> ((inst <:~:> (Listof String)))
-                                  (RNC:<^> (<xml:string>))) '*))
-          (λ [[segments : (Listof String)]] : String
-            (apply string-append segments))))
+                                  (RNC:<^> (<xml:string>))) '*)))
+
+  (cond [(not filter) (RNC<~> <:literal:> string-append*)]
+        [else (RNC<~> <:literal:> string-append* filter)]))
 
 (define (<:rnc-ns:literal:>) : (XML-Parser (Listof (U String Symbol)))
   (RNC<+> (<:rnc-literal:>)
@@ -453,3 +455,8 @@
                           [(not (xml:comment? head)) (skip-whitespace tail)]
                           [(string-prefix? (xml:whitespace-datum head) "#") (values head tail)]
                           [else (skip-whitespace tail)]))]))))
+
+(define rnc-uri? : (-> (Listof String) String (Listof XML-Token) (XML-Option True))
+  (lambda [data literal tokens]
+    (cond [(string-uri? literal) #true]
+          [else (make+exn:rnc:uri tokens)])))

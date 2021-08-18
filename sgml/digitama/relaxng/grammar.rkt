@@ -66,6 +66,12 @@
 (struct rng-grammar-annotation rng-grammar-content ([element : RNG-Annotation-Element]) #:transparent #:type-name RNG-Grammar-Annotation)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define-type RNG-Preamble-Namespaces (Immutable-HashTable Symbol (Option String)))
+(define-type RNG-Preamble-Datatypes (Immutable-HashTable Symbol String))
+
+(define rnc-default-namespaces : (Parameterof RNG-Preamble-Namespaces) (make-parameter (ann #hash() RNG-Preamble-Namespaces)))
+(define rnc-default-datatypes : (Parameterof RNG-Preamble-Datatypes) (make-parameter (ann #hash() RNG-Preamble-Datatypes)))
+
 (define rnc-grammar-parse : (All (a) (-> (XML-Parser (Listof a)) (Listof XML-Token) (Values (Listof a) (Listof XML-Token))))
   (lambda [parse tokens]
     (define-values (grammar rest) (parse null tokens))
@@ -274,7 +280,7 @@
                       [<mixed>     (RNC<~> (<:rnc-brace:> (RNC<λ> <:rnc-pattern:>)) (make-rnc->prefab-element '#:mixed))]
                       [<parent>    ((inst RNC:<^> RNG-Pattern) (RNC:<~> (<rnc:id>) rng:parent))]
                       [<grammar>   ((inst RNC<~> RNG-Grammar-Content RNG-Pattern) (<:rnc-brace:> (RNC<λ> <:rnc-grammar-content:>) '+) rng:grammar)]
-                      [<external>  (RNC<~> (RNC<&> (<:rnc-literal:>) (RNC<*> (<:inherit:>) '?)) rnc->external)])
+                      [<external>  (RNC<~> (RNC<&> (<:rnc-literal:> rnc-uri?) (RNC<*> (<:inherit:>) '?)) rnc->external)])
 
               (<:rnc-parenthesis:> (RNC<λ> <:inner-pattern:>))))
 
@@ -395,7 +401,7 @@
     (define (<:grammar-component:>) : (XML-Parser (Listof RNG-Grammar-Content))
       (RNC<+> (<:start+define:>)
               (RNC<?> [<div>     ((inst RNC<~> RNG-Grammar-Content RNG-Grammar-Content) (<:rnc-brace:> (RNC<λ> <:rnc-grammar-content:>) '+) rng-div)]
-                      [<include> (RNC<~> (RNC<&> (<:rnc-literal:>) (RNC<*> (<:inherit:>) '?) (RNC<*> (<:rnc-brace:> (RNC<λ> <:include-member:>) '+) '?))
+                      [<include> (RNC<~> (RNC<&> (<:rnc-literal:> rnc-uri?) (RNC<*> (<:inherit:>) '?) (RNC<*> (<:rnc-brace:> (RNC<λ> <:include-member:>) '+) '?))
                                          rnc->include-content)])))
 
     (define (<:annotated-include:>) : (XML-Parser (Listof RNG-Grammar-Content))
@@ -421,12 +427,12 @@
                                       (Values (Option (U String Symbol))
                                               (Immutable-HashTable Symbol (Option String))
                                               (Immutable-HashTable Symbol String)))
-  (let ([predeclared-ns : (Immutable-HashTable Symbol (Option String)) #hasheq((xml . "http://www.w3.org/XML/1998/namespace"))]
-        [predeclared-dts : (Immutable-HashTable Symbol String) #hasheq((xsd . "http://www.w3.org/2001/XMLSchema-datatypes"))])
+  (let ([predeclared-ns : RNG-Preamble-Namespaces #hasheq((xml . "http://www.w3.org/XML/1998/namespace"))]
+        [predeclared-dts : RNG-Preamble-Datatypes #hasheq((xsd . "http://www.w3.org/2001/XMLSchema-datatypes"))])
     (lambda [preamble]
       (let env ([default-ns : (Option (U String Symbol)) #false]
-                [ns : (Immutable-HashTable Symbol (Option String)) predeclared-ns]
-                [dts : (Immutable-HashTable Symbol String) predeclared-dts]
+                [ns : RNG-Preamble-Namespaces predeclared-ns]
+                [dts : RNG-Preamble-Datatypes predeclared-dts]
                 [decls : (Listof RNG-Decl) preamble])
         (cond [(null? decls) (values default-ns ns dts)]
               [else (let-values ([(self rest) (values (car decls) (cdr decls))])
