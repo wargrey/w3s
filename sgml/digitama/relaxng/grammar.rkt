@@ -8,6 +8,8 @@
 (require "../namespace.rkt")
 (require "../misc.rkt")
 
+(require digimon/string)
+
 (require (for-syntax racket/base))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -38,7 +40,7 @@
 (struct rng:data rng-pattern ([ns : (Option Symbol)] [name : (U Symbol Keyword)] [params : (Listof RNG-Parameter)] [except : (Option RNG-Pattern)])
   #:transparent #:type-name RNG:Data)
 
-(struct rng-name rng-name-class ([id : Symbol]) #:transparent #:type-name RNG-Name)
+(struct rng-name rng-name-class ([ns : (Option Symbol)] [id : Symbol]) #:transparent #:type-name RNG-Name)
 (struct rng-any-name rng-name-class ([ns : (Option Symbol)] [except : (Option RNG-Name-Class)]) #:transparent #:type-name RNG-Any-Name)
 (struct rng-alt-name rng-name-class ([options : (Listof RNG-Name-Class)]) #:transparent #:type-name RNG-Alt-Name)
 
@@ -69,6 +71,7 @@
 (define-type RNG-Preamble-Namespaces (Immutable-HashTable Symbol (Option String)))
 (define-type RNG-Preamble-Datatypes (Immutable-HashTable Symbol String))
 
+(define rnc-check-prefixes? : (Parameterof Boolean) (make-parameter #false))
 (define rnc-default-namespaces : (Parameterof RNG-Preamble-Namespaces) (make-parameter (ann #hash() RNG-Preamble-Namespaces)))
 (define rnc-default-datatypes : (Parameterof RNG-Preamble-Datatypes) (make-parameter (ann #hash() RNG-Preamble-Datatypes)))
 
@@ -91,6 +94,72 @@
             (<:rnc-pattern:>))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define prefab-namespaces : RNG-Preamble-Namespaces
+  #hasheq((xml . "http://www.w3.org/XML/1998/namespace")
+          (a . "http://relaxng.org/ns/compatibility/annotations/1.0")))
+
+(define prefab-datatypes : RNG-Preamble-Datatypes
+  #hasheq((xsd . "http://www.w3.org/2001/XMLSchema-datatypes")))
+
+(define rnc-grammar-environment : (-> (Listof RNG-Decl) (Values (Option (U String Symbol)) RNG-Preamble-Namespaces RNG-Preamble-Datatypes))
+  (lambda [preamble]
+    (let env ([default-ns : (Option (U String Symbol)) #false]
+              [ns : RNG-Preamble-Namespaces prefab-namespaces]
+              [dts : RNG-Preamble-Datatypes prefab-datatypes]
+              [decls : (Listof RNG-Decl) preamble])
+      (cond [(null? decls) (values default-ns ns dts)]
+            [else (let-values ([(self rest) (values (car decls) (cdr decls))])
+                    (cond [(rng-datatype? self)
+                           (env default-ns ns (hash-set dts (rng-decl-prefix self) (rng-datatype-uri self)) rest)]
+                          [(rng-namespace? self)
+                           (let ([prefix (rng-decl-prefix self)]
+                                 [uri (rng-namespace-uri self)])
+                             (cond [(not (rng-namespace-default? self))
+                                    (env default-ns (hash-set ns prefix (and (string? uri) uri)) dts rest)]
+                                   [(eq? prefix '||)
+                                    (env (and (string? uri) uri) ns dts rest)]
+                                   [else ; default namespace prefix = uri <==> default namespace = uri; prefix = uri
+                                    (env prefix (hash-set dts prefix (and (string? uri) uri)) dts rest)]))]
+                          [else '#:deadcode (env default-ns ns dts rest)]))]))))
+
+(define rnc-uri-guard : (-> (Listof String) String (Listof XML-Token) (XML-Option True))
+  (lambda [data literal tokens]
+    (cond [(string-uri? literal) #true]
+          [else (make+exn:rnc:uri tokens)])))
+
+(define rnc-prefix-guard : (-> (Option Symbol) (-> HashTableTop) HashTableTop (U XML-Syntax-Any (Listof XML-Token)) (XML-Option True))
+  (lambda [key bases prefabs tokens]
+    (cond [(not key) #true]
+          [(not (rnc-check-prefixes?)) #true]
+          [(hash-has-key? (bases) key) #true]
+          [(hash-has-key? prefabs key) #true]
+          [else (make+exn:rnc:prefix tokens)])))
+
+(define make-rnc:prefix-guard : (All (a b) (-> (-> Any Boolean : b) (-> b (Option Symbol)) (-> HashTableTop) HashTableTop
+                                               (-> a XML-Syntax-Any (XML-Option True))))
+  (lambda [subobject? object->key bases prefabs]
+    (λ [datum token]
+      (define key (and (subobject? datum) (object->key datum)))
+      (rnc-prefix-guard key bases prefabs token))))
+
+(define make-rnc-prefix-guard : (All (a b) (-> (-> Any Boolean : b) (-> b (Option Symbol)) (-> HashTableTop) HashTableTop
+                                               (-> (Listof a) a (Listof XML-Token) (XML-Option True))))
+  (lambda [subobject? object->key bases prefabs]
+    (λ [data datum tokens]
+      (define key (and (subobject? datum) (object->key datum)))
+      (rnc-prefix-guard key bases prefabs tokens))))
+
+(define make-rnc-prefixed-name-guard : (All (a b) (-> (-> Any Boolean : b) (-> b (Option Symbol)) (-> HashTableTop) HashTableTop
+                                                      (-> (Listof a) a (Listof XML-Token) (XML-Option True))))
+  (lambda [subobject? object->key bases prefabs]
+    (λ [data datum tokens]
+      (define key (and (subobject? datum) (object->key datum)))
+      (define-values (ns name) (if (not key) (values '|| '||) (xml-qname-split key)))
+
+      (cond [(eq? ns 'inherit) (make+exn:rnc:annotation tokens)]
+            [else (rnc-prefix-guard (if (eq? ns '||) #false ns) bases prefabs tokens)]))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define <:rnc-declaration:> : (-> (XML-Parser (Listof RNG-Decl)))
   (let (;[xml:uri "http://www.w3.org/XML/1998/namespace"]
         ;[xsd:uri "http://www.w3.org/2001/XMLSchema-datatypes"]
@@ -98,7 +167,7 @@
         [<namespace> (<rnc:keyword> '#:namespace)]
         [<datatypes> (<rnc:keyword> '#:datatypes)])
 
-    (define (prefix-filter [NS : (Listof RNG-Decl)] [ns : RNG-Decl] [tokens : (Listof XML-Token)]) : (XML-Option True)
+    (define (prefix-guard [NS : (Listof RNG-Decl)] [ns : RNG-Decl] [tokens : (Listof XML-Token)]) : (XML-Option True)
       (define-values (prefix uri default?)
         (if (rng-namespace? ns)
             (values (rng-decl-prefix ns) (rng-namespace-uri ns) (rng-namespace-default? ns))
@@ -131,15 +200,17 @@
 
     (lambda []
       (RNC<?> [<namespace> (RNC<~> (RNC<&> (RNC:<^> (<rnc:id-or-keyword>)) ((inst <:=:> (Listof (U String Symbol)))) (<:rnc-ns:literal:>))
-                                   (make-xml->namespace #false) prefix-filter)]
+                                   (make-xml->namespace #false) prefix-guard)]
               [<datatypes> (RNC<~> (RNC<&> (RNC:<^> (<rnc:id-or-keyword>)) ((inst <:=:> (Listof (U String Symbol)))) (<:rnc-literal:>))
-                                   xml->datatypes prefix-filter)]
+                                   xml->datatypes prefix-guard)]
               [<default>   (RNC<~> (RNC<&> ((inst RNC:<_> (Listof (U String Symbol))) <namespace>)
                                            (RNC:<*> (<rnc:id-or-keyword>) '?) ((inst <:=:> (Listof (U String Symbol)))) (<:rnc-ns:literal:>))
-                                   (make-xml->namespace #true) prefix-filter)]))))
+                                   (make-xml->namespace #true) prefix-guard)]))))
 
 (define-values (<:rnc-initial-annotation:> <:rnc-grammar-annotation:> <:rnc-follow-annotation:>)
-  (let ([<:rnc-annotation-attribute:> (<:rnc-name=value:> (<rnc:name>) rng-parameter)])
+  (let* ([attribute-guard (make-rnc-prefixed-name-guard rng-parameter? rng-parameter-name rnc-default-namespaces prefab-namespaces)]
+         [element-guard (make-rnc-prefixed-name-guard rng-annotation-element? rng-annotation-element-name rnc-default-namespaces prefab-namespaces)]
+         [<:rnc-annotation-attribute:> (<:rnc-name=value:> (<rnc:name>) rng-parameter attribute-guard)])
     (define (rnc->annotation [data : (Listof (U RNG-Parameter String RNG-Annotation-Element))]) : RNG-Annotation
       (let dispatch ([attributes : (Listof RNG-Parameter) null]
                      [documentations : (Listof String) null]
@@ -147,9 +218,9 @@
                      [source : (Listof (U String RNG-Parameter RNG-Annotation-Element)) data])
         (cond [(null? source) (rng-annotation (reverse attributes) (reverse documentations) (reverse elements))]
               [else (let-values ([(self rest) (values (car source) (cdr source))])
-                      (cond [(rng-parameter? self) (dispatch (cons self attributes) documentations elements rest)]
-                            [(rng-annotation-element? self) (dispatch attributes documentations (cons self elements) rest)]
-                            [else self (dispatch attributes (cons self documentations) elements rest)]))])))
+                      (cond [(rng-annotation-element? self) (dispatch attributes documentations (cons self elements) rest)]
+                            [(rng-parameter? self) (dispatch (cons self attributes) documentations elements rest)]
+                            [else (dispatch attributes (cons self documentations) elements rest)]))])))
     
     (define (rnc->annotation-element [data : (Listof (U Symbol String RNG-Parameter RNG-Annotation-Element))]) : RNG-Annotation-Element
       (let dispatch ([name : Symbol '||]
@@ -164,20 +235,20 @@
                             [(string? self) (dispatch name attributes (cons self contents) rest)]
                             [else (dispatch name attributes contents rest)]))])))
 
-    (define (rnc-annotation-filter [A : (Listof RNG-Annotation)] [a : RNG-Annotation] [tokens : (Listof XML-Token)]) : (XML-Option True)
+    (define (rnc-annotation-guard [A : (Listof RNG-Annotation)] [a : RNG-Annotation] [tokens : (Listof XML-Token)]) : (XML-Option True)
       (and (pair? tokens) #true))
     
     (define (<:rnc-element:>) : (XML-Parser (Listof RNG-Annotation-Element))
       (RNC<~> (RNC<&> (RNC:<^> (<rnc:name>))
                       (<:rnc-bracket:> (RNC<&> (RNC<*> <:rnc-annotation-attribute:> '*)
                                                (RNC<*> (RNC<+> (RNC<λ> <:rnc-element:>) (<:rnc-literal:>)) '*))))
-              rnc->annotation-element))
+              rnc->annotation-element element-guard))
 
     (values (lambda [] : (XML-Parser (Listof RNG-Annotation))
               (RNC<~> (RNC<&> (RNC:<*> (<xml:whitespace>) '*)
                               (RNC<*> (<:rnc-bracket:> (RNC<&> (RNC<*> <:rnc-annotation-attribute:> '*)
                                                                (RNC<*> (<:rnc-element:>) '*))) '?))
-                      rnc->annotation rnc-annotation-filter))
+                      rnc->annotation rnc-annotation-guard))
 
             <:rnc-element:>
 
@@ -193,6 +264,9 @@
         [<element> (<rnc:keyword> '#:element)]
         [<external> (<rnc:keyword> '#:external)]
         [<attribute> (<rnc:keyword> '#:attribute)]
+        [external-guard (make-rnc-prefix-guard rng:external? rng:external-inherit rnc-default-namespaces prefab-namespaces)]
+        [value-guard (make-rnc-prefix-guard rng:value? rng:value-ns rnc-default-datatypes prefab-datatypes)]
+        [data-guard (make-rnc-prefix-guard rng:data? rng:data-ns rnc-default-datatypes prefab-datatypes)]
         [deadcode (rng-pattern)])
     (define (rnc-qname-split [cname : Any]) : (Values (Option Symbol) (U Symbol Keyword))
       (cond [(keyword? cname) (values #false cname)]
@@ -271,8 +345,8 @@
     (define (<:primary:>) : (XML-Parser (Listof RNG-Pattern)) ; order matters
       (RNC<+> ((inst RNC:<^> RNG-Pattern) (RNC:<~> (<rnc:keyword> '(#:empty #:text #:notAllowed)) rng:simple))
               ((inst RNC:<^> RNG-Pattern) (RNC:<~> (<rnc:id>) rng:ref))
-              (RNC<~> (RNC<&> (RNC:<*> (<datatype:name>) '?) (<:rnc-literal:>)) rnc->value)
-              (RNC<~> (RNC<&> (RNC:<^> (<datatype:name>)) (RNC<*> (<:rnc-brace:> (<:param:>) '+) '?)) rnc->data)
+              (RNC<~> (RNC<&> (RNC:<*> (<datatype:name>) '?) (<:rnc-literal:>)) rnc->value value-guard)
+              (RNC<~> (RNC<&> (RNC:<^> (<datatype:name>)) (RNC<*> (<:rnc-brace:> (<:param:>) '+) '?)) rnc->data data-guard)
               
               (RNC<?> [<element>   (RNC<~> (RNC<&> (<:rnc-name-class:>) (<:rnc-brace:> (RNC<λ> <:rnc-pattern:>))) rnc->element)]
                       [<attribute> (RNC<~> (RNC<&> (<:rnc-name-class:>) (<:rnc-brace:> (RNC<λ> <:rnc-pattern:>))) rnc->attribute)]
@@ -280,7 +354,7 @@
                       [<mixed>     (RNC<~> (<:rnc-brace:> (RNC<λ> <:rnc-pattern:>)) (make-rnc->prefab-element '#:mixed))]
                       [<parent>    ((inst RNC:<^> RNG-Pattern) (RNC:<~> (<rnc:id>) rng:parent))]
                       [<grammar>   ((inst RNC<~> RNG-Grammar-Content RNG-Pattern) (<:rnc-brace:> (RNC<λ> <:rnc-grammar-content:>) '+) rng:grammar)]
-                      [<external>  (RNC<~> (RNC<&> (<:rnc-literal:> rnc-uri?) (RNC<*> (<:inherit:>) '?)) rnc->external)])
+                      [<external>  (RNC<~> (RNC<&> (<:rnc-literal:> rnc-uri-guard) (RNC<*> (<:inherit:>) '?)) rnc->external external-guard)])
 
               (<:rnc-parenthesis:> (RNC<λ> <:inner-pattern:>))))
 
@@ -325,7 +399,13 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define <:rnc-name-class:> : (-> (XML-Parser (Listof RNG-Name-Class)))
-  (let ([deadcode (rng-name-class)])
+  (let ([prefix-guard (make-rnc-prefix-guard rng-any-name? rng-any-name-ns rnc-default-namespaces prefab-namespaces)]
+        [cname:guard (make-rnc:prefix-guard rng-name? rng-name-ns rnc-default-namespaces prefab-namespaces)]
+        [deadcode (rng-name-class)])
+    (define (rnc->name [datum : Symbol]) : RNG-Name-Class
+      (define-values (prefix name) (xml-qname-split datum))
+      (rng-name (if (eq? prefix '||) #false prefix) name))
+    
     (define (rnc->any-name [data : (Listof (U Symbol RNG-Name-Class))]) : RNG-Name-Class
       (cond [(null? data) '#:livecode (rng-any-name #false #false)]
             [(pair? (cdr data)) (rng-any-name (xml-qname-prefix (assert (car data) symbol?)) (assert (cadr data) rng-name-class?))]
@@ -339,17 +419,19 @@
             [else (rng-alt-name data)]))
 
     (define (<:nsname*:>) : (XML-Parser (Listof Symbol))
-      (RNC<&> (RNC:<*> (<rnc:nsname>) '?) ((inst <:*:> (Listof Symbol)))))
+      (RNC<&> (RNC:<*> (<rnc:nsname>) '?)
+              ((inst <:*:> (Listof Symbol)))))
 
     (define (<:simple-class-name:>) : (XML-Parser (Listof RNG-Name-Class))
-      (RNC<+> (RNC<~> (<:nsname*:>) rnc->any-name) ; order matters
-              (RNC:<^> ((inst RNC:<~> Symbol RNG-Name-Class) (RNC:<+> (<rnc:id-or-keyword>) (<rnc:cname>)) rng-name))))
+      (RNC<+> (RNC<~> (<:nsname*:>) rnc->any-name prefix-guard) ; order matters
+              (RNC:<^> (RNC:<+> ((inst RNC:<~> Symbol RNG-Name-Class) (<rnc:id-or-keyword>) rnc->name)
+                                ((inst RNC:<~> Symbol RNG-Name-Class) (<rnc:cname>) rnc->name cname:guard)))))
 
     (define (<:except-name:>) : (XML-Parser (Listof RNG-Name-Class))
       (RNC<~> (RNC<&> (<:nsname*:>)
                       ((inst <:-:> (Listof RNG-Name-Class)))
                       (<:rnc-annotation:> (<:rnc-initial-annotation:>) (<:simple-class-name:>) #false rng-annotated-class))
-              rnc->any-name))
+              rnc->any-name prefix-guard))
     
     (define (<:annotated-except-name:>) : (XML-Parser (Listof RNG-Name-Class))
       (<:rnc-annotation:> (<:rnc-initial-annotation:>) (<:except-name:>) (<:rnc-follow-annotation:>)
@@ -369,6 +451,7 @@
   (let ([<div> (<rnc:keyword> '#:div)]
         [<start> (<rnc:keyword> '#:start)]
         [<include> (<rnc:keyword> '#:include)]
+        [include-guard (make-rnc-prefix-guard rng-include? rng-include-inherit rnc-default-namespaces prefab-namespaces)]
         [deadcode (rng-grammar-content)])
     (define (rnc->definition [data : (Listof (U Symbol Char RNG-Pattern))]) : RNG-Grammar-Content
       (cond [(or (null? data) (null? (cdr data))) deadcode]
@@ -401,8 +484,8 @@
     (define (<:grammar-component:>) : (XML-Parser (Listof RNG-Grammar-Content))
       (RNC<+> (<:start+define:>)
               (RNC<?> [<div>     ((inst RNC<~> RNG-Grammar-Content RNG-Grammar-Content) (<:rnc-brace:> (RNC<λ> <:rnc-grammar-content:>) '+) rng-div)]
-                      [<include> (RNC<~> (RNC<&> (<:rnc-literal:> rnc-uri?) (RNC<*> (<:inherit:>) '?) (RNC<*> (<:rnc-brace:> (RNC<λ> <:include-member:>) '+) '?))
-                                         rnc->include-content)])))
+                      [<include> (RNC<~> (RNC<&> (<:rnc-literal:> rnc-uri-guard) (RNC<*> (<:inherit:>) '?) (RNC<*> (<:rnc-brace:> (RNC<λ> <:include-member:>) '+) '?))
+                                         rnc->include-content include-guard)])))
 
     (define (<:annotated-include:>) : (XML-Parser (Listof RNG-Grammar-Content))
       (RNC<~> (RNC<&> (RNC<*> (<:rnc-initial-annotation:>) '?)
@@ -421,30 +504,3 @@
     (lambda [] ; a.k.a `member`
       (RNC<+> (<:annotated-component:>) ; order matters, inefficient
               (RNC<~> (<:rnc-grammar-annotation:>) rnc->grammar-annotation)))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define rnc-grammar-environment : (-> (Listof RNG-Decl)
-                                      (Values (Option (U String Symbol))
-                                              (Immutable-HashTable Symbol (Option String))
-                                              (Immutable-HashTable Symbol String)))
-  (let ([predeclared-ns : RNG-Preamble-Namespaces #hasheq((xml . "http://www.w3.org/XML/1998/namespace"))]
-        [predeclared-dts : RNG-Preamble-Datatypes #hasheq((xsd . "http://www.w3.org/2001/XMLSchema-datatypes"))])
-    (lambda [preamble]
-      (let env ([default-ns : (Option (U String Symbol)) #false]
-                [ns : RNG-Preamble-Namespaces predeclared-ns]
-                [dts : RNG-Preamble-Datatypes predeclared-dts]
-                [decls : (Listof RNG-Decl) preamble])
-        (cond [(null? decls) (values default-ns ns dts)]
-              [else (let-values ([(self rest) (values (car decls) (cdr decls))])
-                      (cond [(rng-datatype? self)
-                             (env default-ns ns (hash-set dts (rng-decl-prefix self) (rng-datatype-uri self)) rest)]
-                            [(rng-namespace? self)
-                             (let ([prefix (rng-decl-prefix self)]
-                                   [uri (rng-namespace-uri self)])
-                               (cond [(not (rng-namespace-default? self))
-                                      (env default-ns (hash-set ns prefix (and (string? uri) uri)) dts rest)]
-                                     [(eq? prefix '||)
-                                      (env (and (string? uri) uri) ns dts rest)]
-                                     [else ; default namespace prefix = uri <==> default namespace = uri; prefix = uri
-                                      (env prefix (hash-set dts prefix (and (string? uri) uri)) dts rest)]))]
-                            [else '#:deadcode (env default-ns ns dts rest)]))])))))

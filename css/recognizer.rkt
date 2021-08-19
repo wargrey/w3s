@@ -190,12 +190,12 @@
      (λ [[token : CSS-Syntax-Any]]
        (define datum : (CSS-Option a) (css-filter token))
        (if (exn:css? datum) datum (and datum (css->racket datum))))]
-    [(css-filter css->racket datum-filter)
+    [(css-filter css->racket datum-guard)
      (λ [[token : CSS-Syntax-Any]]
        (define datum : (CSS-Option a) (css-filter token))
        (cond [(or (not datum) (exn:css? datum)) datum]
              [else (let* ([rdatum (css->racket datum)]
-                          [okay? (datum-filter rdatum token)])
+                          [okay? (datum-guard rdatum token)])
                      (cond [(or (not okay?) (exn:css? okay?)) okay?]
                            [else rdatum]))]))]))
 
@@ -403,12 +403,12 @@
        (define-values (datum --tokens) (css-parser null tokens))
        (cond [(or (exn:css? datum) (false? datum)) (values datum --tokens)]
              [else (values (cons (css->racket (reverse datum)) data) --tokens)]))]
-    [(css-parser css->racket data-filter)
+    [(css-parser css->racket data-guard)
      (λ [[data : (Listof b)] [tokens : (Listof CSS-Token)]]
        (define-values (datum --tokens) (css-parser null tokens))
        (cond [(or (exn:css? datum) (false? datum)) (values datum --tokens)]
              [else (let* ([rdatum (css->racket (reverse datum))]
-                          [okay? (data-filter data rdatum (if (eq? tokens --tokens) null (drop-right tokens (length --tokens))))])
+                          [okay? (data-guard data rdatum (if (eq? tokens --tokens) null (drop-right tokens (length --tokens))))])
                      (cond [(or (not okay?) (exn:css? okay?)) (values okay? tokens)]
                            [else (values (cons rdatum data) --tokens)]))]))]))
 

@@ -1,6 +1,7 @@
 #lang typed/racket/base
 
 (provide (all-defined-out) SGML-StdIn)
+(provide rnc-check-prefixes?)
 
 (require racket/list)
 
@@ -28,7 +29,11 @@
     (define tokens : (Listof XML-Token) (read-rnc-tokens* /dev/dtdin source))
     (define-values (preamble body-tokens) (rnc-grammar-parse (<:rnc-preamble:>) tokens))
     (define-values (default-ns ns dts) (rnc-grammar-environment preamble))
-    (define-values (body rest) (rnc-grammar-parse (<:rnc-body:>) body-tokens))
+
+    (define-values (body rest)
+      (parameterize ([rnc-default-namespaces ns]
+                     [rnc-default-datatypes dts])
+        (rnc-grammar-parse (<:rnc-body:>) body-tokens)))
 
     #;(let ([whitespace-count (count xml:whitespace? rest)])
         (when (< whitespace-count (length rest))

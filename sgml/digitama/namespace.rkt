@@ -25,11 +25,11 @@
   (lambda [qname]
     (define sqname : String (symbol->immutable-string qname))
     
-    (cond [(not (string-contains? sqname ":")) (values qname qname)]
+    (cond [(not (string-contains? sqname ":")) (values '|| qname)]
           [else (let ([parts : (Listof Symbol) (map string->symbol (string-split sqname ":"))])
                   (cond [(null? parts) #| input is just ': |# (values '|| '||)]
                         [(null? (cdr parts)) (if (string-suffix? sqname ":") (values (car parts) '||) (values '|| (car parts)))]
-                        [(pair? (cddr parts)) (values qname qname)]
+                        [(pair? (cddr parts)) (values '|| qname)]  ; TODO: standardize this case
                         [else (values (car parts) (cadr parts))]))])))
 
 (define xml-qname-prefix : (-> Symbol Symbol)
