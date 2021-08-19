@@ -165,23 +165,23 @@
                                   (it-check-parser "include 'uri' { start = begin }" logsrc (<:rnc-grammar-content:>)
                                                    (rng-include "uri" #false (list (rng-start #\= (rng:ref 'begin)))))
                                   (it-check-parser "include 'uri' inherit = rng { start = begin a:sub [ name='test'] }" logsrc (<:rnc-grammar-content:>)
-                                                   (let ([ae (rng-annotation-element 'a:sub (list (rng-parameter 'name "test")) null)])
+                                                   (let ([ae (rng-annotation-element 'a:sub '((name . "test")) null)])
                                                      (rng-include "uri" 'rng (list (rng-start #\= (rng:ref 'begin)) (rng-grammar-annotation ae)))))
                                   (it-check-parser "a:entity [ systemId='picture.svg' ]" logsrc (<:rnc-grammar-content:>)
-                                                   (rng-grammar-annotation (rng-annotation-element 'a:entity (list (rng-parameter 'systemId "picture.svg")) null))))
+                                                   (rng-grammar-annotation (rng-annotation-element 'a:entity '((systemId . "picture.svg")) null))))
 
                         (describe "Data/Values" #:do
                                   (it-check-parser "token 'a token type'" logsrc (<:rnc-pattern:>) (rng:value #false '#:token "a token type"))
                                   (it-check-parser "mox:rnc 'a mox type'" logsrc (<:rnc-pattern:>) (rng:value 'mox 'rnc "a mox type"))
                                   (it-check-parser "string { name = 'literal' } - token" logsrc (<:rnc-pattern:>)
-                                                   (rng:data #false '#:string (list (rng-parameter 'name "literal")) (rng:data #false '#:token null #false))))
+                                                   (rng:data #false '#:string '((name . "literal")) (rng:data #false '#:token null #false))))
 
                         (describe "Annotation" #:do
                                   (it-check-parser "start = no-annotation" logsrc (<:rnc-initial-annotation:>) (vector))
                                   (it-check-parser "## documentations []" logsrc (<:rnc-initial-annotation:>) (rng-annotation null (list "# documentations []") null))
-                                  (it-check-parser "[a:docs='##']" logsrc (<:rnc-initial-annotation:>) (rng-annotation (list (rng-parameter 'a:docs "##")) null null))
-                                  (it-check-parser ">> a:entity [ notation='svg']" logsrc (<:rnc-follow-annotation:>)
-                                                   (rng-annotation-element 'a:entity (list (rng-parameter 'notation "svg")) null)))
+                                  (it-check-parser "[a:docs='##']" logsrc (<:rnc-initial-annotation:>) (rng-annotation '((a:docs . "##")) null null))
+                                  (it-check-parser ">> a:entity [ notation='svg' ]" logsrc (<:rnc-follow-annotation:>)
+                                                   (rng-annotation-element 'a:entity '((notation . "svg")) null)))
 
                         (describe "Primary Pattern" #:do
                                   (it-check-parser "stupid-xml" logsrc (<:rnc-pattern:>) (rng:ref 'stupid-xml))
@@ -206,7 +206,7 @@
                                   (it-check-parser "primary?" logsrc (<:rnc-pattern:>) (rng:element '#:optional (rng:ref 'primary)))
                                   (it-check-parser "primary? >> follow [ name = 'test' ]" logsrc (<:rnc-pattern:>)
                                                    (rng-annotated-pattern #false (rng:element '#:optional (rng:ref 'primary))
-                                                                          (list (rng-annotation-element 'follow (list (rng-parameter 'name "test")) null)))))
+                                                                          (list (rng-annotation-element 'follow '((name . "test")) null)))))
                         
                         (describe "Particle Pattern" #:do
                                   (it-check-parser "c1 | c2 | c3" logsrc (<:rnc-pattern:>) (rng:particle '#:choice (list (rng:ref 'c1) (rng:ref 'c2) (rng:ref 'c3))))
@@ -225,5 +225,6 @@
                                   (it-check-parser "include 'uri' inherit = error" logsrc (<:rnc-grammar-content:>) exn:rnc:prefix?)
                                   (it-check-parser "external 'uri' inherit = error" logsrc (<:rnc-pattern:>) exn:rnc:prefix?)
                                   (it-check-parser "error:rnc 'an error type'" logsrc (<:rnc-pattern:>) exn:rnc:prefix?)
-                                  (it-check-parser ">> a:entity [ x:notation='svg']" logsrc (<:rnc-follow-annotation:>) exn:rnc:prefix?)
-                                  (it-check-parser "[inherit:docs='##']" logsrc (<:rnc-initial-annotation:>) exn:rnc:annotation?)))))
+                                  (it-check-parser ">> a:entity [ x:notation='svg' ]" logsrc (<:rnc-follow-annotation:>) exn:rnc:prefix?)
+                                  (it-check-parser "[inherit:docs='##']" logsrc (<:rnc-initial-annotation:>) exn:rnc:annotation?)
+                                  (it-check-parser "[dname='origin' dname='dup']" logsrc (<:rnc-initial-annotation:>) exn:xml:duplicate?)))))

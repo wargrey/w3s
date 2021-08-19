@@ -6,17 +6,16 @@
 
 (require "../digicore.rkt")
 (require "../namespace.rkt")
-(require "../misc.rkt")
 
 (require digimon/string)
 
 (require (for-syntax racket/base))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(struct rng-annotation ([attributes : (Listof RNG-Parameter)] [documentations : (Listof String)] [elements : (Listof RNG-Annotation-Element)])
+(struct rng-annotation ([attributes : (Listof (Pairof Symbol String))] [documentations : (Listof String)] [elements : (Listof RNG-Annotation-Element)])
   #:transparent #:type-name RNG-Annotation)
 
-(struct rng-annotation-element ([name : Symbol] [attributes : (Listof RNG-Parameter)] [content : (Listof (U RNG-Annotation-Element String))])
+(struct rng-annotation-element ([name : Symbol] [attributes : (Listof (Pairof Symbol String))] [content : (Listof (U RNG-Annotation-Element String))])
   #:transparent #:type-name RNG-Annotation-Element)
 
 (struct rng-decl ([prefix : Symbol]) #:transparent #:type-name RNG-Decl)
@@ -37,7 +36,7 @@
 (struct rng:particle rng-pattern ([name : Keyword] [children : (Listof RNG-Pattern)]) #:transparent #:type-name RNG:Particle)
 (struct rng:attribute rng-pattern ([name : RNG-Name-Class] [child : RNG-Pattern]) #:transparent #:type-name RNG:Attribute)
 (struct rng:value rng-pattern ([ns : (Option Symbol)] [name : (U Symbol Keyword False)] [literal : String]) #:transparent #:type-name RNG:Value)
-(struct rng:data rng-pattern ([ns : (Option Symbol)] [name : (U Symbol Keyword)] [params : (Listof RNG-Parameter)] [except : (Option RNG-Pattern)])
+(struct rng:data rng-pattern ([ns : (Option Symbol)] [name : (U Symbol Keyword)] [params : (Listof (Pairof Symbol String))] [except : (Option RNG-Pattern)])
   #:transparent #:type-name RNG:Data)
 
 (struct rng-name rng-name-class ([ns : (Option Symbol)] [id : Symbol]) #:transparent #:type-name RNG-Name)
@@ -127,14 +126,6 @@
     (cond [(string-uri? literal) #true]
           [else (make+exn:rnc:uri tokens)])))
 
-(define rnc-prefix-guard : (-> (Option Symbol) (-> HashTableTop) HashTableTop (U XML-Syntax-Any (Listof XML-Token)) (XML-Option True))
-  (lambda [key bases prefabs tokens]
-    (cond [(not key) #true]
-          [(not (rnc-check-prefixes?)) #true]
-          [(hash-has-key? (bases) key) #true]
-          [(hash-has-key? prefabs key) #true]
-          [else (make+exn:rnc:prefix tokens)])))
-
 (define make-rnc:prefix-guard : (All (a b) (-> (-> Any Boolean : b) (-> b (Option Symbol)) (-> HashTableTop) HashTableTop
                                                (-> a XML-Syntax-Any (XML-Option True))))
   (lambda [subobject? object->key bases prefabs]
@@ -177,9 +168,9 @@
         (cond [(null? prefixes) #true]
               [else (let-values ([(self rest) (values (car prefixes) (cdr prefixes))])
                       (cond [(and default? (rng-namespace? self) (rng-namespace-default? self))
-                             (make+exn:xml:duplicate tokens)]
+                             (make+exn:xml:duplicate tokens) #true]
                             [(and (eq? prefix (rng-decl-prefix self)) (eq? (object-name ns) (object-name self)))
-                             (make+exn:xml:duplicate tokens)]
+                             (make+exn:xml:duplicate tokens) #true]
                             [else (check-duplicate rest)]))]))
       
       #;(cond [(eq? prefix 'xml) (if (equal? uri xml:uri) #true (make+exn:rnc:uri tokens))]
@@ -208,47 +199,61 @@
                                    (make-xml->namespace #true) prefix-guard)]))))
 
 (define-values (<:rnc-initial-annotation:> <:rnc-grammar-annotation:> <:rnc-follow-annotation:>)
-  (let* ([attribute-guard (make-rnc-prefixed-name-guard rng-parameter? rng-parameter-name rnc-default-namespaces prefab-namespaces)]
-         [element-guard (make-rnc-prefixed-name-guard rng-annotation-element? rng-annotation-element-name rnc-default-namespaces prefab-namespaces)]
-         [<:rnc-annotation-attribute:> (<:rnc-name=value:> (<rnc:name>) rng-parameter attribute-guard)])
+  (let* ([attrspace-guard (make-rnc-prefixed-name-guard rng-parameter? rng-parameter-name rnc-default-namespaces prefab-namespaces)]
+         [element-guard (make-rnc-prefixed-name-guard rng-annotation-element? rng-annotation-element-name rnc-default-namespaces prefab-namespaces)])
     (define (rnc->annotation [data : (Listof (U RNG-Parameter String RNG-Annotation-Element))]) : RNG-Annotation
-      (let dispatch ([attributes : (Listof RNG-Parameter) null]
-                     [documentations : (Listof String) null]
+      (let dispatch ([attributes : (Listof (Pairof Symbol String)) null]
+                     [a:docs : (Listof String) null]
                      [elements : (Listof RNG-Annotation-Element) null]
                      [source : (Listof (U String RNG-Parameter RNG-Annotation-Element)) data])
-        (cond [(null? source) (rng-annotation (reverse attributes) (reverse documentations) (reverse elements))]
+        (cond [(null? source) (rng-annotation (reverse attributes) (reverse a:docs) (reverse elements))]
               [else (let-values ([(self rest) (values (car source) (cdr source))])
-                      (cond [(rng-annotation-element? self) (dispatch attributes documentations (cons self elements) rest)]
-                            [(rng-parameter? self) (dispatch (cons self attributes) documentations elements rest)]
-                            [else (dispatch attributes (cons self documentations) elements rest)]))])))
+                      (cond [(rng-annotation-element? self) (dispatch attributes a:docs (cons self elements) rest)]
+                            [(rng-parameter? self) (dispatch (cons (cons (rng-parameter-name self) (rng-parameter-value self)) attributes) a:docs elements rest)]
+                            [else (dispatch attributes (cons self a:docs) elements rest)]))])))
     
     (define (rnc->annotation-element [data : (Listof (U Symbol String RNG-Parameter RNG-Annotation-Element))]) : RNG-Annotation-Element
       (let dispatch ([name : Symbol '||]
-                     [attributes : (Listof RNG-Parameter) null]
+                     [attributes : (Listof (Pairof Symbol String)) null]
                      [contents : (Listof (U String RNG-Annotation-Element)) null]
                      [source : (Listof (U Symbol String RNG-Parameter RNG-Annotation-Element)) data])
         (cond [(null? source) (rng-annotation-element name (reverse attributes) (reverse contents))]
               [else (let-values ([(self rest) (values (car source) (cdr source))])
                       (cond [(symbol? self) (dispatch self attributes contents rest)]
-                            [(rng-parameter? self) (dispatch name (cons self attributes) contents rest)]
+                            [(rng-parameter? self) (dispatch name (cons (cons (rng-parameter-name self) (rng-parameter-value self)) attributes) contents rest)]
                             [(rng-annotation-element? self) (dispatch name attributes (cons self contents) rest)]
                             [(string? self) (dispatch name attributes (cons self contents) rest)]
                             [else (dispatch name attributes contents rest)]))])))
 
-    (define (rnc-annotation-guard [A : (Listof RNG-Annotation)] [a : RNG-Annotation] [tokens : (Listof XML-Token)]) : (XML-Option True)
+    (define (annotation-guard [A : (Listof RNG-Annotation)] [a : RNG-Annotation] [tokens : (Listof XML-Token)]) : (XML-Option True)
       (and (pair? tokens) #true))
+
+    (define (attribute-guard [attrs : (Listof RNG-Parameter)] [attr : RNG-Parameter] [tokens : (Listof XML-Token)]) : (XML-Option True)
+      (define name (rng-parameter-name attr))
+      
+      (let check-duplicate ([attrs : (Listof RNG-Parameter) attrs])
+        (cond [(null? attrs) #true]
+              [else (let-values ([(self rest) (values (car attrs) (cdr attrs))])
+                      (if (eq? name (rng-parameter-name self))
+                          (make+exn:xml:duplicate tokens)
+                          (check-duplicate rest)))]))
+      
+      (attrspace-guard attrs attr tokens))
+
+    (define (<:rnc-annotation-attribute:>)
+      (<:rnc-name=value:> (<rnc:name>) rng-parameter attribute-guard))
     
     (define (<:rnc-element:>) : (XML-Parser (Listof RNG-Annotation-Element))
       (RNC<~> (RNC<&> (RNC:<^> (<rnc:name>))
-                      (<:rnc-bracket:> (RNC<&> (RNC<*> <:rnc-annotation-attribute:> '*)
+                      (<:rnc-bracket:> (RNC<&> (RNC<*> (<:rnc-annotation-attribute:>) '*)
                                                (RNC<*> (RNC<+> (RNC<λ> <:rnc-element:>) (<:rnc-literal:>)) '*))))
               rnc->annotation-element element-guard))
 
     (values (lambda [] : (XML-Parser (Listof RNG-Annotation))
               (RNC<~> (RNC<&> (RNC:<*> (<xml:whitespace>) '*)
-                              (RNC<*> (<:rnc-bracket:> (RNC<&> (RNC<*> <:rnc-annotation-attribute:> '*)
+                              (RNC<*> (<:rnc-bracket:> (RNC<&> (RNC<*> (<:rnc-annotation-attribute:>) '*)
                                                                (RNC<*> (<:rnc-element:>) '*))) '?))
-                      rnc->annotation rnc-annotation-guard))
+                      rnc->annotation annotation-guard))
 
             <:rnc-element:>
 
@@ -288,8 +293,8 @@
       (define-values (params rest) (partition rng-parameter? data))
       (cond [(null? rest) deadcode]
             [else (let-values ([(ns name) (rnc-qname-split (car rest))])
-                    (cond [(null? (cdr rest)) (rng:data ns name params #false)]
-                          [else (rng:data ns name params (assert (cadr rest) rng-pattern?))]))]))
+                    (cond [(null? (cdr rest)) (rng:data ns name (map rnc-parameter->pair params) #false)]
+                          [else (rng:data ns name (map rnc-parameter->pair params) (assert (cadr rest) rng-pattern?))]))]))
 
     (define (rnc->element [data : (Listof (U RNG-Name-Class RNG-Pattern))]) : RNG-Pattern
       (cond [(or (null? data) (null? (cdr data))) deadcode]
@@ -504,3 +509,16 @@
     (lambda [] ; a.k.a `member`
       (RNC<+> (<:annotated-component:>) ; order matters, inefficient
               (RNC<~> (<:rnc-grammar-annotation:>) rnc->grammar-annotation)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define rnc-parameter->pair : (-> RNG-Parameter (Pairof Symbol String))
+  (lambda [param]
+    (cons (rng-parameter-name param) (rng-parameter-value param))))
+
+(define rnc-prefix-guard : (-> (Option Symbol) (-> HashTableTop) HashTableTop (U XML-Syntax-Any (Listof XML-Token)) (XML-Option True))
+  (lambda [key bases prefabs tokens]
+    (cond [(not key) #true]
+          [(not (rnc-check-prefixes?)) #true]
+          [(hash-has-key? (bases) key) #true]
+          [(hash-has-key? prefabs key) #true]
+          [else (make+exn:rnc:prefix tokens)])))
