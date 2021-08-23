@@ -73,25 +73,6 @@
       (define datum : (XML-Option Any) (rnc-filter token))
       (if (exn:xml? datum) datum (and datum const)))))
 
-(define RNC:<?> : (All (a b c) (case-> [(XML:Filter a) (-> (U XML-Syntax-Any (Listof XML-Token)) XML-Syntax-Error) -> (XML:Filter a)]
-                                       [(XML:Filter a) b (-> XML-Syntax-Error c) -> (XML:Filter (U a b c))]))
-  (case-lambda
-    [(rnc:filter make-exn)
-     (λ [[token : XML-Syntax-Any]]
-       (define datum : (XML-Option a) (rnc:filter token))
-       (cond [(or (not datum) (exn:xml? datum)) (make-exn token)]
-             [else datum]))]
-    [(rnc:filter false-value fexn-value)
-     ;;; NOTICE
-     ; this filter is intentionally designed for tolerating a failed match,
-     ; the input token therefore would be consumed unconditionally.
-     (λ [[token : XML-Syntax-Any]]
-       (define datum : (XML-Option a) (rnc:filter token))
-       (cond [(not datum) false-value]
-             [(not (exn:xml? datum)) datum]
-             [(not fexn-value) false-value]
-             [else (fexn-value datum)]))]))
-
 (define RNC:<^> : (All (a) (-> (U (XML:Filter a) (Listof+ (XML:Filter a))) (XML-Parser (Listof a))))
   (case-lambda
     [(atom-filter)
@@ -160,43 +141,7 @@
                           [(= n+1 most) (values (cons datum data++) --tokens)] ; (= n +inf.0) also does not make much sense
                           [else (mult-0+ (cons datum data++) --tokens (add1 n+1))])))])))
 
-(define RNC:<!> : (All (a) (->* ((XML:Filter a)) ((U (XML-Multiplier Positive-Index) '+)) (XML-Parser (Listof Any))))
-  ;;; (WARNING: this is *not*) https://drafts.csswg.org/css-values/#mult-req
-  (lambda [atom-filter [multiplier '+]]
-    (define-values (least most) (rnc:multiplier-range multiplier 1))
-    (λ [[data : (Listof Any)] [tokens : (Listof XML-Token)]]
-      (let not-mult-req ([sub++ : (Listof a) null]
-                         [tokens-- : (Listof XML-Token) tokens]
-                         [n+1 : Natural 1])
-        (define-values (token --tokens) (rnc-car/cdr tokens--))
-        (define datum : (XML-Option a) (atom-filter token))
-        (if (or (not datum) (exn:xml? datum))
-            (cond [(< least n+1) (values (cons (reverse sub++) data) tokens--)]
-                  [else (values datum --tokens)])
-            (cond [(= n+1 most) (values (cons (reverse (cons datum sub++)) data) --tokens)]
-                  [else (not-mult-req (cons datum sub++) --tokens (add1 n+1))]))))))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define RNC<^> : (All (a) (-> (XML-Parser (Listof a)) (XML-Parser (Listof Any))))
-  (case-lambda
-    [(atom-parser) ; equivalent to casting `(XML-Parser (Listof a))` into `(XML-Parser (Listof Any))` for `XML-Declaration-Parser`
-     (λ [[data : (Listof Any)] [tokens : (Listof XML-Token)]]
-       (define-values (datum --tokens) (atom-parser null tokens))
-       (cond [(or (not datum) (exn:xml? datum)) (values datum --tokens)]
-             [else (values (append datum data) --tokens)]))]))
-
-(define RNC<$> : (case-> [(XML-Parser (Listof Any)) -> (XML-Parser (Listof Any))]
-                         [(XML-Parser (Listof Any)) Any -> (XML-Parser (Listof Any))])
-  (case-lambda
-    [(rnc-parser)
-     (λ [[data : (Listof Any)] [tokens : (Listof XML-Token)]]
-       (cond [(pair? tokens) (rnc-parser data tokens)]
-             [else (values data null)]))]
-    [(rnc-parser eof-value)
-     (λ [[data : (Listof Any)] [tokens : (Listof XML-Token)]]
-       (cond [(pair? tokens) (rnc-parser data tokens)]
-             [else (values (cons eof-value data) null)]))]))
-
 (define RNC<~> : (All (a b) (case-> [(XML-Parser (Listof a)) (-> (Listof a) b) -> (XML-Parser (Listof b))]
                                     [(XML-Parser (Listof a)) (-> (Listof a) b) (-> (Listof b) b (Listof XML-Token) (XML-Option True)) -> (XML-Parser (Listof b))]))
   (case-lambda
@@ -235,25 +180,15 @@
                           [(= n+1 most) (values ++data --tokens)] ; (= n +inf.0) also does not make much sense
                           [else (mult-0+ ++data --tokens (add1 n+1))])))])))
 
-(define RNC<!> : (All (a) (->* ((XML-Parser (Listof a))) ((U (XML-Multiplier Positive-Index) '+)) (XML-Parser (Listof Any))))
-  ;;; (WARNING: this is *not*) https://drafts.csswg.org/css-values/#mult-req
-  (lambda [rnc-parser [multiplier '+]]
-    (define-values (least most) (rnc:multiplier-range multiplier 1))
-    (λ [[data : (Listof Any)] [tokens : (Listof XML-Token)]]
-      (let not-mult-req ([subdata++ : (Listof a) null]
-                         [tokens-- : (Listof XML-Token) tokens]
-                         [n+1 : Natural 1])
-        (define-values (subdata --tokens) (rnc-parser subdata++ tokens--))
-        (if (or (not subdata) (exn:xml? subdata))
-            (cond [(< least n+1) (values (cons (reverse subdata++) data) tokens--)]
-                  [else (values subdata --tokens)])
-            (cond [(= n+1 most) (values (cons (reverse subdata) data) --tokens)]
-                  [else (not-mult-req subdata --tokens (add1 n+1))]))))))
-
-(define RNC<λ> : (All (a) (-> (-> (XML-Parser (Listof a))) (XML-Parser (Listof a))))
-  (lambda [rnc-parser]
-    (λ [[data : (Listof a)] [tokens : (Listof XML-Token)]]
-      ((rnc-parser) data tokens))))
+(define RNC<λ> : (All (a b) (case-> [(-> (XML-Parser (Listof a))) -> (XML-Parser (Listof a))]
+                                    [(-> b (XML-Parser (Listof a))) b -> (XML-Parser (Listof a))]))
+  (case-lambda
+    [(rnc-parser)
+     (λ [[data : (Listof a)] [tokens : (Listof XML-Token)]]
+       ((rnc-parser) data tokens))]
+    [(rnc-parser argc)
+     (λ [[data : (Listof a)] [tokens : (Listof XML-Token)]]
+       ((rnc-parser argc) data tokens))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define rnc:disjoin : (All (a b c) (case-> [(XML:Filter a) (XML:Filter b) -> (XML:Filter (U a b))]))

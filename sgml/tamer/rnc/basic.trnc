@@ -10,7 +10,7 @@ namespace xs = "http://www.w3.org/2001/XMLSchema"
 namespace xsd = "http://www.w3.org/2001/XMLSchema"
 
 # ISO RELAX NG Schema
-include "shared-relationshipReference.rnc" inherit = r
+include "shared.trnc" inherit = r
 CT_OfficeArtExtension =
   element * { BUILT_IN_ANY_TYPE },
   attribute uri {

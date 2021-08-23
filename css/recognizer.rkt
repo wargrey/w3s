@@ -526,10 +526,15 @@
             (cond [(= n+1 most) (values (cons (reverse subdata) data) --tokens)]
                   [else (not-mult-req subdata --tokens (add1 n+1))]))))))
 
-(define CSS<λ> : (All (a) (-> (-> (CSS-Parser (Listof a))) (CSS-Parser (Listof a))))
-  (lambda [css-parser]
-    (λ [[data : (Listof a)] [tokens : (Listof CSS-Token)]]
-      ((css-parser) data tokens))))
+(define CSS<λ> : (All (a b) (case-> [(-> (CSS-Parser (Listof a))) -> (CSS-Parser (Listof a))]
+                                    [(-> b (CSS-Parser (Listof a))) b -> (CSS-Parser (Listof a))]))
+  (case-lambda
+    [(css-parser)
+     (λ [[data : (Listof a)] [tokens : (Listof CSS-Token)]]
+       ((css-parser) data tokens))]
+    [(css-parser argc)
+     (λ [[data : (Listof a)] [tokens : (Listof CSS-Token)]]
+       ((css-parser argc) data tokens))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define css:disjoin : (All (a b c) (case-> [(CSS:Filter a) (CSS:Filter b) -> (CSS:Filter (U a b))]

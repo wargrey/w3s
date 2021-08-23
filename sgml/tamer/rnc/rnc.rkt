@@ -6,7 +6,7 @@
 (require sgml/digitama/tokenizer/port)
 
 (require sgml/digitama/relaxng/rnc)
-(require sgml/digitama/relaxng/grammar)
+(require sgml/digitama/relaxng/compact)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define open-tamer-input : (-> (U String (Listof Char)) Input-Port)
@@ -74,12 +74,12 @@
     (expect-equal (length tokens) (length expected-values))))
 
 (define-behavior (it-check-parser stream.rnc logsrc <rng> expected-values)
-  (let ([rng-object? (or (rng-decl? expected-values)
-                         (rng-pattern? expected-values)
-                         (rng-name-class? expected-values)
-                         (rng-grammar-content? expected-values)
-                         (rng-annotation? expected-values)
-                         (rng-annotation-element? expected-values))])
+  (let ([rng-object? (or (preamble? expected-values)
+                         (pattern? expected-values)
+                         (name-class? expected-values)
+                         (grammar-content? expected-values)
+                         (annotation? expected-values)
+                         (annotation-element? expected-values))])
     #:it
     ["should be parsed into ~s, when fed with ~s" expected-values stream.rnc] #:when rng-object?
     ["should report error due to `~a`, when fed with ~s" (object-name expected-values) stream.rnc] #:when (procedure? expected-values)
@@ -104,9 +104,10 @@
 
   (current-logger /dev/dtrace)
 
-  (rnc-check-prefixes? #true)
+  (rnc-check-prefix? #true)
   (rnc-default-namespaces #hash((mox . "mox") (local . "local") (rng . "rng")))
   (rnc-default-datatypes #hash((mox . "mox") (local . "local") (rng . "rng")))
+  (rnc-shadow-definitions (list 'shadow))
   
   (spec-begin RelaxNG #:do
               (describe "Compact Syntax" #:do
@@ -137,87 +138,85 @@
                                   (it-check-token "ns:name" (list 'ns:name)))
 
                         (describe "Environment" #:do
-                                  (it-check-parser "default namespace xml = 'uri'" logsrc (<:rnc-preamble:>) (rng-namespace 'xml "uri" #true))
-                                  (it-check-parser "default namespace = inherit" logsrc (<:rnc-preamble:>) (rng-namespace '|| 'inherit #true))
+                                  (it-check-parser "default namespace xml = 'uri'" logsrc (<:rnc-preamble:>) ($namespace 'xml "uri" #true))
+                                  (it-check-parser "default namespace = inherit" logsrc (<:rnc-preamble:>) ($namespace '|| 'inherit #true))
                                   (it-check-parser "default namespace = inherit default namespace = inherit" logsrc (<:rnc-preamble:>) exn:xml:duplicate?)
                                   (it-check-parser "default namespace dup = 'dup' namespace dup = 'dup'" logsrc (<:rnc-preamble:>) exn:xml:duplicate?)
                                   (it-check-parser "namespace dup = 'is_okay' datatypes dup = 'yes'" logsrc (<:rnc-preamble:>) (vector))
-                                  (it-check-parser "datatypes cat = 'https://' ~ 'gyoudmon.org'" logsrc (<:rnc-preamble:>) (rng-datatype 'cat "https://gyoudmon.org")))
+                                  (it-check-parser "datatypes cat = 'https://' ~ 'gyoudmon.org'" logsrc (<:rnc-preamble:>) ($datatype 'cat "https://gyoudmon.org")))
 
                         (describe "Name Class" #:do
-                                  (it-check-parser "*" logsrc (<:rnc-name-class:>) (rng-any-name #false #false))
-                                  (it-check-parser "* - name" logsrc (<:rnc-name-class:>) (rng-any-name #false (rng-name #false 'name)))
-                                  (it-check-parser "mox:*" logsrc (<:rnc-name-class:>) (rng-any-name 'mox #false))
-                                  (it-check-parser "mox:* - local:name" logsrc (<:rnc-name-class:>) (rng-any-name 'mox (rng-name 'local 'name)))
+                                  (it-check-parser "*" logsrc (<:rnc-name-class:>) ($any-name #false #false))
+                                  (it-check-parser "* - name" logsrc (<:rnc-name-class:>) ($any-name #false ($name #false 'name)))
+                                  (it-check-parser "mox:*" logsrc (<:rnc-name-class:>) ($any-name 'mox #false))
+                                  (it-check-parser "mox:* - local:name" logsrc (<:rnc-name-class:>) ($any-name 'mox ($name 'local 'name)))
                                   (it-check-parser "rng | xsd | dtd" logsrc (<:rnc-name-class:>)
-                                                   (rng-alt-name (list (rng-name #false 'rng) (rng-name #false 'xsd) (rng-name #false 'dtd))))
+                                                   ($alt-name (list ($name #false 'rng) ($name #false 'xsd) ($name #false 'dtd))))
                                   (it-check-parser "((rng | xsd))" logsrc (<:rnc-name-class:>)
-                                                   (rng-alt-name (list (rng-name #false 'rng) (rng-name #false 'xsd))))
+                                                   ($alt-name (list ($name #false 'rng) ($name #false 'xsd))))
                                   (it-check-parser "* - name >> follow-nothing []" logsrc (<:rnc-name-class:>)
-                                                   (rng-annotated-class #false (rng-any-name #false (rng-name #false 'name))
-                                                                        (list (rng-annotation-element 'follow-nothing null null)))))
+                                                   (annotated-class #false ($any-name #false ($name #false 'name))
+                                                                    (list (annotation-element 'follow-nothing null null)))))
 
                         (describe "Grammar Content" #:do
-                                  (it-check-parser "start |= \\grammar" logsrc (<:rnc-grammar-content:>) (rng-start #\| (rng:ref 'grammar)))
-                                  (it-check-parser "begin |= end" logsrc (<:rnc-grammar-content:>) (rng-define 'begin #\| (rng:ref 'end)))
-                                  (it-check-parser "div { d = iv }" logsrc (<:rnc-grammar-content:>) (rng-div (list (rng-define 'd #\= (rng:ref 'iv)))))
-                                  (it-check-parser "include 'target-only'" logsrc (<:rnc-grammar-content:>) (rng-include "target-only" #false null))
+                                  (it-check-parser "start |= \\grammar" logsrc (<:rnc-grammar-content:>) ($start #\| ($ref 'grammar)))
+                                  (it-check-parser "begin |= end" logsrc (<:rnc-grammar-content:>) ($define 'begin #\| ($ref 'end)))
+                                  (it-check-parser "div { d = iv }" logsrc (<:rnc-grammar-content:>) ($div (list ($define 'd #\= ($ref 'iv)))))
+                                  (it-check-parser "include 'target-only'" logsrc (<:rnc-grammar-content:>) ($include "target-only" #false null))
+                                  (it-check-parser "include 'uri' { shadow = begin }" logsrc (<:rnc-grammar-content:>) ($include "uri" #false (list (grammar-content))))
                                   (it-check-parser "include 'uri' { start = begin }" logsrc (<:rnc-grammar-content:>)
-                                                   (rng-include "uri" #false (list (rng-start #\= (rng:ref 'begin)))))
+                                                   ($include "uri" #false (list ($start #\= ($ref 'begin)))))
                                   (it-check-parser "include 'uri' inherit = rng { start = begin a:sub [ name='test'] }" logsrc (<:rnc-grammar-content:>)
-                                                   (let ([ae (rng-annotation-element 'a:sub '((name . "test")) null)])
-                                                     (rng-include "uri" 'rng (list (rng-start #\= (rng:ref 'begin)) (rng-grammar-annotation ae)))))
+                                                   (let ([ae (annotation-element 'a:sub '((name . "test")) null)])
+                                                     ($include "uri" 'rng (list ($start #\= ($ref 'begin)) (grammar-annotation ae)))))
                                   (it-check-parser "a:entity [ systemId='picture.svg' ]" logsrc (<:rnc-grammar-content:>)
-                                                   (rng-grammar-annotation (rng-annotation-element 'a:entity '((systemId . "picture.svg")) null))))
+                                                   (grammar-annotation (annotation-element 'a:entity '((systemId . "picture.svg")) null))))
 
                         (describe "Data/Values" #:do
-                                  (it-check-parser "token 'a token type'" logsrc (<:rnc-pattern:>) (rng:value #false '#:token "a token type"))
-                                  (it-check-parser "mox:rnc 'a mox type'" logsrc (<:rnc-pattern:>) (rng:value 'mox 'rnc "a mox type"))
+                                  (it-check-parser "token 'a token type'" logsrc (<:rnc-pattern:>) ($value #false '#:token "a token type"))
+                                  (it-check-parser "mox:rnc 'a mox type'" logsrc (<:rnc-pattern:>) ($value 'mox 'rnc "a mox type"))
                                   (it-check-parser "string { name = 'literal' } - token" logsrc (<:rnc-pattern:>)
-                                                   (rng:data #false '#:string '((name . "literal")) (rng:data #false '#:token null #false))))
+                                                   ($data #false '#:string '((name . "literal")) ($data #false '#:token null #false))))
 
                         (describe "Annotation" #:do
                                   (it-check-parser "start = no-annotation" logsrc (<:rnc-initial-annotation:>) (vector))
-                                  (it-check-parser "## documentations []" logsrc (<:rnc-initial-annotation:>) (rng-annotation null (list "# documentations []") null))
-                                  (it-check-parser "[a:docs='##']" logsrc (<:rnc-initial-annotation:>) (rng-annotation '((a:docs . "##")) null null))
+                                  (it-check-parser "## documentations []" logsrc (<:rnc-initial-annotation:>) (annotation null (list "# documentations []") null))
+                                  (it-check-parser "[a:docs='##']" logsrc (<:rnc-initial-annotation:>) (annotation '((a:docs . "##")) null null))
                                   (it-check-parser ">> a:entity [ notation='svg' ]" logsrc (<:rnc-follow-annotation:>)
-                                                   (rng-annotation-element 'a:entity '((notation . "svg")) null)))
+                                                   (annotation-element 'a:entity '((notation . "svg")) null)))
 
                         (describe "Primary Pattern" #:do
-                                  (it-check-parser "stupid-xml" logsrc (<:rnc-pattern:>) (rng:ref 'stupid-xml))
-                                  (it-check-parser "notAllowed" logsrc (<:rnc-pattern:>) (rng:simple '#:notAllowed))
-                                  (it-check-parser "parent mox" logsrc (<:rnc-pattern:>) (rng:parent 'mox))
-                                  (it-check-parser "'value only'" logsrc (<:rnc-pattern:>) (rng:value #false #false "value only"))
-                                  (it-check-parser "element * { target }" logsrc (<:rnc-pattern:>) (rng:element (rng-any-name #false #false) (rng:ref 'target)))
-                                  (it-check-parser "element rng:text { empty }" logsrc (<:rnc-pattern:>) (rng:element (rng-name 'rng 'text) (rng:simple '#:empty)))
+                                  (it-check-parser "stupid-xml" logsrc (<:rnc-pattern:>) ($ref 'stupid-xml))
+                                  (it-check-parser "notAllowed" logsrc (<:rnc-pattern:>) ($simple '#:notAllowed))
+                                  (it-check-parser "parent mox" logsrc (<:rnc-pattern:>) ($parent 'mox))
+                                  (it-check-parser "'value only'" logsrc (<:rnc-pattern:>) ($value #false #false "value only"))
+                                  (it-check-parser "element * { target }" logsrc (<:rnc-pattern:>) ($element ($any-name #false #false) ($ref 'target)))
+                                  (it-check-parser "element rng:text { empty }" logsrc (<:rnc-pattern:>) ($element ($name 'rng 'text) ($simple '#:empty)))
                                   (it-check-parser "attribute bar { string }" logsrc (<:rnc-pattern:>)
-                                                   (rng:attribute (rng-name #false 'bar) (rng:data #false '#:string null #false)))
+                                                   ($attribute ($name #false 'bar) ($data #false '#:string null #false)))
                                   (it-check-parser "attribute * - local:* { string }*" logsrc (<:rnc-pattern:>)
-                                                   (rng:element '#:zeroOrMore (rng:attribute (rng-any-name #false (rng-any-name 'local #false))
-                                                                                             (rng:data #false '#:string null #false))))
-                                  (it-check-parser "grammar { target = mox }" logsrc (<:rnc-pattern:>) (rng:grammar (list (rng-define 'target #\= (rng:ref 'mox)))))
-                                  (it-check-parser "list { elem }" logsrc (<:rnc-pattern:>) (rng:element '#:list (rng:ref 'elem)))
-                                  (it-check-parser "external 'uri'" logsrc (<:rnc-pattern:>) (rng:external "uri" #false))
-                                  (it-check-parser "external 'uri' inherit = mox" logsrc (<:rnc-pattern:>) (rng:external "uri" 'mox)))
+                                                   ($element '#:zeroOrMore ($attribute ($any-name #false ($any-name 'local #false))
+                                                                                       ($data #false '#:string null #false))))
+                                  (it-check-parser "grammar { target = mox }" logsrc (<:rnc-pattern:>) ($grammar (list ($define 'target #\= ($ref 'mox)))))
+                                  (it-check-parser "list { elem }" logsrc (<:rnc-pattern:>) ($element '#:list ($ref 'elem)))
+                                  (it-check-parser "external 'uri'" logsrc (<:rnc-pattern:>) ($external "uri" #false))
+                                  (it-check-parser "external 'uri' inherit = mox" logsrc (<:rnc-pattern:>) ($external "uri" 'mox)))
 
                         (describe "Repeated Primary Pattern" #:do
-                                  (it-check-parser "primary+" logsrc (<:rnc-pattern:>) (rng:element '#:oneOrMore (rng:ref 'primary)))
-                                  (it-check-parser "primary*" logsrc (<:rnc-pattern:>) (rng:element '#:zeroOrMore (rng:ref 'primary)))
-                                  (it-check-parser "primary?" logsrc (<:rnc-pattern:>) (rng:element '#:optional (rng:ref 'primary)))
+                                  (it-check-parser "primary+" logsrc (<:rnc-pattern:>) ($element '#:oneOrMore ($ref 'primary)))
+                                  (it-check-parser "primary*" logsrc (<:rnc-pattern:>) ($element '#:zeroOrMore ($ref 'primary)))
+                                  (it-check-parser "primary?" logsrc (<:rnc-pattern:>) ($element '#:optional ($ref 'primary)))
                                   (it-check-parser "primary? >> follow [ name = 'test' ]" logsrc (<:rnc-pattern:>)
-                                                   (rng-annotated-pattern #false (rng:element '#:optional (rng:ref 'primary))
-                                                                          (list (rng-annotation-element 'follow '((name . "test")) null)))))
+                                                   (annotated-pattern #false ($element '#:optional ($ref 'primary))
+                                                                      (list (annotation-element 'follow '((name . "test")) null)))))
                         
                         (describe "Particle Pattern" #:do
-                                  (it-check-parser "c1 | c2 | c3" logsrc (<:rnc-pattern:>) (rng:particle '#:choice (list (rng:ref 'c1) (rng:ref 'c2) (rng:ref 'c3))))
-                                  (it-check-parser "g1 , g2 , g3" logsrc (<:rnc-pattern:>) (rng:particle '#:group (list (rng:ref 'g1) (rng:ref 'g2) (rng:ref 'g3))))
+                                  (it-check-parser "c1 | c2 | c3" logsrc (<:rnc-pattern:>) ($particle '#:choice (list ($ref 'c1) ($ref 'c2) ($ref 'c3))))
+                                  (it-check-parser "g1 , g2 , g3" logsrc (<:rnc-pattern:>) ($particle '#:group (list ($ref 'g1) ($ref 'g2) ($ref 'g3))))
                                   (it-check-parser "(nameQName | nameClass), (common & pattern+)" logsrc (<:rnc-pattern:>)
-                                                   (rng:particle '#:group (list (rng:particle '#:choice
-                                                                                              (list (rng:ref 'nameQName)
-                                                                                                    (rng:ref 'nameClass)))
-                                                                                (rng:particle '#:interleave
-                                                                                              (list (rng:ref 'common)
-                                                                                                    (rng:element '#:oneOrMore (rng:ref 'pattern))))))))
+                                                   ($particle '#:group
+                                                               (list ($particle '#:choice (list ($ref 'nameQName) ($ref 'nameClass)))
+                                                                     ($particle '#:interleave (list ($ref 'common) ($element '#:oneOrMore ($ref 'pattern))))))))
 
                         (describe "Constraints" #:do
                                   (it-check-parser "error:* - local:name" logsrc (<:rnc-name-class:>) exn:rnc:prefix?)

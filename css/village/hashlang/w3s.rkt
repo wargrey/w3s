@@ -61,7 +61,8 @@
             src (~r MB #:precision '(= 3)) cpu real gc)
           (format "[~a]memory: ~aMB cpu time: ~a(~a) real time: ~a(~a) gc time: ~a"
             src (~r MB #:precision '(= 3)) cpu (- cpu gc) real (- real gc) gc)))
-    
+
     (displayln infomsg)
+    
     (log-message (current-logger) 'info src infomsg
                  (vector MB cpu real gc) #false)))

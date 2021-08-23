@@ -37,9 +37,10 @@
          (define-values (#,lang.sgml MB cpu real gc)
            (w3s-read-doc '#,src #,bytes-bag #,line #,column #,position
                          #,read-sgml-doc))
-
+         
          (module+ main
            #,lang.sgml
+           
            (w3s-display-times '#,lang.sgml MB cpu real gc))
 
          (w3s-doc-process #,sgml-normalize #,lang*.sgml MB* cpu* real* gc* #,lang.sgml)))))
@@ -99,7 +100,8 @@
   (lambda [[src #false] [/dev/rncin (current-input-port)]]
     (parameterize ([xml-alternative-document-source (sgml-path->string src)])
       (sgml-doc-read-syntax 'read-rnc-grammar 'sgml/rnc
-                            #px"\\.t?rnc$" ".rnc" src /dev/rncin))))
+                            #px"\\.t?rnc$" ".rnc" src /dev/rncin
+                            'rng-grammar-simplify))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (xml-info in mod line col pos)

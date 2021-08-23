@@ -5,7 +5,8 @@
 (provide (all-defined-out))
 
 (require racket/string)
-(require racket/path)
+
+(require digimon/filesystem)
 
 (require "digicore.rkt")
 (require "parser.rkt")
@@ -13,6 +14,7 @@
 (require "condition.rkt")
 (require "misc.rkt")
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; https://drafts.csswg.org/css-syntax/#css-stylesheets
 (define-type CSS-Stylesheet-Pool (HashTable Natural CSS-Stylesheet))
 (define-type CSS-Grammar-Rule (U CSS-Style-Rule CSS-@Rule CSS-@Media-Rule CSS-@Supports-Rule))
@@ -157,8 +159,8 @@
     (define ?block : (Option CSS:Block) (css-@rule-block import))
     (define ?target.css : (U Path CSS-Syntax-Error)
       (cond [(not uri) (make+exn:css:empty (css-@rule-name import))]
-            [(css:string=<-? uri non-empty-string?) => (λ [url] (css-url-string->path parent-href url))]
-            [(css:url=<-? uri non-empty-string?) => (λ [url] (css-url-string->path parent-href url))]
+            [(css:string=<-? uri non-empty-string?) => (λ [url] (build-requiring-path parent-href url))]
+            [(css:url=<-? uri non-empty-string?) => (λ [url] (build-requiring-path parent-href url))]
             [(or (css:string? uri) (css:url? uri)) (make+exn:css:empty uri)]
             [else (make+exn:css:type uri)]))
     (cond [(exn? ?target.css) ?target.css]
@@ -260,11 +262,3 @@
         (define child.css : (U Symbol String) (css-stylesheet-location id))
         (when (string? child.css)
           (read-css-stylesheet (string->path child.css) pool))))))
-  
-(define css-url-string->path : (-> Any String Path)
-  (lambda [parent-location uri]
-    (define uri.css : Path-String
-      (cond [(absolute-path? (string->path uri)) uri]
-            [else (let ([pwd (or (and (string? parent-location) (path-only parent-location)) (current-directory))])
-                    (build-path pwd uri))]))
-    (simple-form-path uri.css)))

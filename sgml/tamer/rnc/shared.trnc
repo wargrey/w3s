@@ -1,0 +1,28 @@
+#lang sgml/rnc
+
+namespace fn = "http://www.w3.org/2006/xpath-functions"
+namespace r =
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+namespace rng = "http://relaxng.org/ns/structure/1.0"
+namespace xs = "http://www.w3.org/2001/XMLSchema"
+namespace xsd = "http://www.w3.org/2001/XMLSchema"
+
+# ISO RELAX NG Schema
+ST_RelationshipId =
+  [ xs:documentation [ "Explicit Relationship ID" ] ] xsd:string
+id = attribute id { text >> xs:documentation [ "Relationship ID" ] }
+embed =
+  attribute embed {
+    text >> xs:documentation [ "Embedded Image Relationship Target" ]
+  }
+link = attribute link { text }
+dm = attribute dm { text }
+lo = attribute lo { text }
+qs = attribute qs { text }
+cs = attribute cs { text }
+blip = attribute blip { text }
+pict = attribute pict { text }
+href =
+  attribute href {
+    text >> xs:documentation [ "Hyperlink Target Relationship ID" ]
+  }
