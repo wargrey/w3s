@@ -101,7 +101,7 @@
     (parameterize ([xml-alternative-document-source (sgml-path->string src)])
       (sgml-doc-read-syntax 'read-rnc-grammar 'sgml/rnc
                             #px"\\.t?rnc$" ".rnc" src /dev/rncin
-                            'rng-grammar-simplify))))
+                            'rnc-grammar-simplify))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (xml-info in mod line col pos)

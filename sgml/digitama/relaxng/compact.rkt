@@ -42,8 +42,8 @@
 (struct $any-name name-class ([ns : (Option Symbol)] [except : (Option Name-Class)]) #:transparent)
 (struct $alt-name name-class ([options : (Listof Name-Class)]) #:transparent)
 
-(struct $start grammar-content ([combine : (Option Char)] [pattern : Pattern]) #:transparent)
-(struct $define grammar-content ([name : Symbol] [combine : (Option Char)] [pattern : Pattern]) #:transparent)
+(struct $start grammar-content ([combine : (Option Char)] [pattern : Pattern] [shadow? : Boolean]) #:transparent)
+(struct $define grammar-content ([name : Symbol] [combine : (Option Char)] [pattern : Pattern] [shadow? : Boolean]) #:transparent)
 (struct $div grammar-content ([contents : (Listof Grammar-Content)]) #:transparent)
 (struct $include grammar-content ([href : String] [inherit : (Option Symbol)] [contents : (Listof Grammar-Content)]) #:transparent)
 
@@ -59,19 +59,19 @@
 (struct grammar-annotation grammar-content ([element : Annotation-Element]) #:transparent)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-type RNG-Preamble-Namespaces (Immutable-HashTable Symbol (Option String)))
-(define-type RNG-Preamble-Datatypes (Immutable-HashTable Symbol String))
+(define-type RNC-Preamble-Namespaces (Immutable-HashTable Symbol (Option String)))
+(define-type RNC-Preamble-Datatypes (Immutable-HashTable Symbol String))
 
-(define prefab-namespaces : RNG-Preamble-Namespaces
+(define prefab-namespaces : RNC-Preamble-Namespaces
   #hasheq((xml . "http://www.w3.org/XML/1998/namespace")
           (a . "http://relaxng.org/ns/compatibility/annotations/1.0")))
 
-(define prefab-datatypes : RNG-Preamble-Datatypes
+(define prefab-datatypes : RNC-Preamble-Datatypes
   #hasheq((xsd . "http://www.w3.org/2001/XMLSchema-datatypes")))
 
 (define rnc-check-prefix? : (Parameterof Boolean) (make-parameter #false))
-(define rnc-default-namespaces : (Parameterof RNG-Preamble-Namespaces) (make-parameter prefab-namespaces))
-(define rnc-default-datatypes : (Parameterof RNG-Preamble-Datatypes) (make-parameter prefab-datatypes))
+(define rnc-default-namespaces : (Parameterof RNC-Preamble-Namespaces) (make-parameter prefab-namespaces))
+(define rnc-default-datatypes : (Parameterof RNC-Preamble-Datatypes) (make-parameter prefab-datatypes))
 
 (define rnc-shadow-start? : (Parameterof Boolean) (make-parameter #false))
 (define rnc-shadow-definitions : (Parameterof (Listof Symbol)) (make-parameter null))
@@ -95,12 +95,12 @@
             (<:rnc-pattern:>))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define rnc-grammar-environment : (-> (Listof Preamble) (Values (Option (U String Symbol)) RNG-Preamble-Namespaces RNG-Preamble-Datatypes))
+(define rnc-grammar-environment : (-> (Listof Preamble) (Values (Option (U String Symbol)) RNC-Preamble-Namespaces RNC-Preamble-Datatypes))
   (lambda [preamble]
     (let env ([default-ns : (Option (U String Symbol)) #false]
               ; TODO: if prefixes should be added for `include` and `external`
-              [ns : RNG-Preamble-Namespaces prefab-namespaces]
-              [dts : RNG-Preamble-Datatypes prefab-datatypes]
+              [ns : RNC-Preamble-Namespaces prefab-namespaces]
+              [dts : RNC-Preamble-Datatypes prefab-datatypes]
               [decls : (Listof Preamble) preamble])
       (cond [(null? decls) (values default-ns ns dts)]
             [else (let-values ([(self rest) (values (car decls) (cdr decls))])
@@ -453,25 +453,25 @@
         [<start> (<rnc:keyword> '#:start)]
         [<include> (<rnc:keyword> '#:include)]
         [include-guard (make-rnc-prefix-guard $include? $include-inherit rnc-default-namespaces prefab-namespaces)]
-        [shadow-grammar (grammar-content)])
+        [deadcode (grammar-content)])
     (define (rnc->definition [data : (Listof (U Symbol Char Pattern))]) : Grammar-Content
-      (cond [(or (null? data) (null? (cdr data))) shadow-grammar]
-            [(null? (cddr data)) (if (rnc-shadow-start?) shadow-grammar ($start (assert (car data) char?) (assert (cadr data) pattern?)))]
-            [(memq (car data) (rnc-shadow-definitions)) shadow-grammar]
-            [else ($define (assert (car data) symbol?) (assert (cadr data) char?) (assert (caddr data) pattern?))]))
+      (cond [(or (null? data) (null? (cdr data))) deadcode]
+            [(null? (cddr data)) ($start (assert (car data) char?) (assert (cadr data) pattern?) (rnc-shadow-start?))]
+            [else ($define (assert (car data) symbol?) (assert (cadr data) char?) (assert (caddr data) pattern?)
+                           (and (memq (car data) (rnc-shadow-definitions)) #true))]))
 
     (define (rnc->include-content [data : (Listof (U String Symbol Grammar-Content))]) : Grammar-Content
       (define-values (contents datum) (partition grammar-content? data))
-      (cond [(null? datum) shadow-grammar]
+      (cond [(null? datum) deadcode]
             [(null? (cdr datum)) ($include (assert (car datum) string?) #false contents)]
             [else ($include (assert (car datum) string?) (assert (cadr datum) symbol?) contents)]))
 
     (define (rnc->grammar-annotation [data : (Listof (U Annotation-Element))]) : Grammar-Content
-      (cond [(null? data) shadow-grammar]
+      (cond [(null? data) deadcode]
             [else (grammar-annotation (car data))]))
 
     (define (rnc->annotated-component [data : (Listof (U Annotation Grammar-Content))]) : Grammar-Content
-      (cond [(null? data) shadow-grammar]
+      (cond [(null? data) deadcode]
             [(null? (cdr data)) (assert (car data) grammar-content?)]
             [else (annotated-content (assert (car data) annotation?) (assert (cadr data) grammar-content?))]))
     

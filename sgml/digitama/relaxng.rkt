@@ -12,18 +12,18 @@
 (require "stdin.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(struct rng-grammar
+(struct rnc-grammar
   ([tagname : Symbol]
    [location : (U String Symbol)]
    [default-namespace : (Option (U Symbol String))] ; `#false` implies `inherit`
-   [namespaces : RNG-Preamble-Namespaces]
-   [datatypes : RNG-Preamble-Datatypes]
+   [namespaces : RNC-Preamble-Namespaces]
+   [datatypes : RNC-Preamble-Datatypes]
    [body : (U Pattern (Listof Grammar-Content))])
   #:transparent
-  #:type-name RNG-Grammar)
+  #:type-name RNC-Grammar)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define read-rnc-grammar : (->* (SGML-StdIn) ((U False String Symbol) #:tagname Symbol) RNG-Grammar)
+(define read-rnc-grammar : (->* (SGML-StdIn) ((U False String Symbol) #:tagname Symbol) RNC-Grammar)
   (lambda [/dev/rawin [port-name #false] #:tagname [name 'grammar]]
     (define /dev/dtdin : Input-Port (rnc-open-input-port /dev/rawin #true port-name))
     (define source : (U Symbol String) (or port-name (sgml-port-name /dev/dtdin)))
@@ -40,7 +40,7 @@
         (when (< whitespace-count (length rest))
           (make+exn:xml:malformed rest)))
     
-    (rng-grammar name source default-ns ns dts
+    (rnc-grammar name source default-ns ns dts
                  (let-values ([(grammars patterns) (partition grammar-content? body)])
                    (cond [(null? patterns) grammars]
                          [else (assert (car patterns) pattern?)])))))

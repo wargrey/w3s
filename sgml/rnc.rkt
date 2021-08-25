@@ -5,12 +5,13 @@
 ;     what adapts the hedge automata theory
 
 (provide (all-defined-out) SGML-StdIn default-rnc-error-literal)
-(provide (struct-out rng-grammar) rnc-check-prefix? read-rnc-grammar)
-(provide rng-grammar-simplify)
+(provide RNC-Grammar (struct-out rnc-grammar) rnc-check-prefix? read-rnc-grammar)
+(provide RNG-Grammar (struct-out rng-grammar) rnc-grammar-simplify)
 
 (require "digitama/relaxng.rkt")
 (require "digitama/relaxng/rnc.rkt")
 (require "digitama/relaxng/compact.rkt")
+(require "digitama/relaxng/schema.rkt")
 (require "digitama/relaxng/simplification.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
