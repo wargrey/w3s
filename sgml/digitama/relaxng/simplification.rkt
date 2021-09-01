@@ -6,19 +6,17 @@
 
 (require digimon/filesystem)
 
-(require sgml/xexpr)
-
 (require "../relaxng.rkt")
 
 (require "compact.rkt")
 (require "schema.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define rng-current-inherit : (Parameterof (Option (Pairof Symbol String))) (make-parameter #false))
+(define rng-current-inherit : (Parameterof (Pairof Symbol (Option String))) (make-parameter (cons 'inherit #false)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define rnc-grammar-simplify : (-> RNC-Grammar RNG-Grammar)
-  (lambda [rnc]
+(define rnc-grammar-simplify : (->* (RNC-Grammar) ((Listof (Pairof Symbol String)) (Listof RNG-Grammar-Content)) RNG-Grammar)
+  (lambda [rnc [annotated-attributes null] [siblings null]]
     (define grammars : (U Pattern (Listof Grammar-Content)) (rnc-grammar-body rnc))
     (define namespaces : RNC-Preamble-Namespaces (rnc-grammar-namespaces rnc))
     (define default-uri : (Option String) (rng-namespace-uri namespaces (rnc-grammar-default-namespace rnc)))
@@ -30,77 +28,75 @@
         (cond [(not xmlns-uri) xmlns]
               [else (cons (cons xmlns:ns xmlns-uri) xmlns)])))
 
-    (define rng : RNG-Grammar
-      (if (pattern? grammars)
-          (rng-pattern-simplify rnc grammars)
-          (rnc-grammars-simplify rnc grammars)))
+    (define attributes : (Listof (Pairof Symbol String))
+      (append (cond [(not default-uri) (reverse xmlns:ns)]
+                    [else (cons (cons 'ns default-uri) (reverse xmlns:ns))])
+              annotated-attributes))
 
-    (struct-copy rng-grammar rng
-                 [attributes (cond [(not default-uri) (reverse xmlns:ns)]
-                                   [else (cons (cons 'ns default-uri)
-                                               (reverse xmlns:ns))])])))
+    (if (pattern? grammars)
+        (rng-pattern-simplify rnc grammars)
+        (rnc-grammars-simplify rnc grammars namespaces attributes siblings))))
 
 (define rng-pattern-simplify : (-> RNC-Grammar Pattern RNG-Grammar)
   (lambda [rnc pattern]
     (rng-grammar (rnc-grammar-tagname rnc) (rnc-grammar-location rnc)
-                 null null)))
+                 null null #false null rng-empty-definitions)))
 
-(define rnc-grammars-simplify : (-> RNC-Grammar (Listof Grammar-Content) RNG-Grammar)
-  (lambda [rnc grammars]
-    (define defines : (HashTable Symbol $define) (make-hash))
-    
-    (define body : (Listof RNG-Grammar-Content)
-      (let simplify ([body : (Listof Grammar-Content) grammars]
-                     [ydob : (Listof RNG-Grammar-Content) null])
-        (cond [(null? body) (reverse ydob)]
-              [else (let-values ([(self rest) (values (car body) (cdr body))])
-                      (cond [(rng-include-element? self) (simplify rest (cons (rng-include->div rnc self) ydob))]
-                            [else (simplify rest ydob)]))])))
+(define rnc-grammars-simplify : (-> RNC-Grammar (Listof Grammar-Content) RNC-Preamble-Namespaces
+                                    (Listof (Pairof Symbol String)) (Listof RNG-Grammar-Content)
+                                    RNG-Grammar)
+  (lambda [rnc grammars namespaces attributes siblings]
+    (define-values (?start defines children) (rng-grammar-contents-simplify (rnc-grammar-location rnc) grammars namespaces))
     
     (rng-grammar (rnc-grammar-tagname rnc) (rnc-grammar-location rnc)
-                 null body)))
+                 attributes children ?start siblings defines)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define rng-include->div : (-> RNC-Grammar (U $include annotated-content) RNG-Grammar)
-  (lambda [grammar include]
-    (define-values (a:attrs a:children self)
-      (cond [($include? include) (values null null include)]
-            [else (let ([a (annotated-content-initial include)]
-                        [inc (annotated-content-component include)])
-                    (values (annotation-attributes a) (annotation-elements a)
-                            (assert inc $include?)))]))
+(define rng-grammar-contents-simplify : (-> (U String Symbol) (Listof Grammar-Content) RNC-Preamble-Namespaces
+                                            (Values (Option RNG-Element) RNG-Definitions (Listof RNG-Grammar-Content)))
+  (lambda [source grammars namespaces]
+    (let simplify ([body : (Listof Grammar-Content) grammars]
+                   [ydob : (Listof RNG-Grammar-Content) null]
+                   [a:initial : (Option Annotation) #false]
+                   [?start : (Option RNG-Element) #false]
+                   [defines : RNG-Definitions rng-empty-definitions])
+      (cond [(null? body) (values ?start defines (reverse ydob))]
+            [else (let-values ([(self rest) (values (car body) (cdr body))])
+                    (cond [(grammar-annotation? self)
+                           (simplify rest (cons (rng-annotation-element->foreign-element (grammar-annotation-element self)) ydob) #false ?start defines)]
+                          [($include? self)
+                           (simplify rest (cons (rng-include->nested-grammar-div source self a:initial namespaces) ydob) #false ?start defines)]
+                          [(a:content? self)
+                           (simplify (cons (a:content-component self) rest) ydob (a:content-initial self) ?start defines)]
+                          [($div? self) ; yes, ignore the initial annotation
+                           (simplify (append ($div-contents self) rest) ydob #false ?start defines)]
+                          [else (simplify rest ydob #false ?start defines)]))]))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define rng-include->nested-grammar-div : (-> (U Symbol String) $include (Option Annotation) RNC-Preamble-Namespaces RNG-Grammar)
+  (lambda [pwd self a:initial namespaces]
+    (define-values (a:attrs a:children)
+      (cond [(not a:initial) (values null null)]
+            [else (values (annotation-attributes a:initial)
+                          (annotation-elements a:initial))]))
 
     (define inherit ($include-inherit self))
-    (define-values (remove-start? defines)
-      (let collect : (Values Boolean (Listof Symbol))
-        ([start? : Boolean #false]
-         [defines : (Listof Symbol) null]
-         [gc-rest : (Listof Grammar-Content) ($include-contents self)])
-        (cond [(null? gc-rest) (values start? defines)]
-              [else (let-values ([(subself subrest) (values (car gc-rest) (cdr gc-rest))])
-                      (cond [($start? subself) (collect #true defines subrest)]
-                            [($define? subself) (collect start? (cons ($define-name subself) defines) subrest)]
-                            [else (collect start? defines subrest)]))])))
+    (define-values (?start definitions siblings) (rng-grammar-contents-simplify pwd ($include-contents self) namespaces))
     
     (define subrnc : RNG-Grammar
-      (parameterize ([rnc-shadow-start? remove-start?]
-                     [rnc-shadow-definitions defines])
-        (rnc-grammar-simplify (read-rnc-grammar (build-requiring-path (rnc-grammar-location grammar) ($include-href self)) #:tagname 'div))))
+      (parameterize ([rnc-shadow-start? (and ?start #true)]
+                     [rnc-shadow-definitions (hash-keys definitions)]
+                     [rng-current-inherit (if (not inherit) (rng-current-inherit) (cons inherit (hash-ref namespaces inherit (λ [] #false))))])
+        (rnc-grammar-simplify (read-rnc-grammar (build-requiring-path pwd ($include-href self)) #:tagname 'div)
+                              a:attrs (append (map rng-annotation-element->foreign-element a:children) siblings))))
 
     subrnc))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define rng-include-element? : (-> Any Boolean : #:+ (U $include annotated-content))
-  (lambda [rgc]
-    (or ($include? rgc)
-        (and (annotated-content? rgc)
-             ($include? (annotated-content-component rgc))))))
+(define rng-empty-definitions : RNG-Definitions #hasheq())
 
 (define rng-namespace-uri : (-> RNC-Preamble-Namespaces (U Symbol String False) (Option String))
   (lambda [ns uri]
     (cond [(string? uri) uri]
           [(symbol? uri) (rng-namespace-uri ns (hash-ref ns uri (λ [] #false)))]
-          [else (let ([inherited-ns (rng-current-inherit)])
-                  (and inherited-ns (cdr inherited-ns)))])))
+          [else (cdr (rng-current-inherit))])))

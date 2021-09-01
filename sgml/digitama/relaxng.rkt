@@ -3,8 +3,6 @@
 (provide (all-defined-out) SGML-StdIn)
 (provide rnc-check-prefix?)
 
-(require racket/list)
-
 (require "relaxng/rnc.rkt")
 (require "relaxng/compact.rkt")
 

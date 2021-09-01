@@ -50,10 +50,10 @@
 ;; stupid design or bad-written specs
 ; https://relaxng.org/compact-20021121.html#d0e331
 ; https://relaxng.org/compact-20021121.html#d0e377
-(struct annotated-parameter parameter ([initial : Annotation]) #:transparent)
-(struct annotated-pattern pattern ([initial : (Option Annotation)] [primary : Pattern] [follows : (Listof Annotation-Element)]) #:transparent)
-(struct annotated-class name-class ([initial : (Option Annotation)] [simple : Name-Class] [follows : (Listof Annotation-Element)]) #:transparent)
-(struct annotated-content grammar-content ([initial : Annotation] [component : Grammar-Content]) #:transparent)
+(struct a:parameter parameter ([initial : Annotation]) #:transparent)
+(struct a:pattern pattern ([initial : (Option Annotation)] [primary : Pattern] [follows : (Listof Annotation-Element)]) #:transparent)
+(struct a:class name-class ([initial : (Option Annotation)] [simple : Name-Class] [follows : (Listof Annotation-Element)]) #:transparent)
+(struct a:content grammar-content ([initial : Annotation] [component : Grammar-Content]) #:transparent)
 
 ; https://relaxng.org/compact-20021121.html#d0e385
 (struct grammar-annotation grammar-content ([element : Annotation-Element]) #:transparent)
@@ -307,7 +307,7 @@
                      [rest : (Listof (U Pattern Char Symbol Annotation-Element)) data])
           (if (null? rest)
               (cond [(not particle) self]
-                    [(pair? follows) (annotated-pattern #false ($element particle self) (reverse follows))]
+                    [(pair? follows) (a:pattern #false ($element particle self) (reverse follows))]
                     [else ($element particle self)])
 
               (let-values ([(head tail) (values (car rest) (cdr rest))])
@@ -325,7 +325,7 @@
       (cond [(null? data) (parameter 'dead "code")]
             [(null? (cdr data)) (assert (car data) parameter?)]
             [else (let ([param (assert (car data) parameter?)])
-                    (annotated-parameter (parameter-name param) (parameter-value param)
+                    (a:parameter (parameter-name param) (parameter-value param)
                                              (assert (cadr data) annotation?)))]))
 
     (define (<datatype:name>) : (XML:Filter (U Symbol Keyword))
@@ -340,7 +340,7 @@
       (RNC<~> (RNC<&> (RNC:<^> (<datatype:name>))
                       (RNC<*> (<:rnc-brace:> (<:param:>) '+) '?)
                       ((inst <:-:> (Listof Pattern)))
-                      (<:rnc-annotation:> (<:rnc-initial-annotation:>) (<:primary:>) #false annotated-pattern))
+                      (<:rnc-annotation:> (<:rnc-initial-annotation:>) (<:primary:>) #false a:pattern))
               rnc->data))
 
     (define (<:primary:>) : (XML-Parser (Listof Pattern)) ; order matters
@@ -361,10 +361,10 @@
 
     (define (<:annotated-data-except:>) : (XML-Parser (Listof Pattern))
       (<:rnc-annotation:> (<:rnc-initial-annotation:>) (<:data-except:>) (<:rnc-follow-annotation:>)
-                          annotated-pattern))
+                          a:pattern))
 
     (define (<:inner-particle:>) : (XML-Parser (Listof Pattern))
-      (RNC<~> (RNC<&> (<:rnc-annotation:> (<:rnc-initial-annotation:>) (<:primary:>) (<:rnc-follow-annotation:>) annotated-pattern)
+      (RNC<~> (RNC<&> (<:rnc-annotation:> (<:rnc-initial-annotation:>) (<:primary:>) (<:rnc-follow-annotation:>) a:pattern)
                       (RNC<*> (RNC<&> (RNC:<^> (<xml:delim> '(#\? #\+ #\*)))
                                       (RNC<*> (<:rnc-follow-annotation:>) '*)) '?))
               rnc->inner-particle))
@@ -431,15 +431,15 @@
     (define (<:except-name:>) : (XML-Parser (Listof Name-Class))
       (RNC<~> (RNC<&> (<:nsname*:>)
                       ((inst <:-:> (Listof Name-Class)))
-                      (<:rnc-annotation:> (<:rnc-initial-annotation:>) (<:simple-class-name:>) #false annotated-class))
+                      (<:rnc-annotation:> (<:rnc-initial-annotation:>) (<:simple-class-name:>) #false a:class))
               rnc->any-name prefix-guard))
     
     (define (<:annotated-except-name:>) : (XML-Parser (Listof Name-Class))
       (<:rnc-annotation:> (<:rnc-initial-annotation:>) (<:except-name:>) (<:rnc-follow-annotation:>)
-                          annotated-class))
+                          a:class))
 
     (define (<:annotated-simple-class-name:>) : (XML-Parser (Listof Name-Class))
-      (<:rnc-annotation:> (<:rnc-initial-annotation:>) (<:simple-class-name:>) (<:rnc-follow-annotation:>) annotated-class))
+      (<:rnc-annotation:> (<:rnc-initial-annotation:>) (<:simple-class-name:>) (<:rnc-follow-annotation:>) a:class))
     
     (lambda [] ; a.k.a `innerNameClass`
       (RNC<+> (<:annotated-except-name:>) ; order matters, inefficient
@@ -473,7 +473,7 @@
     (define (rnc->annotated-component [data : (Listof (U Annotation Grammar-Content))]) : Grammar-Content
       (cond [(null? data) deadcode]
             [(null? (cdr data)) (assert (car data) grammar-content?)]
-            [else (annotated-content (assert (car data) annotation?) (assert (cadr data) grammar-content?))]))
+            [else (a:content (assert (car data) annotation?) (assert (cadr data) grammar-content?))]))
     
     (define (<:start+define:>) : (XML-Parser (Listof Grammar-Content))
       (RNC<?> [<start> (RNC<~> (RNC<&> (RNC:<^> (<rnc:assign-method>)) (<:rnc-pattern:>)) rnc->definition)]

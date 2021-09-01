@@ -155,8 +155,8 @@
                                   (it-check-parser "((rng | xsd))" logsrc (<:rnc-name-class:>)
                                                    ($alt-name (list ($name #false 'rng) ($name #false 'xsd))))
                                   (it-check-parser "* - name >> follow-nothing []" logsrc (<:rnc-name-class:>)
-                                                   (annotated-class #false ($any-name #false ($name #false 'name))
-                                                                    (list (annotation-element 'follow-nothing null null)))))
+                                                   (a:class #false ($any-name #false ($name #false 'name))
+                                                            (list (annotation-element 'follow-nothing null null)))))
 
                         (describe "Grammar Content" #:do
                                   (it-check-parser "start |= \\grammar" logsrc (<:rnc-grammar-content:>) ($start #\| ($ref 'grammar) #false))
@@ -208,8 +208,8 @@
                                   (it-check-parser "primary*" logsrc (<:rnc-pattern:>) ($element '#:zeroOrMore ($ref 'primary)))
                                   (it-check-parser "primary?" logsrc (<:rnc-pattern:>) ($element '#:optional ($ref 'primary)))
                                   (it-check-parser "primary? >> follow [ name = 'test' ]" logsrc (<:rnc-pattern:>)
-                                                   (annotated-pattern #false ($element '#:optional ($ref 'primary))
-                                                                      (list (annotation-element 'follow '((name . "test")) null)))))
+                                                   (a:pattern #false ($element '#:optional ($ref 'primary))
+                                                              (list (annotation-element 'follow '((name . "test")) null)))))
                         
                         (describe "Particle Pattern" #:do
                                   (it-check-parser "c1 | c2 | c3" logsrc (<:rnc-pattern:>) ($particle '#:choice (list ($ref 'c1) ($ref 'c2) ($ref 'c3))))
