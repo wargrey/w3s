@@ -11,7 +11,6 @@
 (require racket/keyword)
 
 (require digimon/number)
-(require digimon/predicate)
 
 (require bitmap/digitama/unsafe/image)
 
