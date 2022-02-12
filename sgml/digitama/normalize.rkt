@@ -29,7 +29,7 @@
  [unsafe-string-ref (-> String Index Char)])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-type XML-XXE-Reader (All (E) (->* (Input-Port) ((U False Symbol String)) E)))
+(define-type (XML-XXE-Reader E) (->* (Input-Port) ((U False Symbol String)) E))
 (define-type Open-Input-XML-XXE
   (-> Path-String (Option String) (Option String) (Option Index) (Boxof (U False String Symbol))
       (U False Input-Port (Pairof Input-Port Boolean))))
@@ -95,11 +95,11 @@
     (define topsize : (Option Index) (xml-dtd-guard-ipe-topsize dtdg))
     (define xxeg : XML-XXE-Guard (xml-dtd-guard-xxe-guard dtdg))
     (define-values (int-entities iothers stopped?) (xml-dtd-entity-expand/partition intsubset #false #true stop? topsize xxeg))
-    
+
     (define-values (entities eothers _)
       (cond [(or stopped? (not ?ext-dtd)) (values int-entities null #false)]
             [else (xml-dtd-entity-expand/partition (xml-dtd-declarations ?ext-dtd) int-entities #true #false #false xxeg)]))
-    
+
     (xml-dtd-type-declaration-expand entities (append iothers eothers) topsize xxeg)))
 
 (define xml-dtd-entity-expand/partition : (-> (Listof DTD-Declaration*) (Option Schema-Entities) Boolean Boolean (Option Index) XML-XXE-Guard
@@ -205,7 +205,7 @@
   ;;; https://www.w3.org/TR/xml/#bypass
   (lambda [e entities ?int-entities topsize xxeg]
     (define ?value (xsch-internal-entity-value e))
-    
+
     (cond [(not (xml-entity-value-normalize? ?value topsize)) e]
           [else (let ([?new-value (xml-dtd-entity-replace (xsch-entity-name e) ?value entities ?int-entities topsize xxeg)])
                   (and ?new-value
@@ -248,7 +248,7 @@
     (define attlist : (Immutable-HashTable Symbol XSch-Attribute)
       (hash-ref (xml-schema-attributes schema) (xml:name-datum tagname)
                 (λ [] xsch-empty-attributes)))
-    
+
     (define-values (setubirtta xml:this:lang xml:this:space)
       (let attribute-filter-map : (Values (Listof XML-Element-Attribute*) (Option String) Symbol)
         ([rest : (Listof XML-Element-Attribute*) (cadr e)]
@@ -268,7 +268,7 @@
                               [(xml:lang) (attribute-filter-map rest++ setubirtta++ names++ (xml:lang-ref tagname ?attr) space)]
                               [(xml:space) (attribute-filter-map rest++ setubirtta++ names++ lang (xml:space-ref tagname ?attr space))]
                               [else (attribute-filter-map rest++ setubirtta++ names++ lang space)]))]))
-            
+
             (for/fold ([setubirtta : (Listof XML-Element-Attribute*) setubirtta]
                        [this:lang : (Option String) lang]
                        [this:space : Symbol space])
@@ -287,7 +287,7 @@
       (xml-subelement-normalize* tagname (caddr e) schema
                                 xml:this:lang xml:this:space xml:filter
                                 (assert (+ depth 1) index?) topsize xxeg))
-    
+
     (list tagname (reverse setubirtta) ?children)))
 
 (define xml-element-attribute-normalize*
@@ -338,7 +338,7 @@
                                         Index (Option Index) XML-XXE-Guard (Listof (U XML-Subdatum* XML-Element*)))
   (lambda [tagname children schema xml:lang xml:space xml:filter depth topsize xxeg]
     (define tag : Symbol (xml:name-datum tagname))
-    
+
     (let normalize-subelement ([rest : (Listof (U XML-Subdatum* XML-Element*)) children]
                                [nerdlihc : (Listof (U XML-Subdatum* XML-Element*)) null]
                                [secaps : (Listof XML:WhiteSpace) null])
@@ -389,7 +389,7 @@
     (define size : Index (string-length src))
     (define false-idx : Nonnegative-Fixnum (+ size 1))
     (define safe? : Boolean (eq? (string-utf-8-length src) size))
-    
+
     (let dtd-normalize ([idx : Nonnegative-Fixnum 0]
                         [leader : (Option Char) #false]
                         [srahc : (Listof Char) null]
@@ -398,10 +398,10 @@
       (cond [(< idx size)
              (let ([ch (unsafe-string-ref src idx)])
                (define idx++ : Nonnegative-Fixnum (+ idx 1))
-               
+
                (when (eq? ch #\<)
                  (make+exn:xml:char etoken ename 'debug))
-               
+
                (if (not leader)
                    (cond [(or (eq? ch #\%) (eq? ch #\&)) (dtd-normalize idx++ ch srahc gexists? expanded)]
                          [(eq? expanded topsize) (make+exn:xml:bomb etoken ename) (dtd-normalize false-idx #false null gexists? expanded)]
@@ -444,7 +444,7 @@
                (if (not gexists?)
                    (w3s-remake-token etoken xml:string new-value)
                    (w3s-remake-token etoken xml:&string new-value)))]
-            
+
             [else #false]))))
 
 (define xml-attr-entity-replace : (->* (XML-Token XML:String Schema-Entities (Option Schema-Entities) (Option Index) XML-XXE-Guard)
@@ -457,7 +457,7 @@
     (define src : String (xml:string-datum vtoken))
     (define size : Index (string-length src))
     (define false-idx : Nonnegative-Fixnum (+ size 1))
-    
+
     (let attv-normalize ([idx : Nonnegative-Fixnum 0]
                          [leader : (Option Symbol) #false]
                          [srahc : (Listof Char) null]
@@ -465,7 +465,7 @@
       (cond [(< idx size)
              (let ([ch (string-ref src idx)])
                (define idx++ : Nonnegative-Fixnum (+ idx 1))
-               
+
                (cond [(eq? leader '&)
                       (cond [(not (eq? ch #\;)) (attv-normalize idx++ leader (cons ch srahc) expanded)]
                             [(null? srahc) (make+exn:xml:malformed vtoken aname) (attv-normalize false-idx leader srahc expanded)]
@@ -496,15 +496,15 @@
                      [(eq? ch #\return) (attv-normalize idx++ 'xD srahc (unsafe-fx+ expanded 1 #| for `return`s at the end of the string |#))]
                      [(eq? ch #\newline) (write-char #\space /dev/avout) (attv-normalize idx++ leader srahc (unsafe-fx+ expanded 1))]
                      ; End EOL
-                     
+
                      [else (write-char ch /dev/avout) (attv-normalize idx++ leader srahc (unsafe-fx+ expanded 1))]))]
-            
+
             [(and (= idx size) (not (eq? leader '&)))
              (when (eq? leader 'xD) #| already counted on |# (write-char #\space /dev/avout))
              (if (null? rstack)
                  (w3s-remake-token vtoken xml:string (get-output-string /dev/avout))
                  expanded)]
-            
+
             [else #false]))))
 
 (define xml-cdata-entity-replace : (->* (XML-Token XML:String Schema-Entities (Option Schema-Entities) (Option Index) XML-XXE-Guard)
@@ -514,7 +514,7 @@
     (define src : String (xml:string-datum vtoken))
     (define size : Index (string-length src))
     (define false-idx : Nonnegative-Fixnum (+ size 1))
-    
+
     (let content-normalize ([idx : Nonnegative-Fixnum 0]
                             [leader : (Option Symbol) #false]
                             [srahc : (Listof Char) null]
@@ -522,7 +522,7 @@
       (cond [(< idx size)
              (let ([ch (string-ref src idx)])
                (define idx++ : Nonnegative-Fixnum (+ idx 1))
-               
+
                (cond [(eq? leader '&)
                       (cond [(not (eq? ch #\;)) (content-normalize idx++ leader (cons ch srahc) expanded)]
                             [(null? srahc) (make+exn:xml:malformed vtoken aname) (content-normalize false-idx leader srahc expanded)]
@@ -555,15 +555,15 @@
                      [(eq? expanded topsize) (make+exn:xml:bomb vtoken aname) (content-normalize false-idx #false null expanded)]
                      [(eq? ch #\&) (content-normalize idx++ '& srahc expanded)]
                      [else (write-char ch /dev/cvout) (content-normalize idx++ leader srahc (unsafe-fx+ expanded 1))]))]
-            
+
             [(and (= idx size) (not leader))
              (if (null? rstack)
                  (w3s-remake-token vtoken xml:string (get-output-string /dev/cvout))
                  expanded)]
-            
+
             [else #false]))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;  
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xsch-notation-cons : (-> XSch-Notation Schema-Notations Schema-Notations)
   (lambda [n notations]
     (let* ([ntoken (xsch-notation-name n)]
@@ -619,7 +619,7 @@
                                              (Values (Option String) Boolean))
   (lambda [ntoken name entities int-entities [context #false]]
     (define ?xstr : (Option XML:String) (xml-internal-entity-value-token-ref ntoken name entities int-entities context))
-    
+
     (cond [(not ?xstr) (values #false #false)]
           [(xml:&string? ?xstr) (values (xml:string-datum ?xstr) #true)]
           [else (values (xml:string-datum ?xstr) #false)])))
@@ -629,7 +629,7 @@
     (define e : (Option XSch-Entity)
       (cond [(not ?int-entities) (hash-ref entities name (λ [] #false))]
             [else (hash-ref ?int-entities name (λ [] (hash-ref entities name (λ [] #false))))]))
-    
+
     (cond [(xsch-internal-entity? e) (xsch-internal-entity-value e)]
           [(xsch-unparsed-entity? e) (make+exn:xml:foreign ntoken context) #false]
           [(xsch-external-entity? e) (make+exn:xml:external ntoken context) #false]
@@ -640,7 +640,7 @@
     (define e : (Option XSch-Entity)
       (cond [(not ?int-entities) (hash-ref entities name (λ [] #false))]
             [else (hash-ref ?int-entities name (λ [] (hash-ref entities name (λ [] #false))))]))
-    
+
     (cond [(xsch-internal-entity? e) (xsch-internal-entity-value e)]
           [(xsch-unparsed-entity? e) (make+exn:xml:foreign ntoken context) #false]
           [(xsch-external-entity? e) #true]
@@ -657,7 +657,7 @@
     (define e : (Option XSch-Entity)
       (cond [(not ?int-entities) (hash-ref entities name (λ [] #false))]
             [else (hash-ref ?int-entities name (λ [] (hash-ref entities name (λ [] #false))))]))
-    
+
     (cond [(xsch-token-entity? e)
            (let ([?tokens (xsch-token-entity-body e)])
              (cond [(list? ?tokens) ?tokens]
@@ -703,10 +703,10 @@
                      [(not ?port) (values #false #false)]
                      [(cdr ?port) (values (car ?port) #false)]
                      [else (values (car ?port) topsize0)]))
-             
+
              (if (not /dev/rawin)
                  (make+exn:xml:defense (filter xml:string? (list system public)) content)
-                 
+
                  (let ([/dev/entin (if (not topsize) /dev/rawin (make-limited-input-port /dev/rawin topsize #false))])
                    (unless (port-counts-lines? /dev/entin)
                      (port-count-lines! /dev/entin))
@@ -722,7 +722,7 @@
                  (read-xxe)))
 
            (custodian-shutdown-all (current-custodian))
-             
+
            (cond [(not ?entity) (make+exn:xml:timeout (filter xml:string? (list system public)) content) #false]
                  [(exn:xml? ?entity) #false]
                  [else ?entity])))))
@@ -732,7 +732,7 @@
     (λ [[tv : XML:String]]
       (define source : String (w3s-token-location-string tv))
       (define /dev/subin : Input-Port (dtd-open-input-port (xml:string-datum tv) #true source))
-      
+
       (read-tokens /dev/subin source scope))))
 
 (define xml-dtd-reader : (XML-XXE-Reader (Listof XML-Token))
@@ -745,11 +745,11 @@
     (define /dev/entout : Output-Port (open-output-string '/dev/entout))
 
     (xml-skip-whitespace /dev/entin)
-      
+
     (for ([line (in-bytes-lines /dev/entin)])
       (write-bytes line /dev/entout)
       (write-char #\newline /dev/entout))
-    
+
     (string-trim (get-output-string /dev/entout) #:left? #false)))
 
 (define xml-make-cdata-reader : (-> XML:Reference (XML-XXE-Reader (List XML:String)))
@@ -804,7 +804,7 @@
 (define xml-whitespaces-consolidate* : (-> (Pairof XML:WhiteSpace (Listof XML:WhiteSpace)) XML:WhiteSpace)
   (lambda [secaps]
     (define-values (head body) (values (car secaps) (cdr secaps)))
-    
+
     (if (pair? body)
         (let ws-consolidate ([rest : (Listof XML:WhiteSpace) body]
                              [end-token : XML:WhiteSpace head]
@@ -821,7 +821,7 @@
 (define xml-whitespaces-fold* : (-> (Pairof XML:WhiteSpace (Listof XML:WhiteSpace)) XML:WhiteSpace)
   (lambda [secaps]
     (define-values (head body) (values (car secaps) (cdr secaps)))
-    
+
     (cond [(null? body) head]
           [else (let ws-fold ([rest : (Listof XML:WhiteSpace) body]
                               [spaces : (Listof String) null]
