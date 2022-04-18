@@ -317,17 +317,17 @@
     (cond [(xsch-attribute-string-type? atype) value]
           [(xsch-attribute-enum-type? atype)
            (let ([option (string->symbol (xml-attribute-token-value-consolidate value))])
-             (cond [(memq option (map xml:name-datum (xsch-attribute-enum-type-options atype))) (w3s-remake-token value xml:name option)]
-                   [(and (eq? (xml:name-datum attname) 'xml:space) (memq option '(default preserve))) (w3s-remake-token value xml:name option)]
+             (cond [(memq option (map xml:name-datum (xsch-attribute-enum-type-options atype))) (syn-remake-token value xml:name option)]
+                   [(and (eq? (xml:name-datum attname) 'xml:space) (memq option '(default preserve))) (syn-remake-token value xml:name option)]
                    [else (make+exn:xml:enum value attname) #false]))]
           [(xsch-attribute-token-type? atype)
            (if (not (xsch-attribute-token-type-names? atype))
-               (w3s-remake-token value xml:name
+               (syn-remake-token value xml:name
                                  (let ([clean-value (xml-attribute-token-value-consolidate value)])
                                    (case (xml:name-datum (xsch-attribute-token-type-name atype))
                                      [(ENTITY) (string->unreadable-symbol clean-value)]
                                      [else (string->symbol clean-value)])))
-               (map (λ [[name : Symbol]] (w3s-remake-token value xml:name name))
+               (map (λ [[name : Symbol]] (syn-remake-token value xml:name name))
                     (let ([names (string-split (xml:string-datum value))])
                       (case (xml:name-datum (xsch-attribute-token-type-name atype))
                         [(ENTITIES) (map string->unreadable-symbol names)]
@@ -356,7 +356,7 @@
                      (normalize-subelement sp.rest++ (append (reverse (normalize-subelement air-elements null null)) nerdlihc++) null))]
 
                   [(xml:char? self)
-                   (let ([content (w3s-remake-token self xml:string (string (integer->char (xml:char-datum self))))])
+                   (let ([content (syn-remake-token self xml:string (string (integer->char (xml:char-datum self))))])
                      (normalize-subelement rest++ (cons content (xml-child-cons* secaps nerdlihc xml:filter tag xml:lang)) null))]
 
                   [(not (xml:whitespace? self)) (normalize-subelement rest++ (cons self (xml-child-cons* secaps nerdlihc xml:filter tag xml:lang)) null)]
@@ -442,8 +442,8 @@
             [(and (= idx size) (not leader))
              (let ([new-value (get-output-string /dev/evout)])
                (if (not gexists?)
-                   (w3s-remake-token etoken xml:string new-value)
-                   (w3s-remake-token etoken xml:&string new-value)))]
+                   (syn-remake-token etoken xml:string new-value)
+                   (syn-remake-token etoken xml:&string new-value)))]
 
             [else #false]))))
 
@@ -502,7 +502,7 @@
             [(and (= idx size) (not (eq? leader '&)))
              (when (eq? leader 'xD) #| already counted on |# (write-char #\space /dev/avout))
              (if (null? rstack)
-                 (w3s-remake-token vtoken xml:string (get-output-string /dev/avout))
+                 (syn-remake-token vtoken xml:string (get-output-string /dev/avout))
                  expanded)]
 
             [else #false]))))
@@ -558,7 +558,7 @@
 
             [(and (= idx size) (not leader))
              (if (null? rstack)
-                 (w3s-remake-token vtoken xml:string (get-output-string /dev/cvout))
+                 (syn-remake-token vtoken xml:string (get-output-string /dev/cvout))
                  expanded)]
 
             [else #false]))))
@@ -596,10 +596,10 @@
           [(null? (cdr cdatas)) (cons (car cdatas) children)]
           [(not (and start-token end-token)) #| <==> (null? cdatas) |# children]
           [else (let ([cdata (apply string-append (filter-map xml-cdata-token->datum cdatas))])
-                  (cons (if (eq? (w3s-token-source start-token) (w3s-token-source end-token))
-                            (w3s-remake-token [start-token end-token] xml:string cdata)
+                  (cons (if (eq? (syn-token-source start-token) (syn-token-source end-token))
+                            (syn-remake-token [start-token end-token] xml:string cdata)
                             ; TODO: resolve the right position
-                            (w3s-remake-token [start-token end-token] xml:string cdata))
+                            (syn-remake-token [start-token end-token] xml:string cdata))
                         children))])))
 
 (define xml-char-unreference : (->* (XML-Token String) ((Option XML-Token)) (Option Char))
@@ -683,7 +683,7 @@
   (lambda [content public system open-port topsize0 timeout read-entity]
     (and (or public system) ; always true
          (parameterize ([current-custodian (make-custodian)])
-           (define source : (U Symbol String) (w3s-token-source (or public system)))
+           (define source : (U Symbol String) (syn-token-source (or public system)))
            (define rootdir : Path-String
              (or (and (string? source)
                       (cond [(file-exists? source) (path-only source) #| local path |#]
@@ -730,7 +730,7 @@
 (define xml-make-entity->tokens : (All (T) (-> T (-> Input-Port (U String Symbol) T (Listof XML-Token)) (-> XML:String (Listof XML-Token))))
   (lambda [scope read-tokens]
     (λ [[tv : XML:String]]
-      (define source : String (w3s-token-location-string tv))
+      (define source : String (syn-token-location-string tv))
       (define /dev/subin : Input-Port (dtd-open-input-port (xml:string-datum tv) #true source))
 
       (read-tokens /dev/subin source scope))))
@@ -755,16 +755,16 @@
 (define xml-make-cdata-reader : (-> XML:Reference (XML-XXE-Reader (List XML:String)))
   (lambda [e]
     (λ [[/dev/entin : Input-Port] [port-name : (U False String Symbol) #false]]
-      (list (w3s-remake-token e xml:string (xml-cdata-reader /dev/entin port-name))))))
+      (list (syn-remake-token e xml:string (xml-cdata-reader /dev/entin port-name))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-xml:space=preserve xml:space=preserve* #:=> XML:WhiteSpace
-  #:remake-space w3s-remake-token
+  #:remake-space syn-remake-token
   #:space-datum xml:whitespace-datum
   #:space-newline? xml:newline?)
 
 (define-xml-child-cons xml-child-cons* (#:-> XML:WhiteSpace (Listof (U XML-Subdatum* XML-Element*)))
-  #:remake-space w3s-remake-token #:space-datum xml:whitespace-datum
+  #:remake-space syn-remake-token #:space-datum xml:whitespace-datum
   #:spaces-fold xml-whitespaces-fold* #:spaces-consolidate xml-whitespaces-consolidate*
   #:space=preserve xml:space=preserve* #:space-newline? xml:newline?)
 
@@ -809,14 +809,14 @@
         (let ws-consolidate ([rest : (Listof XML:WhiteSpace) body]
                              [end-token : XML:WhiteSpace head]
                              [start-token : XML:WhiteSpace head])
-          (cond [(null? rest) (w3s-remake-token [start-token end-token] xml:whitespace " ")]
+          (cond [(null? rest) (syn-remake-token [start-token end-token] xml:whitespace " ")]
                 [else (let ([self (car rest)])
                         (ws-consolidate (cdr rest)
-                                        (if (eq? (w3s-token-source end-token) (w3s-token-source self)) end-token self)
+                                        (if (eq? (syn-token-source end-token) (syn-token-source self)) end-token self)
                                         self))]))
         (let ([raw (xml:whitespace-datum head)])
           (cond [(string=? raw " ") head]
-                [else (w3s-remake-token head xml:whitespace " ")])))))
+                [else (syn-remake-token head xml:whitespace " ")])))))
 
 (define xml-whitespaces-fold* : (-> (Pairof XML:WhiteSpace (Listof XML:WhiteSpace)) XML:WhiteSpace)
   (lambda [secaps]
@@ -829,13 +829,13 @@
                               [start-token : XML:WhiteSpace head]
                               [has-newline? : Boolean (xml:newline? head)])
                   (if (null? rest)
-                      (w3s-remake-token [start-token end-token]
+                      (syn-remake-token [start-token end-token]
                                         (if has-newline? xml:newline xml:whitespace)
                                         (apply string-append spaces))
                       (let ([self (car rest)])
                         (ws-fold (cdr rest)
                                  (cons (xml:whitespace-datum self) spaces)
-                                 (if (eq? (w3s-token-source end-token) (w3s-token-source self)) end-token self)
+                                 (if (eq? (syn-token-source end-token) (syn-token-source self)) end-token self)
                                  self
                                  (or has-newline? (xml:newline? self))))))])))
 

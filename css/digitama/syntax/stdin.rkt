@@ -25,7 +25,7 @@
     (if (list? /dev/stdin)
         (let ([total : Index (length /dev/stdin)]
               [cursor : Integer 0])
-          (make-input-port (if (pair? /dev/stdin) (w3s-token-source (car /dev/stdin)) '/dev/cssin/null)
+          (make-input-port (if (pair? /dev/stdin) (syn-token-source (car /dev/stdin)) '/dev/cssin/null)
                            (λ [[buf : Bytes]]
                              (λ _ (cond [(>= cursor total) eof]
                                         [(set! cursor (add1 cursor))

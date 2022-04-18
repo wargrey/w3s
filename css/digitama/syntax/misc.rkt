@@ -4,7 +4,7 @@
 
 (require racket/promise)
 
-(require "w3s.rkt")
+(require digimon/token)
 
 (require (for-syntax racket/base))
 (require (for-syntax racket/syntax))
@@ -47,11 +47,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;  
 (define css-log-read-error : (->* ((U exn String)) (Any Log-Level) Void)
   (lambda [errobj [src #false] [level 'debug]]
-    (w3s-log-exn errobj 'exn:css:read src level)))
+    (syn-log-exn errobj 'exn:css:read src level)))
 
 (define css-log-eval-error : (->* ((U exn String)) (Any Log-Level) Void)
   (lambda [errobj [src #false] [level 'debug]]
-    (w3s-log-exn errobj 'exn:css:eval src level)))
+    (syn-log-exn errobj 'exn:css:eval src level)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type CSS-Shorthand-Datum (Listof (Pairof Symbol Any)))

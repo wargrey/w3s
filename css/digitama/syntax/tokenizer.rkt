@@ -129,7 +129,7 @@
     (define /dev/cssin : Input-Port (css-srcloc-in srcloc))
     (if (css-valid-escape? #\\ (peek-char /dev/cssin 1))
         (css-consume-ident-token srcloc (css-consume-escaped-char /dev/cssin))
-        (w3s-remake-token (css-make-bad-token srcloc css:bad:char struct:css:delim #\\) css:delim #\\))))
+        (syn-remake-token (css-make-bad-token srcloc css:bad:char struct:css:delim #\\) css:delim #\\))))
 
 (define css-consume-string-token : (-> CSS-Srcloc Char (U CSS:String CSS:Bad))
   ;;; https://drafts.csswg.org/css-syntax/#consume-a-string-token
