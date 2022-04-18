@@ -2,7 +2,7 @@
 
 (provide (all-defined-out) port-next-location)
 
-(require css/digitama/syntax/w3s)
+(require digimon/token)
 
 (require "digicore.rkt")
 
@@ -28,7 +28,7 @@
     [(_ source prev-env end xml:bad:sub datum)
      (syntax/loc stx
        (let ([bad (xml-make-token source prev-env end xml:bad:sub datum)])
-         (w3s-log-exn (xml-token->string bad) 'exn:xml:read)
+         (syn-log-exn (xml-token->string bad) 'exn:xml:read)
          bad))]))
 
 (define-syntax (xml-datum->token stx)
