@@ -1,9 +1,8 @@
 #lang typed/racket/base
 
+(provide (all-defined-out))
 (provide (all-from-out racket/list racket/format))
 (provide (struct-out SYN-Token) syn-token-location-string syn-remake-token)
-(provide (except-out (all-defined-out) xml-make-syntax-error
-                     define-tokens define-token define-symbolic-tokens))
 
 (require racket/list)
 (require racket/format)

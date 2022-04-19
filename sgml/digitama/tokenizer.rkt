@@ -1,6 +1,6 @@
 #lang typed/racket/base
 
-(provide (all-defined-out) port-next-location)
+(provide (all-defined-out) syn-token-port-location)
 
 (require digimon/token)
 
@@ -8,12 +8,6 @@
 
 (require "tokenizer/delimiter.rkt")
 (require "tokenizer/port.rkt")
-
-(require typed/racket/unsafe)
-
-(unsafe-require/typed
- racket/base ; the line is gauranteed to count, hence the explicitly requiring.
- [port-next-location (-> Port (Values Positive-Integer Natural Positive-Integer))])
 
 (require (for-syntax racket/base))
 
@@ -103,12 +97,12 @@
   (lambda [/dev/xmlin source env]
     (define prev-env : XML-Parser-ENV
       (cond [(xml-parser-env? env) env]
-            [else (let-values ([(line column position) (port-next-location /dev/xmlin)])
+            [else (let-values ([(line column position) (syn-token-port-location /dev/xmlin)])
                     (cond [(not env) (xml-parser-env xml-consume-token:* xml-initial-scope line column position)]
                           [else (xml-parser-env (car env) (cdr env) line column position)]))]))
     (define-values (datum next-consume next-scope)
       (xml-consume-token /dev/xmlin (xml-parser-env-consume prev-env) (xml-parser-env-scope prev-env)))
-    (define-values (line column end) (port-next-location /dev/xmlin))
+    (define-values (line column end) (syn-token-port-location /dev/xmlin))
     (define env++ : XML-Parser-ENV (xml-parser-env next-consume next-scope line column end))
 
     (values (xml-datum->token source prev-env end datum) env++)))

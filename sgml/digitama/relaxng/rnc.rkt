@@ -43,14 +43,14 @@
     ; `xml-parser-env-consume` is useless for RNC
     (define prev-env : XML-Parser-ENV
       (cond [(xml-parser-env? env) env]
-            [else (let-values ([(line column position) (port-next-location /dev/rncin)])
+            [else (let-values ([(line column position) (syn-token-port-location /dev/rncin)])
                     (cond [(not env) (xml-parser-env xml-consume-token:* xml-default-scope line column position)]
                           [else (xml-parser-env (car env) (cdr env) line column position)]))]))
     (define ch : (U Char XML-Error EOF) (read-rnc-char /dev/rncin))
     (define-values (datum next-scope)
       (cond [(not (char? ch)) (values ch (xml-parser-env-scope prev-env))]
             [else (rnc-consume-token:* /dev/rncin ch (xml-parser-env-scope prev-env))]))
-    (define-values (line column end) (port-next-location /dev/rncin))
+    (define-values (line column end) (syn-token-port-location /dev/rncin))
     (define env++ : XML-Parser-ENV
       (xml-parser-env xml-consume-token:*
                       (and next-scope xml-default-scope) ; tell the lexer that meanwhile the `scope` is useless for RNC

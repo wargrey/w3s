@@ -1,11 +1,8 @@
 #lang typed/racket/base
 
+(provide (all-defined-out))
 (provide (all-from-out racket/flonum racket/fixnum racket/bool racket/list racket/format))
-(provide (struct-out SYN-Token) syn-remake-token)
-(provide (except-out (all-defined-out)
-                     css-make-syntax-error css-tee-computed-value css-ref-raw
-                     define-tokens define-token define-symbolic-tokens define-numeric-tokens
-                     define-prefab-keyword))
+(provide (struct-out SYN-Token) syn-token-port-location syn-remake-token)
 
 (require racket/fixnum)
 (require racket/flonum)

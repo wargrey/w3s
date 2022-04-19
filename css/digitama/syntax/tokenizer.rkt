@@ -8,13 +8,7 @@
 (require "dimension.rkt")
 (require "misc.rkt")
 
-(require typed/racket/unsafe)
-
 (require (for-syntax racket/base))
-
-(unsafe-require/typed
- racket/base ; the line is gauranteed to count, hence the explicitly requiring.
- [port-next-location (-> Port (Values Positive-Integer Natural Positive-Integer))])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (struct css-srcloc
@@ -29,7 +23,7 @@
   (syntax-case stx []
     [(_ src make-css:token datum ...)
      (syntax/loc stx
-       (let-values ([(line column here-position) (port-next-location (css-srcloc-in src))])
+       (let-values ([(line column here-position) (syn-token-port-location (css-srcloc-in src))])
          (make-css:token (css-srcloc-source src) (css-srcloc-line src) (css-srcloc-column src)
                          (css-srcloc-position src) here-position datum ...)))]))
   
@@ -46,7 +40,7 @@
   ;;; https://drafts.csswg.org/css-syntax/#error-handling
   ;;; https://drafts.csswg.org/css-syntax/#consume-a-token
   (lambda [/dev/cssin source]
-    (define-values (line column position) (port-next-location /dev/cssin))
+    (define-values (line column position) (syn-token-port-location /dev/cssin))
     (define srcloc (css-srcloc /dev/cssin source line column position))
     (define ch (read-char /dev/cssin))
     (cond [(eof-object? ch) eof]
