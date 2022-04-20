@@ -8,6 +8,8 @@
 (require "dimension.rkt")
 (require "misc.rkt")
 
+(require digimon/character)
+
 (require (for-syntax racket/base))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -103,8 +105,9 @@
     (define /dev/cssin : Input-Port (css-srcloc-in srcloc))
     (define ch1 : (U EOF Char) (peek-char /dev/cssin 0))
     (define ch2 : (U EOF Char) (peek-char /dev/cssin 1))
-    (cond [(and (char-ci=? id0 #\u) (char? ch1) (char=? ch1 #\+)
-                (or (char-hexdigit? ch2) (and (char? ch2) (char=? ch2 #\?))))
+    (cond [(and (char-ci=? id0 #\u)
+                (char? ch1) (char=? ch1 #\+)
+                (char? ch2) (or (char-hexdigit? ch2) (char=? ch2 #\?)))
            (read-char /dev/cssin) (css-consume-unicode-range-token srcloc)]
           [else (let ([name (css-consume-name /dev/cssin id0)])
                   (define ch : (U EOF Char) (peek-char /dev/cssin))
@@ -220,7 +223,7 @@
       (cond [(not (fx= start0 end0)) (values start0 end0)]
             [else (let ([ch1 (peek-char /dev/cssin 0)]
                         [ch2 (peek-char /dev/cssin 1)])
-                    (cond [(and (char? ch1) (char=? ch1 #\-) (char-hexdigit? ch2) (read-char /dev/cssin))
+                    (cond [(and (char? ch1) (char=? ch1 #\-) (char? ch2) (char-hexdigit? ch2) (read-char /dev/cssin))
                            (define-values (end _) (css-consume-hexadecimal (css-srcloc-in srcloc) 6))
                            (values start0 end)]
                           [else (values start0 start0)]))]))
@@ -328,18 +331,6 @@
           [else (css-consume-bad-url-remnants /dev/cssin bad-url-token)])))
   
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define char-hexdigit? : (-> (U EOF Char) Boolean : #:+ Char)
-  (lambda [ch]
-    (and (char? ch)
-         (or (char-numeric? ch)
-             (char-ci<=? #\a ch #\f)))))
-
-(define char->hexadecimal : (-> Char Fixnum)
-  (lambda [hexch]
-    (cond [(char<=? #\a hexch) (fx- (char->integer hexch) #x57)]
-          [(char<=? #\A hexch) (fx- (char->integer hexch) #x37)]
-          [else (fx- (char->integer hexch) #x30)])))
-
 (define css-char-non-printable? : (-> (U EOF Char) Boolean : #:+ Char)
   (lambda [ch]
     (and (char? ch)

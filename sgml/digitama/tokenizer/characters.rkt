@@ -3,19 +3,11 @@
 ;;; https://www.w3.org/TR/xml/#charsets
 
 (provide (all-defined-out))
+(provide char-hexdigit? char->hexadecimal)
+
+(require digimon/character)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define char-hexdigit? : (-> Char Boolean)
-  (lambda [ch]
-    (or (char-numeric? ch)
-        (char-ci<=? #\a ch #\f))))
-
-(define char->hexadecimal : (-> Char Fixnum)
-  (lambda [hexch]
-    (cond [(char<=? #\a hexch) (- (char->integer hexch) #x57)]
-          [(char<=? #\A hexch) (- (char->integer hexch) #x37)]
-          [else (- (char->integer hexch) #x30)])))
-
 (define natural->char-entity : (-> Fixnum (Option Index))
   (lambda [n]
     (and (or (= n #x9)

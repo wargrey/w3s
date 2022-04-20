@@ -5,12 +5,13 @@
 (provide (all-defined-out))
 
 (require racket/string)
+(require racket/unsafe/ops)
+
+(require digimon/stdio)
 
 (require "characters.rkt")
 (require "delimiter.rkt")
 (require "errno.rkt")
-
-(require racket/unsafe/ops)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; Performance Hint
@@ -333,9 +334,9 @@
     (let consume-name ([span : Nonnegative-Fixnum 0]
                        [skip : Nonnegative-Fixnum 0])
       (define ch : (U EOF Char) (peek-char /dev/xmlin skip))
-      (cond [(eof-object? ch) (xml-read-string /dev/xmlin span leader)]
+      (cond [(eof-object? ch) (read-tail-string /dev/xmlin span leader)]
             [(xml-name-char? ch) (consume-name (unsafe-fx+ span 1) (unsafe-fx+ skip (char-utf-8-length ch)))]
-            [else (xml-read-string /dev/xmlin span leader)]))))
+            [else (read-tail-string /dev/xmlin span leader)]))))
 
 (define xml-consume-contentchars : (-> Input-Port Char (U String XML-Error))
   ;;; https://www.w3.org/TR/xml/#NT-content
@@ -343,9 +344,9 @@
     (let consume-content ([span : Nonnegative-Fixnum 0]
                           [skip : Nonnegative-Fixnum 0])
       (define ch : (U EOF Char) (peek-char /dev/xmlin skip))
-      (cond [(eof-object? ch) (xml-read-string /dev/xmlin span leader)]
+      (cond [(eof-object? ch) (read-tail-string /dev/xmlin span leader)]
             [(xml-content-char? ch) (consume-content (unsafe-fx+ span 1) (unsafe-fx+ skip (char-utf-8-length ch)))]
-            [else (xml-read-string /dev/xmlin span leader)]))))
+            [else (read-tail-string /dev/xmlin span leader)]))))
 
 (define xml-consume-char-reference : (-> Input-Port (Option Char) Char (U Index XML-Error))
   ;;; https://www.w3.org/TR/xml/#NT-CharRef
@@ -460,14 +461,6 @@
                           [(eq? ach #\>) (reverse srahc)]
                           [else (xml-drop-string /dev/xmlin 2) (consume-literal (list* ach ch srahc))]))]))))
 
-(define xml-read-string : (-> Input-Port Natural Char String)
-  (lambda [/dev/xmlin tailsize leader]
-    (define total : Nonnegative-Fixnum (unsafe-fx+ tailsize 1))
-    (define s : String (make-string total leader))
-
-    (read-string! s /dev/xmlin 1 total)
-    s))
-
 (define xml-drop-string : (-> Input-Port Natural Void)
   (let ([blackhole (make-string 8)])
     (lambda [/dev/xmlin n]
@@ -491,7 +484,7 @@
 
 (define xml-make-whitespace : (-> Input-Port Nonnegative-Fixnum Char Boolean XML-White-Space)
   (lambda [/dev/xmlin span leader newline?]
-    (define ws : String (xml-read-string /dev/xmlin span leader))
+    (define ws : String (read-tail-string /dev/xmlin span leader))
     
     (if (not newline?)
         (xml-white-space ws)
