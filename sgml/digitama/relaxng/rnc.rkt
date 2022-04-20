@@ -9,6 +9,7 @@
 (require racket/unsafe/ops)
 
 (require digimon/enumeration)
+(require digimon/stdio)
 
 (require "../digicore.rkt")
 (require "../tokenizer.rkt")
@@ -115,7 +116,7 @@
     (define compound? : Boolean (eq? eq #\=))
 
     (when (and compound?)
-      (xml-drop-string /dev/rncin size))
+      (drop-string /dev/rncin size))
 
     (cond [(not (eq? assign #\|)) assign]
           [(not compound?) assign]

@@ -249,10 +249,10 @@
     (cond [(eq? maybe-ch #\!)
            (let ([dispatcher (peek-char /dev/xmlin 1)])
              (cond [(eq? dispatcher #\[)
-                    (cond [(equal? (peek-string 6 2 /dev/xmlin) "CDATA[") (xml-drop-string /dev/xmlin 8) (values <!&CDATA& xml-consume-token:cdata scope)]
-                          [else (xml-drop-string /dev/xmlin 2) (values <!& xml-consume-token:start-condition scope)])]
+                    (cond [(equal? (peek-string 6 2 /dev/xmlin) "CDATA[") (drop-bytes /dev/xmlin 8) (values <!&CDATA& xml-consume-token:cdata scope)]
+                          [else (drop-bytes /dev/xmlin 2) (values <!& xml-consume-token:start-condition scope)])]
                    [(and (eq? dispatcher #\-) (eq? (peek-char /dev/xmlin 2) #\-))
-                    (xml-drop-string /dev/xmlin 3) (values (xml-consume-comment-body+tail /dev/xmlin) consume scope)]
+                    (drop-bytes /dev/xmlin 3) (values (xml-consume-comment-body+tail /dev/xmlin) consume scope)]
                    [else (read-char /dev/xmlin) (values <! xml-consume-token:start-decl-name scope)]))]
           [(eq? maybe-ch #\?) (read-char /dev/xmlin) (values <? xml-consume-token:pi-target scope)]
           [(eq? maybe-ch #\/) (read-char /dev/xmlin) (values </ xml-consume-token:end-tag-name scope)]
@@ -266,7 +266,7 @@
         (cond [(not (eq? ?ch #\])) (values leading-char xml-consume-token:* scope)]
               [else (let ([maybe-> (peek-char /dev/xmlin 1)])
                       (cond [(not (eq? maybe-> #\>)) (values leading-char xml-consume-token:* scope)]
-                            [else (xml-drop-string /dev/xmlin 2) (values $$> xml-consume-token:* scope)]))])
+                            [else (drop-bytes /dev/xmlin 2) (values $$> xml-consume-token:* scope)]))])
         (cond [(not (eq? ?ch #\>)) (values leading-char consume scope)]
               [(eq? leading-char #\?) (read-char /dev/xmlin) (values ?> consume scope)]
               [else (read-char /dev/xmlin) (values /> xml-consume-token:* (xml-doc-scope-- scope))]))))
@@ -323,7 +323,7 @@
                          [-? (eq? maybe-- #\-)]
                          [>? (eq? maybe-> #\>)])
                     (cond [(and -? >?)
-                           (xml-drop-string /dev/xmlin 2)
+                           (drop-bytes /dev/xmlin 2)
                            (cond [(not malformed?) (xml-comment (get-output-string /dev/cmtout))]
                                  [else (cons (append (list #\< #\! #\- #\-) (string->list (get-output-string /dev/cmtout)) (list #\- #\- #\>)) !comment)])]
                           [else (write-char ?ch /dev/cmtout) (read-comment <---? (or malformed? -? <---?))]))]))))
@@ -443,7 +443,7 @@
             [else (let ([ach (peek-char /dev/xmlin 1)])
                     (cond [(eof-object? ach) (read-char /dev/xmlin) (reverse (cons ch srahc))]
                           [(eq? ach ahead-boundary) (reverse srahc)]
-                          [else (xml-drop-string /dev/xmlin 2) (consume-literal (list* ach ch srahc))]))]))))
+                          [else (drop-bytes /dev/xmlin 2) (consume-literal (list* ach ch srahc))]))]))))
 
 (define xml-consume-chars-literal/within-tag : (->* (Input-Port (Pairof Char (Listof Char))) (Boolean) (Listof Char))
   (lambda [/dev/xmlin chars [stop-at-whitespace? #false]]
@@ -459,13 +459,7 @@
             [else (let ([ach (peek-char /dev/xmlin 1)])
                     (cond [(eof-object? ach) (read-char /dev/xmlin) (reverse (cons ch srahc))]
                           [(eq? ach #\>) (reverse srahc)]
-                          [else (xml-drop-string /dev/xmlin 2) (consume-literal (list* ach ch srahc))]))]))))
-
-(define xml-drop-string : (-> Input-Port Natural Void)
-  (let ([blackhole (make-string 8)])
-    (lambda [/dev/xmlin n]
-      (read-string! blackhole /dev/xmlin 0 n)
-      (void))))
+                          [else (drop-bytes /dev/xmlin 2) (consume-literal (list* ach ch srahc))]))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-doc-scope++ : (-> XML-Scope XML-Scope)
