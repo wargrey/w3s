@@ -8,6 +8,7 @@
 (require "dimension.rkt")
 (require "misc.rkt")
 
+(require digimon/stdio)
 (require digimon/character)
 
 (require (for-syntax racket/base))
@@ -210,7 +211,7 @@
   ;;; https://drafts.csswg.org/css-syntax/#urange-syntax
   (lambda [srcloc]
     (define /dev/cssin : Input-Port (css-srcloc-in srcloc))
-    (define-values (n rest) (css-consume-hexadecimal (css-srcloc-in srcloc) 6))
+    (define-values (n rest) (read-limited-hexadecimal (css-srcloc-in srcloc) 6))
     (define-values (start0 end0)
       (let consume-? : (Values Fixnum Fixnum) ([s : Fixnum n] [e : Fixnum n] [? : Fixnum rest])
         (cond [(zero? ?) (values s e)]
@@ -224,7 +225,7 @@
             [else (let ([ch1 (peek-char /dev/cssin 0)]
                         [ch2 (peek-char /dev/cssin 1)])
                     (cond [(and (char? ch1) (char=? ch1 #\-) (char? ch2) (char-hexdigit? ch2) (read-char /dev/cssin))
-                           (define-values (end _) (css-consume-hexadecimal (css-srcloc-in srcloc) 6))
+                           (define-values (end _) (read-limited-hexadecimal (css-srcloc-in srcloc) 6))
                            (values start0 end)]
                           [else (values start0 start0)]))]))
     (cond [(and (index? start) (index? end) (<= start end #x10FFFF)) (css-make-token srcloc css:urange (cons start end))]
@@ -300,24 +301,13 @@
                           [(flonum? ?number) (values ?number representation)]
                           [else (values +nan.0 representation)]))]))))
 
-(define css-consume-hexadecimal : (->* (Input-Port Byte) (Fixnum #:\s?$? Boolean) (Values Fixnum Byte))
-  (lambda [/dev/cssin --count [result 0] #:\s?$? [eat-last-whitespace? #false]]
-    (define hex : (U EOF Char) (peek-char /dev/cssin))
-    (cond [(or (eof-object? hex) (not (char-hexdigit? hex)) (zero? --count))
-           (when (and eat-last-whitespace? (char? hex) (char-whitespace? hex)) (read-char /dev/cssin))
-           (values result --count)]
-          [else (read-char /dev/cssin) (css-consume-hexadecimal #:\s?$? eat-last-whitespace?
-                                                         /dev/cssin (fx- --count 1)
-                                                         (fx+ (fxlshift result 4)
-                                                              (char->hexadecimal hex)))])))
-
 (define css-consume-escaped-char : (-> Input-Port Char)
   ;;; https://drafts.csswg.org/css-syntax/#consume-an-escaped-code-point
   (lambda [/dev/cssin]
     (define esc : (U EOF Char) (read-char /dev/cssin))
     (cond [(eof-object? esc) #\uFFFD]
           [(not (char-hexdigit? esc)) esc]
-          [else (let-values ([(hex _) (css-consume-hexadecimal /dev/cssin (sub1 6) (char->hexadecimal esc) #:\s?$? #true)])
+          [else (let-values ([(hex _) (read-limited-hexadecimal /dev/cssin (sub1 6) (char->hexadecimal esc) #:\s?$? #true)])
                   (cond [(or (fx<= hex 0) (fx> hex #x10FFFF)) #\uFFFD] ; #\nul and max unicode
                         [(<= #xD800 hex #xDFFF) #\uFFFD] ; surrogate
                         [else (integer->char hex)]))])))
