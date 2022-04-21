@@ -50,7 +50,13 @@
                          read-css-stylesheet))
 
          (module+ main
-           #,lang.css
+           (require racket/pretty)
+           (require racket/format)
+           
+           (pretty-print-columns 160)
+
+           (define drracket? : Boolean (regexp-match? #px"DrRacket$" (find-system-path 'run-file)))
+           (if drracket? #,lang.css (printf "~a~n" (pretty-format #,lang.css)))
            (w3s-display-times '#,lang.css MB cpu real gc))))))
 
 (define (css-info in mod line col pos)

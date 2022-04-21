@@ -18,9 +18,13 @@
               sexp ...
 
               (module+ main
-                (newline)
-                
-                lang.w3s
+                (require racket/pretty)
+                (require racket/format)
+           
+                (pretty-print-columns 160)
+
+                (define drracket? : Boolean (regexp-match? #px"DrRacket$" (find-system-path 'run-file)))
+                (if drracket? lang.w3s (printf "~a~n" (pretty-format lang.w3s)))
                 (w3s-display-times 'lang.w3s MB cpu real gc))))]
     [(_ process:id lang.w3s MB cpu real gc doc)
      (syntax/loc stx
