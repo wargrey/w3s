@@ -132,7 +132,7 @@
     [xml:delim          #:+ XML:Delim           #:as (U Symbol Char)]
     [xml:name           #:+ XML:Name            #:as Symbol]
     [xml:pereference    #:+ XML:PEReference     #:as Keyword]
-    [xml:bad            #:+ XML:Bad             #:as (Pairof String Symbol)]))
+    [xml:bad            #:+ XML:Bad             #:as (Pairof Symbol String)]))
 
 (define-syntax-error exn:xml #:as XML-Syntax-Error #:for XML-Token
   ;;; https://www.w3.org/TR/xml/#sec-terminology

@@ -34,7 +34,12 @@
   (syntax-case stx []
     [(_ src css:bad:sub token datum)
      (syntax/loc stx
-       (let ([bad (css-make-token src css:bad:sub (~s (cons (object-name token) datum)))])
+       (let ([bad (css-make-token src css:bad:sub
+                                  (cons (assert (object-name token) symbol?)
+                                        (cond [(list? datum) (list->string (reverse datum))]
+                                              [(char? datum) (string datum)]
+                                              [(string? datum) datum]
+                                              [else (~a datum)])))])
          (css-log-read-error (css-token->string bad))
          bad))]))
 
@@ -136,9 +141,9 @@
     (let consume-string-token : (U CSS:String CSS:Bad) ([chars : (Listof Char) null])
       (define ch : (U EOF Char) (read-char /dev/cssin))
       (cond [(or (eof-object? ch) (char=? ch quotation))
-             (when (eof-object? ch) (css-make-bad-token srcloc css:bad:eof struct:css:string (list->string (reverse chars))))
+             (when (eof-object? ch) (css-make-bad-token srcloc css:bad:eof struct:css:string (reverse chars)))
              (css-make-token srcloc css:string (list->string (reverse chars)))]
-            [(char=? ch #\newline) (css-make-bad-token srcloc css:bad:eol struct:css:string (list->string (reverse chars)))]
+            [(char=? ch #\newline) (css-make-bad-token srcloc css:bad:eol struct:css:string (reverse chars))]
             [(not (char=? ch #\\)) (consume-string-token (cons ch chars))]
             [else (let ([next (peek-char /dev/cssin)])
                     (cond [(eof-object? next) (consume-string-token chars)]

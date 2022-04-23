@@ -57,7 +57,7 @@
              [(box? datum) (xml-make-token source prev-env end xml:&string (assert (unbox datum) string?))]
              [(index? datum) (xml-make-token source prev-env end xml:char datum)]
              [(keyword? datum) (xml-make-token source prev-env end xml:pereference datum)]
-             [(pair? datum) (xml-make-bad-token source prev-env end xml:bad (cons (list->string (car datum)) (cdr datum)))]
+             [(pair? datum) (xml-make-bad-token source prev-env end xml:bad (cons (cdr datum) (list->string (car datum))))]
              [else eof]))]))
 
 (struct xml-parser-env

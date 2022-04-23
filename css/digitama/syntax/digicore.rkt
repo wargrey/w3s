@@ -221,7 +221,7 @@
 
   ; WARNING: Carefully defining types to avoid happening to mess up '(list? datum)'. 
   (define-symbolic-tokens css-bad-token #:+ CSS-Bad-Token
-    [css:bad            #:+ CSS:Bad             #:as String]
+    [css:bad            #:+ CSS:Bad             #:as (Pairof Symbol String)]
     [css:close          #:+ CSS:Close           #:as Char])
     
   ; TODO: Typed Racket is buggy if there are more than 11 conditions
