@@ -38,15 +38,15 @@
      (cond [(xml-document? xml) (xml-document-prolog xml)]
            [else (xml-document*-prolog xml)]))))
 
-(define xml-doc-standalone? : (-> (U XML-Document XML-Document*) Boolean)
-  (lambda [xml]
-    (xml-prolog-standalone?
-     (cond [(xml-document? xml) (xml-document-prolog xml)]
-           [else (xml-document*-prolog xml)]))))
-
 (define xml-doc-encoding : (-> (U XML-Document XML-Document*) (Option String))
   (lambda [xml]
     (xml-prolog-encoding
+     (cond [(xml-document? xml) (xml-document-prolog xml)]
+           [else (xml-document*-prolog xml)]))))
+
+(define xml-doc-standalone? : (-> (U XML-Document XML-Document*) Boolean)
+  (lambda [xml]
+    (xml-prolog-standalone?
      (cond [(xml-document? xml) (xml-document-prolog xml)]
            [else (xml-document*-prolog xml)]))))
 
@@ -59,7 +59,7 @@
 (define xml-doc-external : (-> (U XML-Document XML-Document*) (U False String (Pairof String String)))
   (lambda [xml]
     (cond [(xml-document? xml) (xml-doctype-external (xml-document-doctype xml))]
-          [else (xml-external-id->datum (xml-doctype*-external (xml-document*-doctype xml)))])))
+          [else (xml-external-id*->datum (xml-doctype*-external (xml-document*-doctype xml)))])))
 
 (define xml-doc-namespaces : (-> (U XML-Document XML-Document*) (Listof (Pairof Symbol String)))
   (lambda [xml]

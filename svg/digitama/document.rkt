@@ -2,21 +2,41 @@
 
 (provide (all-defined-out))
 
-(require sgml/xml)
+(require sgml/digitama/stdin)
+(require sgml/digitama/doctype)
+(require sgml/digitama/document)
 
-;(require "../village/hashlang/svg11.tdtd")
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define svg-load-external-dtd : Open-Input-XML-XXE
-  (make-xml-load-http-entity))
-
-(define svg-dtd-unsafe-guard : XML-DTD-Guard (make-xml-dtd-guard #:xxe-timeout #false))
+(require "grammar.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define read-svg-document* : (-> SGML-StdIn XML-Document*)
-  (lambda [/dev/rawin]
-    (read-xml-document* /dev/rawin)))
+(struct svg
+  ([prolog : XML-Prolog]
+   [doctype : XML-DocType]
+   [root : SVG:Fragment])
+  #:type-name SVG
+  #:transparent)
 
-(define svg-document*-normalize : (-> XML-Document* XML-Document*)
-  (lambda [doc.svg]
-    (xml-document*-normalize doc.svg svg-load-external-dtd #:guard svg-dtd-unsafe-guard)))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define read-svg-document : (-> SGML-StdIn SVG)
+  (lambda [/dev/svgin]
+    (define xml.svg : XML-Document (xml-document-normalize (read-xml-document /dev/svgin)))
+    (define prolog : XML-Prolog (xml-document-prolog xml.svg))
+    (define doctype : XML-DocType (xml-document-doctype xml.svg))
+    
+    (svg prolog doctype
+         (svg-resolve-root
+          (xml-document-contents xml.svg)
+          (xml-prolog-location prolog)
+          (xml-doctype-name doctype)))))
+
+(define read-svg-document* : (-> SGML-StdIn SVG)
+  (lambda [/dev/svgin]
+    (define xml.svg : XML-Document* (xml-document*-normalize (read-xml-document* /dev/svgin)))
+    (define prolog : XML-Prolog (xml-document*-prolog xml.svg))
+    (define doctype : XML-DocType (xml-doctype*->doctype (xml-document*-doctype xml.svg)))
+    
+    (svg prolog doctype
+         (svg-resolve-root*
+          (xml-document*-contents xml.svg)
+          (xml-prolog-location prolog)
+          (xml-doctype-name doctype)))))

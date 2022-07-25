@@ -65,8 +65,7 @@
 (define xml-document-normalize : (->* (XML-Document)
                                       (#:xml:lang String #:xml:space Symbol #:xml:space-filter (Option XML:Space-Filter))
                                       XML-Document)
-  (lambda [#:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false]
-           doc]
+  (lambda [doc #:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false]]
     (xml-document (xml-document-prolog doc) (xml-document-doctype doc)
                   (xml-normalize (xml-document-contents doc) xml:lang xml:space xml:space-filter))))
 
@@ -154,11 +153,7 @@
 (define xml-document*->document : (-> XML-Document* XML-Document)
   (lambda [doc.xml]
     (xml-document (xml-document*-prolog doc.xml)
-                  (let* ([doctype (xml-document*-doctype doc.xml)]
-                         [name (xml-doctype*-name doctype)]
-                         [id (xml-doctype*-external doctype)])
-                    (xml-doctype (and name (xml:name-datum name))
-                                 (xml-external-id->datum id)))
+                  (xml-doctype*->doctype (xml-document*-doctype doc.xml))
                   (map xml-content->datum (xml-document*-contents doc.xml)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -208,15 +203,6 @@
                               [else '|&DEADC0DE;|])]
                        [else (xml-pi->datum child)]))
                (caddr e)))))
-
-(define xml-external-id->datum : (-> XML-External-ID* XML-External-ID)
-  (lambda [id]
-    (cond [(not id) id]
-          [(xml:string? id) (xml:string-datum id)]
-          [else (let ([public (car id)]
-                      [system (cdr id)])
-                  (cons (and public (xml:string-datum public))
-                        (and system (xml:string-datum system))))])))
 
 (define xml-attribute->datum : (-> XML-Element-Attribute* XML-Element-Attribute)
   (lambda [p]
