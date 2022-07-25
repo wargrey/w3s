@@ -92,6 +92,9 @@
      (syntax/loc stx (begin (list 'token line col) ...)))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define default-xml-error-topic : (Parameterof Symbol) (make-parameter 'exn:xml:syntax))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-tokens xml-token syn-token #:+ XML-Token
   [[xml:open            #:+ XML:Open            #:-> xml:delim]
    [xml:close           #:+ XML:Close           #:-> xml:delim]
@@ -222,7 +225,7 @@
 
 (define xml-log-syntax-error : (->* (XML-Syntax-Error) ((Option XML-Token) (Option Log-Level)) Void)
   (lambda [errobj [property #false] [level #false]]
-    (syn-log-syntax-error 'exn:xml:syntax xml-token->string xml-token->datum
+    (syn-log-syntax-error (default-xml-error-topic) xml-token->string xml-token->datum
                           errobj property (or level
                                               (cond [(exn:xml:fatal? errobj) 'error]
                                                     [(exn:xml:error? errobj) 'warning]

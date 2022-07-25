@@ -5,11 +5,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (provide (all-defined-out) (all-from-out "dtd.rkt" "xexpr.rkt"))
-(provide (all-from-out "digitama/namespace.rkt" "digitama/whitespace.rkt"))
+(provide (all-from-out "digitama/namespace.rkt" "digitama/whitespace.rkt" "digitama/datatype.rkt"))
 (provide XML-DTD xml-load-relative-system-entity)
 (provide (struct-out XML-Document) read-xml-document xml-document-normalize xml-document*->document)
 (provide (struct-out XML-Document*) read-xml-document* xml-document*-normalize xml-document*-valid?)
 (provide XML-DTD-Guard XML-XXE-Guard make-xml-dtd-guard xml-dtd-guard? xml-xxe-guard?)
+(provide default-xml-error-topic)
 
 (require "dtd.rkt")
 (require "xexpr.rkt")
@@ -18,6 +19,7 @@
 (require "digitama/doctype.rkt")
 (require "digitama/document.rkt")
 (require "digitama/normalize.rkt")
+(require "digitama/datatype.rkt")
 
 (require "digitama/digicore.rkt")
 (require "digitama/namespace.rkt")
