@@ -193,7 +193,12 @@
   [exn:rnc:uri           #:-> exn:rnc:vc]
   [exn:rnc:single        #:-> exn:rnc:vc]
   [exn:rnc:unqualified   #:-> exn:rnc:vc]
-  [exn:rnc:annotation    #:-> exn:rnc:vc])
+  [exn:rnc:annotation    #:-> exn:rnc:vc]
+
+  ; for SVG
+  [exn:svg:vc            #:-> exn:xml:vc]
+  [exn:svg:unrecognized  #:-> exn:svg:vc]
+  [exn:svg:range         #:-> exn:svg:unrecognized])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-token->syntax : (-> XML-Token Syntax)

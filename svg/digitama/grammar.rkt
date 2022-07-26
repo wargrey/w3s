@@ -21,7 +21,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type SVG-Source (U String Symbol (Pairof (U String Symbol) (Pairof Positive-Integer Natural))))
-(define-type SVG-Element-Attribute* (Pairof Symbol XML-Element-Attribute-Value*))
 
 (define-syntax (define-svg-element stx)
   (syntax-parse stx #:literals [:]
@@ -36,14 +35,22 @@
                     [(field-ref ...)
                      (for/list ([<field> (in-syntax #'(field ...))])
                        (format-id <field> "~a-~a" (syntax-e #'svg-elem) (syntax-e <field>)))]
+                    [([kw-sargs ...] [kw-sreargs ...])
+                     (let-values ([(args reargs)
+                                   (for/fold ([args null] [reargs null])
+                                             ([<field> (in-syntax #'(sfield ...))]
+                                              [<Argument> (in-syntax #'([sfield : SFieldType sdefval ...] ...))]
+                                              [<ReArgument> (in-syntax #'([sfield : (U Void SFieldType) (void)] ...))])
+                                     (let ([<kw-name> (datum->syntax <field> (string->keyword (symbol->immutable-string (syntax-e <field>))))])
+                                       (values (cons <kw-name> (cons <Argument> args))
+                                               (cons <kw-name> (cons <ReArgument> reargs)))))])
+                       (list args reargs))]
                     [([kw-args ...] [kw-reargs ...])
                      (let-values ([(args reargs)
                                    (for/fold ([args null] [reargs null])
-                                             ([<field> (in-syntax #'(sfield ... field ...))]
-                                              [<Argument> (in-syntax #'([sfield : SFieldType sdefval ...] ...
-                                                                        [field : FieldType defval ...] ...))]
-                                              [<ReArgument> (in-syntax #'([sfield : (U Void SFieldType) (void)] ...
-                                                                          [field : (U Void FieldType) (void)] ...))])
+                                             ([<field> (in-syntax #'(field ...))]
+                                              [<Argument> (in-syntax #'([field : FieldType defval ...] ...))]
+                                              [<ReArgument> (in-syntax #'([field : (U Void FieldType) (void)] ...))])
                                      (let ([<kw-name> (datum->syntax <field> (string->keyword (symbol->immutable-string (syntax-e <field>))))])
                                        (values (cons <kw-name> (cons <Argument> args))
                                                (cons <kw-name> (cons <ReArgument> reargs)))))])
@@ -54,17 +61,14 @@
                   #:transparent
                   options ...)
 
-                (define (make-id kw-args ...) : SVG-Elem
+                (define (make-id kw-sargs ... kw-args ...) : SVG-Elem
                   (svg-elem sfield ... field ...))
 
-                (define (remake-id [src : SVG-Elem] kw-reargs ...) : SVG-Elem
+                (define (remake-id [src : SVG-Elem] kw-sreargs ... kw-reargs ...) : SVG-Elem
                   (svg-elem (if (void? sfield) (sfield-ref src) sfield) ...
-                      (if (void? field) (field-ref src) field) ...)))))]))
+                            (if (void? field) (field-ref src) field) ...)))))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(struct svg-attribute () #:type-name SVG-Attribute #:transparent)
-(struct svg:attr:uncategorized ([raw : (Listof (Pairof Symbol XML-Element-Attribute-Value))]) #:type-name SVG:Attr:Uncategorized #:transparent)
-
 (struct svg-element
   ([source : (Option SVG-Source)]
    [id : (Option Symbol)]
