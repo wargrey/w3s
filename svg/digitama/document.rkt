@@ -12,7 +12,7 @@
 (struct svg
   ([prolog : XML-Prolog]
    [doctype : XML-DocType]
-   [root : SVG:Fragment])
+   [root : SVG:SVG])
   #:type-name SVG
   #:transparent)
 
