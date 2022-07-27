@@ -79,3 +79,11 @@
             [else (let-values ([(self rest) (values (car as) (cdr as))])
                     (cond [(xml:name=:=? (car self) name) (values (cdr self) (append rest sa))]
                           [else (extract rest (cons self sa))]))]))))
+
+(define svg-report-unrecognized-attributes : (-> XML:Name (Listof XML-Element-Attribute*) Void)
+  (lambda [elem srtta]
+    (for ([attr (in-list (reverse srtta))])
+      (define v (cdr attr))
+      (make+exn:svg:unrecognized
+       (cond [(list? v) (cons elem (cons (car attr) v))]
+             [else (list elem (car attr) v)])))))

@@ -28,7 +28,7 @@
 (struct xml-document
   ([prolog : XML-Prolog]
    [doctype : XML-DocType]
-   [contents : (Listof XML-Content)])
+   [content : (Listof XML-Content)])
   #:transparent
   #:type-name XML-Document)
 
@@ -36,7 +36,7 @@
   ([prolog : XML-Prolog]
    [doctype : XML-DocType*]
    [internal-dtd : XML-DTD]
-   [contents : (Listof XML-Content*)])
+   [content : (Listof XML-Content*)])
   #:transparent
   #:type-name XML-Document*)
 
@@ -67,7 +67,7 @@
                                       XML-Document)
   (lambda [doc #:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false]]
     (xml-document (xml-document-prolog doc) (xml-document-doctype doc)
-                  (xml-normalize (xml-document-contents doc) xml:lang xml:space xml:space-filter))))
+                  (xml-normalize (xml-document-content doc) xml:lang xml:space xml:space-filter))))
 
 (define read-xml-document* : (-> SGML-StdIn XML-Document*)
   (lambda [/dev/rawin]
@@ -98,7 +98,7 @@
                #:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:space-filter #false]]
     (define standalone? : Boolean (xml-prolog-standalone? (xml-document*-prolog doc)))
     (define stop-if-xxe-not-loaded? : Boolean (not standalone?))
-    (define content : (Listof XML-Content*) (xml-document*-contents doc))
+    (define content : (Listof XML-Content*) (xml-document*-content doc))
     
     (define external-dtd : (Option (U XML-DTD XML-Schema))
       (let ([dt (xml-document*-doctype doc)])
@@ -134,7 +134,7 @@
                                                        doc extsch)])
                     (xml-document+schema-body (assert ndoc xml-document+schema?)))]))
 
-    (xml-validate schema (xml-document*-contents doc) standalone?
+    (xml-validate schema (xml-document*-content doc) standalone?
                   (xml-dtd-guard-ipe-topsize dtdg))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -154,12 +154,12 @@
   (lambda [doc.xml]
     (xml-document (xml-document*-prolog doc.xml)
                   (xml-doctype*->doctype (xml-document*-doctype doc.xml))
-                  (map xml-content->datum (xml-document*-contents doc.xml)))))
+                  (map xml-content->datum (xml-document*-content doc.xml)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-document-root-element : (-> XML-Document (Option XML-Element))
   (lambda [doc.xml]
-    (let seek-root ([es : (Listof XML-Content) (xml-document-contents doc.xml)])
+    (let seek-root ([es : (Listof XML-Content) (xml-document-content doc.xml)])
       (and (pair? es)
            (let-values ([(self rest) (values (car es) (cdr es))])
              (cond [(mpair? self) (seek-root rest)]
@@ -167,7 +167,7 @@
 
 (define xml-document*-root-element : (-> XML-Document* (Option XML-Element*))
   (lambda [doc.xml]
-    (let seek-root ([es : (Listof XML-Content*) (xml-document*-contents doc.xml)])
+    (let seek-root ([es : (Listof XML-Content*) (xml-document*-content doc.xml)])
       (and (pair? es)
            (let-values ([(self rest) (values (car es) (cdr es))])
              (cond [(mpair? self) (seek-root rest)]

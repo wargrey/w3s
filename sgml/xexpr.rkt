@@ -11,7 +11,7 @@
 (define xml-root-xexpr : (-> (U XML-Document XML-Document*) (Option Xexpr))
   (lambda [xml]
     (define cs : (Listof XML-Content)
-      (cond [(xml-document? xml) (xml-document-contents xml)]
-            [else (map xml-content->datum (xml-document*-contents xml))]))
+      (cond [(xml-document? xml) (xml-document-content xml)]
+            [else (map xml-content->datum (xml-document*-content xml))]))
 
     (findf list? cs)))
