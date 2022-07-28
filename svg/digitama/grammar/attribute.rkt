@@ -16,15 +16,16 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-syntax (define-svg-attribute stx)
   (syntax-parse stx #:literals [:]
-    [(_ svg-attr : SVG-Attr ([field : FieldType #:=> xml-attribute-value->datum] ...) options ...)
+    [(_ svg-attr : SVG-Attr ([field : FieldType #:=> xml-attribute-value->datum defval ...] ...) options ...)
      (with-syntax* ([make-attr (format-id #'svg-attr "make-~a" (syntax-e #'svg-attr))]
                     [remake-attr (format-id #'svg-attr "remake-~a" (syntax-e #'svg-attr))]
                     [extract-attr (format-id #'svg-attr "extract-~a" (syntax-e #'svg-attr))]
                     [cascade-attr (format-id #'svg-attr "cascade-~a" (syntax-e #'svg-attr))]
+                    [attr-values (format-id #'svg-attr "~a-values" (syntax-e #'svg-attr))]
                     [(field-ref ...) (make-identifiers #'svg-attr #'(field ...))]
-                    [([kw-args ...] [kw-reargs ...]) (make-keyword-optional-arguments #'(field ...) #'[FieldType ...])])
+                    [([kw-args ...] [kw-reargs ...]) (make-keyword-arguments #'(field ...) #'(FieldType ...) #'([defval ...] ...))])
        (syntax/loc stx
-         (begin (struct svg-attr svg-attribute ([field : (Option FieldType)] ...)
+         (begin (struct svg-attr svg-attribute ([field : FieldType] ...)
                   #:type-name SVG-Attr
                   #:transparent
                   options ...)
@@ -53,6 +54,9 @@
                                    _srtta)]
                           [else (values #false _srtta)])))
 
+                (define (attr-values [self : SVG-Attr]) : (Values FieldType ...)
+                  (values (field-ref self) ...))
+
                 (define (cascade-attr [parent : SVG-Attr] [child : SVG-Attr]) : SVG-Attr
                   (svg-attr (or (field-ref child) (field-ref parent)) ... )))))]))
 
@@ -60,9 +64,9 @@
 (struct svg-attribute () #:type-name SVG-Attribute #:transparent)
 
 (define-svg-attribute svg:attr:core : SVG:Attr:Core
-  ([xml:base : String  #:=> xml-attribute-value->string]
-   [xml:lang : String  #:=> xml-attribute-value->string]
-   [xml:space : Symbol #:=> xml-attribute-value->symbol]))
+  ([xml:base : (Option String)  #:=> xml-attribute-value->string #false]
+   [xml:lang : (Option String)  #:=> xml-attribute-value->string #false]
+   [xml:space : (Option Symbol) #:=> xml-attribute-value->symbol #false]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define svg-attributes*-extract-core : (-> (Listof XML-Element-Attribute*) (Values (Option Symbol) (Option SVG:Attr:Core) (Listof XML-Element-Attribute*)))
