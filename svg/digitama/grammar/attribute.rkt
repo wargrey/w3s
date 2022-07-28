@@ -48,9 +48,9 @@
                                [(field) (extract rest _srtta (if (eq? 'field name) value field) ...)] ...
                                [else (extract rest (cons self _srtta) field ...)]))]
                           [(or field ...)
-                           (values (if (not _src)
-                                       (svg-attr (and field (xml-attribute-value->datum field)) ...)
-                                       (svg-attr (if (or field) (xml-attribute-value->datum field) (field-ref _src)) ...))
+                           (values (if (or _src)
+                                       (svg-attr (if (or field) (xml-attribute-value->datum field) (field-ref _src)) ...)
+                                       (svg-attr (or (and field (xml-attribute-value->datum field)) defval ...) ...))
                                    _srtta)]
                           [else (values #false _srtta)])))
 

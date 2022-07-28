@@ -4,6 +4,7 @@
 
 (require sgml/digitama/schema)
 (require sgml/digitama/digicore)
+(require sgml/digitama/dtd)
 
 (require "../../village/svglang/svg11.tdtd")
 
@@ -12,17 +13,17 @@
 (define attribs : (HashTable Keyword (Listof Symbol)) (make-hasheq))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define (dtd-setup!) : Void
+(define (dtd-prepare-attlist!) : Void
   (for ([(e-name entity) (in-hash (xml-schema-entities svg11*.dtd))])
     (when (and (keyword? e-name) (xsch-token-entity? entity))
-      (let ([body (xsch-token-entity-body entity)])
+      (let collect-attlist : Void ([body : (Listof XML-Token) (or (xsch-token-entity-body entity) null)])
         (when (and (pair? body) (xml:name? (car body)))
-          (for ([token (in-list (or (xsch-token-entity-body entity) null))])
-            (when (xml:name? token)
-              (define a-name (xml:name-datum token))
-              (when (pair? (dtd-element-list a-name))
-                (hash-set! attrlists a-name e-name)
-                (hash-set! attribs e-name (cons a-name (hash-ref attribs e-name (inst list Symbol))))))))))))
+          (let*-values ([(atype rest) (xml-dtd-extract-attribute-type* (car body) (cdr body))]
+                        [(avalue fixed? rest) (xml-dtd-extract-attribute-default* (car body) rest)])
+            (define a-name (xml:name-datum (car body)))
+            (hash-set! attrlists a-name e-name)
+            (hash-set! attribs e-name (cons a-name (hash-ref attribs e-name (inst list Symbol))))
+            (collect-attlist rest)))))))
 
 (define (dtd-attribute-list [tag-name : Symbol]) : (Listof Symbol)
   (hash-keys

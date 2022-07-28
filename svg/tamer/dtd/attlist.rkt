@@ -6,7 +6,7 @@
 (module+ main
   (define argv : (Listof Symbol) (for/list ([arg (in-vector (current-command-line-arguments))]) (string->symbol arg)))
 
-  (dtd-setup!)
+  (dtd-prepare-attlist!)
   
   (dtd-info-displayln argv 'ELEMENT dtd-element-list)
 
