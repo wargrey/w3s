@@ -70,7 +70,7 @@
           (let ([?root (xml-document-root-element xml)])
             (if (not ?root) null (cadr ?root)))
           (let ([?root (xml-document*-root-element xml)])
-            (if (not ?root) null (map xml-attribute->datum (cadr ?root))))))
+            (if (not ?root) null (map xml-attribute*->datum (cadr ?root))))))
     
     (let filter-namespace ([as : (Listof XML-Element-Attribute) root-attlist]
                            [sn : (Listof (Pairof Symbol String)) null])

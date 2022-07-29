@@ -154,7 +154,7 @@
   (lambda [doc.xml]
     (xml-document (xml-document*-prolog doc.xml)
                   (xml-doctype*->doctype (xml-document*-doctype doc.xml))
-                  (map xml-content->datum (xml-document*-content doc.xml)))))
+                  (map xml-content*->datum (xml-document*-content doc.xml)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-document-root-element : (-> XML-Document (Option XML-Element))
@@ -174,43 +174,45 @@
                    [else self]))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-content->datum : (-> XML-Content* XML-Content)
+(define xml-content*->datum : (-> XML-Content* XML-Content)
   (lambda [g]
-    (cond [(list? g) (xml-element->datum g)]
-          [else (xml-pi->datum g)])))
+    (cond [(list? g) (xml-element*->datum g)]
+          [else (xml-pi*->datum g)])))
 
-(define xml-pi->datum : (-> XML-Processing-Instruction* XML-Processing-Instruction)
+(define xml-pi*->datum : (-> XML-Processing-Instruction* XML-Processing-Instruction)
   (lambda [p]
     (mcons (xml:name-datum (mcar p))
            (let ([body (mcdr p)])
              (and body
                   (xml:string-datum body))))))
 
-(define xml-element->datum : (-> XML-Element* XML-Element)
+(define xml-element*->datum : (-> XML-Element* XML-Element)
   (lambda [e]
     (list (xml:name-datum (car e))
-          (map xml-attribute->datum (cadr e))
-          (map (λ [[child : (U XML-Subdatum* XML-Element*)]]
-                 (cond [(list? child) (xml-element->datum child)]
-                       [(xml:string? child) (xml:string-datum child)]
-                       [(xml-cdata-token? child)
-                        (cond [(xml:newline? child) (xml-new-line (xml:whitespace-datum child))]
-                              [(xml:comment? child) (xml-comment (xml:whitespace-datum child))]
-                              [else (xml-white-space (or (xml-cdata-token->datum child) ""))])]
-                       [(xml-reference-token? child)
-                        (cond [(xml:reference? child) (xml:reference-datum child)]
-                              [(xml:char? child) (xml:char-datum child)]
-                              [else '|&DEADC0DE;|])]
-                       [else (xml-pi->datum child)]))
-               (caddr e)))))
+          (map xml-attribute*->datum (cadr e))
+          (map xml-mixed-content*->datum (caddr e)))))
 
-(define xml-attribute->datum : (-> XML-Element-Attribute* XML-Element-Attribute)
+(define xml-attribute*->datum : (-> XML-Element-Attribute* XML-Element-Attribute)
   (lambda [p]
     (cons (xml:name-datum (car p))
           (let ([v (cdr p)])
             (cond [(xml:string? v) (xml:string-datum v)]
                   [(xml:name? v) (xml:name-datum v)]
                   [else (map xml:name-datum v)])))))
+
+(define xml-mixed-content*->datum : (-> (U XML-Subdatum* XML-Content*) (U XML-Subdatum XML-Content))
+  (lambda [child]
+    (cond [(list? child) (xml-element*->datum child)]
+          [(xml:string? child) (xml:string-datum child)]
+          [(xml-cdata-token? child)
+           (cond [(xml:newline? child) (xml-new-line (xml:whitespace-datum child))]
+                 [(xml:comment? child) (xml-comment (xml:whitespace-datum child))]
+                 [else (xml-white-space (or (xml-cdata-token->datum child) ""))])]
+          [(xml-reference-token? child)
+           (cond [(xml:reference? child) (xml:reference-datum child)]
+                 [(xml:char? child) (xml:char-datum child)]
+                 [else '|&DEADC0DE;|])]
+          [else (xml-pi*->datum child)])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-load-external-dtd : (-> (Option Open-Input-XML-XXE) (Option XML:Name) XML-External-ID* XML-XXE-Guard (XML-XXE-Reader (U XML-DTD XML-Schema))

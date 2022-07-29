@@ -21,79 +21,81 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type SVG-Source (U String Symbol (Pairof (U String Symbol) (Pairof Positive-Integer Natural))))
 
+(define-for-syntax (racket->svg-name <e>)
+  (datum->syntax <e> (string->symbol (substring (symbol->immutable-string (syntax-e <e>)) 4))))
+
 (define-syntax (define-svg-element stx)
   (syntax-parse stx #:literals [:]
     [(_ svg-elem : SVG-Elem
-        #:refinement refine-svg
-        #:header super ([sfield : SFieldType [sdefval ...] sfield-ref] ...)
+        #:xml->svg refine-svg
+        #:header super ([supfield : SupFieldType [supdefval ...] supfield-ref] ...)
         #:sub-header ([subfield : SubFieldType [subdefval ...] subfield-ref xml-attribute-value->subdatum] ...)
-        #:attribute-categories [attr ...]
-        #:attributes ([safield : SAFieldType #:=> xml-attribute-value->datum sadefval ...] ...)
-        ([field : FieldType defval ...] ...)
+        #:attribute-categories [attrib ...]
+        #:attributes ([field : FieldType #:=> xml-attribute-value->datum defval ...] ...)
+        ([extfield : ExtFieldType extdefval ...] ...)
         options ...)
      (with-syntax* ([make-svg (make-identifier #'svg-elem "make-~a")]
                     [remake-svg (make-identifier #'svg-elem "remake-~a")]
-                    [(svg:attr ...) (map-identifiers #'(attr ...) "svg:attr:~a")]
+                    [(svg:attr ...) (map-identifiers #'(attrib ...) "svg:attr:~a")]
                     [(extract-svg:attr ...) (map-identifiers #'(svg:attr ...) "extract-~a")]
-                    [(SVG:Attr ...) (for/list ([sa (in-syntax #'(attr ...))])
+                    [(SVG:Attr ...) (for/list ([sa (in-syntax #'(attrib ...))])
                                       (format-id sa "SVG:Attr:~a" (string-titlecase (symbol->immutable-string (syntax-e sa)))))]
-                    [(content-ref field-ref ...) (make-identifiers #'svg-elem #'(content field ...))]
-                    [(afield-ref ...) (make-identifiers #'svg-elem #'(attr ...))]
-                    [(safield-ref ...) (make-identifiers #'svg-attr #'(safield ...))]
-                    [([kw-sargs ...] [kw-sreargs ...]) (make-keyword-arguments #'(sfield ...) #'(SFieldType ...) #'([sdefval ...] ...))]
+                    [(content-ref field-ref ...) (make-identifiers #'svg-elem #'(content extfield ...))]
+                    [(attfield-ref ...) (make-identifiers #'svg-elem #'(attrib ...))]
+                    [(safield-ref ...) (make-identifiers #'svg-attr #'(field ...))]
+                    [([kw-supargs ...] [kw-supreargs ...]) (make-keyword-arguments #'(supfield ...) #'(SupFieldType ...) #'([supdefval ...] ...))]
                     [([kw-subargs ...] [kw-subreargs ...]) (make-keyword-arguments #'(subfield ...) #'(SubFieldType ...) #'([subdefval ...] ...))]
-                    [([kw-aargs ...] [kw-areargs ...]) (make-keyword-optional-arguments #'(attr ...) #'(SVG:Attr ...))]
-                    [([kw-saargs ...] [kw-sareargs ...]) (make-keyword-arguments #'(safield ...) #'(SAFieldType ...) #'([sadefval ...] ...))]
-                    [([kw-args ...] [kw-reargs ...]) (make-keyword-arguments #'(field ...) #'(FieldType ...) #'([defval ...] ...))])
+                    [([kw-attargs ...] [kw-attreargs ...]) (make-keyword-optional-arguments #'(attrib ...) #'(SVG:Attr ...))]
+                    [([kw-slfargs ...] [kw-slfreargs ...]) (make-keyword-arguments #'(field ...) #'(FieldType ...) #'([defval ...] ...))]
+                    [([kw-extargs ...] [kw-extreargs ...]) (make-keyword-arguments #'(extfield ...) #'(ExtFieldType ...) #'([extdefval ...] ...))])
        (syntax/loc stx
          (begin (struct svg-elem super
-                  ([attr : (Option SVG:Attr)] ...
-                   [safield : (Option SAFieldType)] ...
+                  ([attrib : (Option SVG:Attr)] ... [field : FieldType] ...
                    [content : (Listof SVG-Element)] #| only 5 empty elements (font-face-format, font-face-name, glyphRef, hkern, vkern) |#
-                   [field : FieldType] ...)
+                   [extfield : ExtFieldType] ...)
                   #:type-name SVG-Elem
                   #:transparent
                   options ...)
 
                 (define (make-svg #:content [content : (Listof SVG-Element) null]
-                                  kw-sargs ... kw-subargs ... kw-aargs ... kw-saargs ... kw-args ...) : SVG-Elem
-                  (svg-elem sfield ... subfield ... attr ... safield ... content field ...))
+                                  kw-supargs ... kw-subargs ... kw-attargs ... kw-slfargs ... kw-extargs ...) : SVG-Elem
+                  (svg-elem supfield ... subfield ... attrib ... field ... content extfield ...))
 
                 (define (remake-svg #:content [content : (U Void (Listof SVG-Element)) (void)]
-                                    [src : SVG-Elem] kw-sreargs ... kw-subreargs ... kw-areargs ... kw-saargs ... kw-reargs ...) : SVG-Elem
-                  (svg-elem (if (void? sfield) (sfield-ref src) sfield) ...
+                                    [src : SVG-Elem] kw-supreargs ... kw-subreargs ... kw-attreargs ... kw-slfreargs ... kw-extreargs ...) : SVG-Elem
+                  (svg-elem (if (void? supfield) (supfield-ref src) supfield) ...
                             (if (void? subfield) (subfield-ref src) subfield) ...
-                            (if (void? attr) (afield-ref src) attr) ...
-                            (if (void? safield) (safield-ref src) safield) ...
+                            (if (void? attrib) (attfield-ref src) attrib) ...
+                            (if (void? field) (safield-ref src) field) ...
                             (if (void? content) (content-ref src) content)
-                            (if (void? field) (field-ref src) field) ...))
+                            (if (void? extfield) (field-ref src) extfield) ...))
 
-                (define (refine-svg [xml.svg : XML-Element*] kw-args ...) : SVG-Elem
+                (define (refine-svg [xml.svg : XML-Element*] kw-extargs ...) : SVG-Elem
                   (let*-values ([(?id ?core rest) (svg-attributes*-extract-core (cadr xml.svg))]
-                                [(attr rest) (extract-svg:attr rest)] ...)
+                                [(attrib rest) (extract-svg:attr rest)] ...)
                     (let extract ([_attrs : (Listof XML-Element-Attribute*) rest]
                                   [_srtta : (Listof XML-Element-Attribute*) null]
                                   [subfield : (Option XML-Element-Attribute-Value*) #false] ...
-                                  [safield : (Option XML-Element-Attribute-Value*) #false] ...)
+                                  [field : (Option XML-Element-Attribute-Value*) #false] ...)
                       (if (pair? _attrs)
                           (let*-values ([(self rest) (values (car _attrs) (cdr _attrs))]
                                         [(name value) (values (xml:name-datum (car self)) (cdr self))])
                             (case name
-                              [(subfield) (extract rest _srtta (if (eq? 'subfield name) value subfield) ... safield ...)] ...
-                              [(safield) (extract rest _srtta subfield ... (if (eq? 'safield name) value safield) ...)] ...
-                              [else (extract rest (cons self _srtta) subfield ... safield ...)]))
+                              [(subfield) (extract rest _srtta (if (eq? 'subfield name) value subfield) ... field ...)] ...
+                              [(field) (extract rest _srtta subfield ... (if (eq? 'field name) value field) ...)] ...
+                              [else (extract rest (cons self _srtta) subfield ... field ...)]))
                           (let ()
                             (when (pair? _srtta) (svg-report-unrecognized-attributes (car xml.svg) _srtta))
                             (svg-elem (xml-token->svg-source (car xml.svg))
                                       ?id ?core (or (and subfield (xml-attribute-value->subdatum subfield)) subdefval ...) ...
-                                      attr ... (or (and safield (xml-attribute-value->datum safield)) sadefval ...) ...
+                                      attrib ... (or (and field (xml-attribute-value->datum field)) defval ...) ...
                                       (xml-contents*->svg-elements (caddr xml.svg))
-                                      field ...)))))))))]))
+                                      extfield ...)))))))))]))
 
 (define-syntax (define-svg-subdom stx)
   (syntax-parse stx #:literals [:]
     [(_ subsvg : SubSVG
-        #:refinement refine
+        #:xml->svg refine
         #:header super ([sfield : SFieldType [sdefval ...] sfield-ref] ...)
         #:sub-header ([subfield : SubFieldType [subdefval ...] subfield-ref xml-attribute-value->subdatum] ...)
         ([tfield : TFieldType #:=> xml-attribute-value->datum tdefval ...] ...)
@@ -103,8 +105,7 @@
                     [(tfield-ref ...) (make-identifiers #'subsvg #'(tfield ...))]
                     [(subsvg-refine ...) (map-identifiers #'(nested-svg ...) "~a-refine")]
                     [(refine-elem ...) (map-identifiers #'(svg-elem ...) "refine-~a")]
-                    [(svg-tagname ...) (for/list ([<e> (in-list (syntax->list #'(svg-elem ...)))])
-                                         (datum->syntax <e> (string->symbol (substring (symbol->immutable-string (syntax-e <e>)) 4))))])
+                    [(svg-tagname ...) (map racket->svg-name (syntax->list #'(svg-elem ...)))])
        (syntax/loc stx
          (begin (struct subsvg super ([tfield : TFieldType] ...) #:type-name SubSVG #:transparent)
 
@@ -118,38 +119,35 @@
                                  [else #false]))))))
 
                 (deftree nested-svg : Nested-SVG
-                  #:refinement subsvg-refine
+                  #:xml->svg subsvg-refine
                   #:header subsvg ([sfield : SFieldType [sdefval ...] sfield-ref] ...)
                   #:sub-header ([subfield : SubFieldType [subdefval ...] subfield-ref xml-attribute-value->subdatum] ...
                                 [tfield : TFieldType [tdefval ...] tfield-ref xml-attribute-value->datum] ...)
                   nested-rest ...) ...
 
                 (defsvg svg-elem : SVG-Elem
-                  #:refinement refine-elem
+                  #:xml->svg refine-elem
                   #:header subsvg ([sfield : SFieldType [sdefval ...] sfield-ref] ...)
                   #:sub-header ([subfield : SubFieldType [subdefval ...] subfield-ref xml-attribute-value->subdatum] ...
                                 [tfield : TFieldType [tdefval ...] tfield-ref xml-attribute-value->datum] ...)
                   rest ...) ...)))]
-    [(_ subsvg : SubSVG #:refinement refine #:header super field-defs #:sub-header sub-field-defs self-field-defs elem-defs ...)
+    [(_ subsvg : SubSVG #:xml->svg refine #:header super field-defs #:sub-header sub-field-defs self-field-defs elem-defs ...)
      (syntax/loc stx
        (define-svg-subdom subsvg : SubSVG
-         #:refinement refine #:header super field-defs #:sub-header sub-field-defs
+         #:xml->svg refine #:header super field-defs #:sub-header sub-field-defs
          self-field-defs
          #:subtree []
          elem-defs ...))]))
 
 (define-syntax (define-svg-dom stx)
   (syntax-parse stx #:literals [:]
-    [(_ svg : SVG #:refinement refine ([sfield : SFieldType sdefval ...] ...)
+    [(_ svg : SVG #:xml->svg refine ([sfield : SFieldType sdefval ...] ...)
         #:subtree [(deftree subsvg : SubSVG subrest ...) ...]
         (defsvg svg-elem : SVG-Elem rest ...) ...)
      (with-syntax* ([(sfield-ref ...) (make-identifiers #'svg #'(sfield ...))]
                     [(subsvg-refine ...) (map-identifiers #'(subsvg ...) "~a-refine")]
                     [(refine-elem ...) (map-identifiers #'(svg-elem ...) "refine-~a")]
-                    [([svg-tagname xml->svg] ...) (for/list ([<e> (in-list (drop-right (syntax->list #'(svg-elem ...)) 1 #| for svg:unknown |#))]
-                                                             [<refine> (in-syntax #'(refine-elem ...))])
-                                                    (list (datum->syntax <e> (string->symbol (substring (symbol->immutable-string (syntax-e <e>)) 4)))
-                                                          <refine>))])
+                    [(svg-tagname ...) (map racket->svg-name (syntax->list #'(svg-elem ...)))])
        (syntax/loc stx
          (begin (struct svg ([sfield : SFieldType] ...) #:type-name SVG #:transparent)
 
@@ -159,27 +157,27 @@
                         (let-values ([(ns e-tagname) (xml-qname-split (xml:name-datum (car e)))])
                           (and (or (null? valid-tagnames) (memq e-tagname valid-tagnames))
                                (case e-tagname
-                                 [(svg-tagname) (xml->svg e)] ...
+                                 [(svg-tagname) (refine-elem e)] ...
                                  [else #false])))
                         (and (svg-report-unrecognized-element e)
-                             (refine-svg:unknown e #:raw (xml-element->datum e))))))
+                             (svg-refine-unknown e)))))
 
                 (deftree subsvg : SubSVG
-                  #:refinement subsvg-refine
+                  #:xml->svg subsvg-refine
                   #:header svg ([sfield : SFieldType [sdefval ...] sfield-ref] ...) #:sub-header []
                   subrest ...) ...
                 
                 (defsvg svg-elem : SVG-Elem
-                  #:refinement refine-elem
+                  #:xml->svg refine-elem
                   #:header svg ([sfield : SFieldType [sdefval ...] sfield-ref] ...) #:sub-header []
                   rest ...) ...)))]
-    [(_ svg : SVG #:refinement refine field-defs elem-defs ...)
+    [(_ svg : SVG #:xml->svg refine field-defs elem-defs ...)
      (syntax/loc stx
-       (define-svg-dom svg : SVG #:refinement refine field-defs #:subtree [] elem-defs ...))]))
+       (define-svg-dom svg : SVG #:xml->svg refine field-defs #:subtree [] elem-defs ...))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-svg-dom svg-element : SVG-Element
-  #:refinement xml-element*->svg-element
+  #:xml->svg xml-element*->svg-element
   ([source : (Option SVG-Source) #false]
    [id : (Option Symbol) #false]
    [attr:core : (Option SVG:Attr:Core) #false])
@@ -192,12 +190,14 @@
      (define-svg-element svg:svg : SVG:SVG
        #:attribute-categories []
        #:attributes ()
-       ()))]
-  
-  (define-svg-element svg:unknown : SVG:Unknown
-    #:attribute-categories []
-    #:attributes ()
-    ([raw : XML-Element])))
+       ()))])
+
+(struct svg-unknown svg-element
+  ([tag : Symbol]
+   [attributes : (Listof XML-Element-Attribute)]
+   [content : (Listof (U XML-Content XML-Subdatum))])
+  #:type-name SVG-Unknown
+  #:transparent)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define svg-resolve-root : (-> (Listof XML-Content) (U String Symbol) (Option Symbol) SVG:SVG)
@@ -216,6 +216,15 @@
             [else (let-values ([(self rest) (values (car cs) (cdr cs))])
                     (cond [(not (list? self)) (search-root rest)]
                           [else (assert (xml-element*->svg-element self) svg:svg?)]))]))))
+
+(define svg-refine-unknown : (-> XML-Element* SVG-Unknown)
+  (lambda [e]
+    (define-values (?id ?core rest) (svg-attributes*-extract-core (cadr e)))
+    (svg-unknown (xml-token->svg-source (car e))
+                 ?id ?core
+                 (xml:name-datum (car e))
+                 (map xml-attribute*->datum rest)
+                 (map xml-mixed-content*->datum (caddr e)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-contents->svg-elements : (-> (Listof (U XML-Content XML-Subdatum)) (Listof SVG-Element))
@@ -241,11 +250,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-element->svg-element : (-> XML-Element (Option SVG-Element))
   (lambda [e]
-    (make-svg:unknown #:raw e)))
-
-#;(define xml-element*->svg-element : (-> XML-Element* (Option SVG-Element))
-  (lambda [e]
-    (refine-svg:unknown e #:raw (xml-element->datum e))))
+    (svg-unknown #false #false #false (car e) (cadr e) (caddr e))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-token->svg-source : (-> XML-Token (Option SVG-Source))

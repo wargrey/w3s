@@ -21,14 +21,10 @@
                     [remake-attr (format-id #'svg-attr "remake-~a" (syntax-e #'svg-attr))]
                     [extract-attr (format-id #'svg-attr "extract-~a" (syntax-e #'svg-attr))]
                     [cascade-attr (format-id #'svg-attr "cascade-~a" (syntax-e #'svg-attr))]
-                    [attr-values (format-id #'svg-attr "~a-values" (syntax-e #'svg-attr))]
                     [(field-ref ...) (make-identifiers #'svg-attr #'(field ...))]
                     [([kw-args ...] [kw-reargs ...]) (make-keyword-arguments #'(field ...) #'(FieldType ...) #'([defval ...] ...))])
        (syntax/loc stx
-         (begin (struct svg-attr svg-attribute ([field : FieldType] ...)
-                  #:type-name SVG-Attr
-                  #:transparent
-                  options ...)
+         (begin (struct svg-attr svg-attribute ([field : FieldType] ...) #:type-name SVG-Attr #:transparent options ...)
 
                 (define (make-attr kw-args ...) : SVG-Attr
                   (svg-attr field ...))
@@ -53,9 +49,6 @@
                                        (svg-attr (or (and field (xml-attribute-value->datum field)) defval ...) ...))
                                    _srtta)]
                           [else (values #false _srtta)])))
-
-                (define (attr-values [self : SVG-Attr]) : (Values FieldType ...)
-                  (values (field-ref self) ...))
 
                 (define (cascade-attr [parent : SVG-Attr] [child : SVG-Attr]) : SVG-Attr
                   (svg-attr (or (field-ref child) (field-ref parent)) ... )))))]))
