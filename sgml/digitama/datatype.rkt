@@ -39,14 +39,14 @@
           [(xml:name? v) (symbol->unreadable-symbol (xml:name-datum v))]
           [else (string->unreadable-symbol (symbol-join (map xml:name-datum v)))])))
 
-(define xml-attribute-value->symbols : (-> XML-Element-Attribute-Value* (Listof Symbol))
+(define xml-attribute-value->symbol-list : (-> XML-Element-Attribute-Value* (Listof Symbol))
   (lambda [v]
     (cond [(xml:string? v) (map string->symbol (string-split (xml:string-datum v)))]
           [(list? v) (map xml:name-datum v)]
           [(xml:name? v) (list (xml:name-datum v))]
           [else null])))
 
-(define xml-attribute-value->unreadable-symbols : (-> XML-Element-Attribute-Value* (Listof Symbol))
+(define xml-attribute-value->unreadable-symbol-list : (-> XML-Element-Attribute-Value* (Listof Symbol))
   (lambda [v]
     (cond [(xml:string? v) (map string->unreadable-symbol (string-split (xml:string-datum v)))]
           [(list? v) (map symbol->unreadable-symbol (map xml:name-datum v))]

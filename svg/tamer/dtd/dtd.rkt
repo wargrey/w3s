@@ -2,6 +2,8 @@
 
 (provide (all-defined-out) svg11*.dtd)
 
+(require racket/string)
+
 (require sgml/digitama/schema)
 (require sgml/digitama/digicore)
 (require sgml/digitama/dtd)
@@ -9,21 +11,36 @@
 (require "../../village/svglang/svg11.tdtd")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define attrlists : (HashTable Symbol Keyword) (make-hasheq))
+(define attrlists : (HashTable Symbol (Listof Keyword)) (make-hasheq))
 (define attribs : (HashTable Keyword (Listof Symbol)) (make-hasheq))
+
+(define registered-groups : (Listof Keyword)
+  '(#:SVG.FilterPrimitiveWithIn.attrib #:SVG.FilterPrimitive.attrib
+    #:SVG.Presentation.attrib #:SVG.Conditional.attrib #:SVG.External.attrib
+    #:SVG.AnimationAttribute.attrib #:SVG.AnimationAddition.attrib
+    #:SVG.GraphicalEvents.attrib #:SVG.AnimationEvents.attrib
+    #:SVG.XLink.attrib))
+
+(define hidden-groups : (Listof Keyword)
+  '(#:SVG.id.attrib #:SVG.lang.attrib #:SVG.base.attrib #:SVG.Core.attrib
+    #:SVG.XLinkRequired.attrib #:SVG.XLinkEmbed.attrib #:SVG.XLinkReplace.attrib
+    #:SVG.Animation.attrib))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (dtd-prepare-attlist!) : Void
   (for ([(e-name entity) (in-hash (xml-schema-entities svg11*.dtd))])
-    (when (and (keyword? e-name) (xsch-token-entity? entity))
+    (when (and (keyword? e-name) (xsch-token-entity? entity) (string-suffix? (keyword->string e-name) ".attrib"))
       (let collect-attlist : Void ([body : (Listof XML-Token) (or (xsch-token-entity-body entity) null)])
         (when (and (pair? body) (xml:name? (car body)))
           (let*-values ([(atype rest) (xml-dtd-extract-attribute-type* (car body) (cdr body))]
                         [(avalue fixed? rest) (xml-dtd-extract-attribute-default* (car body) rest)])
             (define a-name (xml:name-datum (car body)))
-            (hash-set! attrlists a-name e-name)
+            (hash-set! attrlists a-name (cons e-name (hash-ref attrlists a-name (inst list Keyword))))
             (hash-set! attribs e-name (cons a-name (hash-ref attribs e-name (inst list Symbol))))
             (collect-attlist rest)))))))
+
+(define (dtd-list-all-elements) : (Listof Symbol)
+  (sort (hash-keys (xml-schema-elements svg11*.dtd)) symbol<?))
 
 (define (dtd-attribute-list [tag-name : Symbol]) : (Listof Symbol)
   (hash-keys
@@ -49,12 +66,21 @@
               ([attr (in-list attrs)])
       (define group (hash-ref attrlists attr (λ [] #false)))
       (cond [(not group) (values groups (cons attr extra))]
-            [(memq group groups) (values groups extra)]
-            [else (values (cons group groups) extra)])))
+            [else (values (append group groups) extra)])))
   
-    (for ([group (in-list groups)])
-      (printf "~a~a: ~a~n" indent group (reverse (hash-ref attribs group list))))
-    (printf "~aREST: ~a~n" indent extra))
+  (for ([group (in-list (remove-duplicates groups))])
+    (define attrs (sort (hash-ref attribs group (inst list Symbol)) symbol<?))
+
+    (unless (memq group hidden-groups)
+      (printf "~a~a[~a]:~n" indent group (length attrs))
+      (unless (memq group registered-groups)
+        (for ([attr (in-list (sort attrs symbol<?))])
+          (printf "~a    [~a : (Option String) #:=> xml-attribute-value->string #false]~n" indent attr)))))
+
+  (when (pair? extra)
+    (printf "~aREST[~a]:~n" indent (length extra))
+    (for ([attr (in-list (sort extra symbol<?))])
+      (printf "~a    [~a : (Option String) #:=> xml-attribute-value->string #false]~n" indent attr))))
 
 (define (dtd-info-displayln [argv : (Listof Symbol)] [type : Symbol] [svg-list : (-> Symbol (Listof Symbol))]) : Void
     (define lists : (Listof (Pairof (Listof Symbol) Symbol))
@@ -66,7 +92,8 @@
     (for ([ls (in-list lists)])
       (when (pair? (car ls))
         (printf "~n~a[~a, ~a]: ~a~n"
-                (cdr ls) type (length (car ls)) (car ls))))
+                (cdr ls) type (length (car ls))
+                (sort (car ls) symbol<?))))
 
     (let ([dict : (HashTable Symbol Natural) (make-hasheq)]
           [n (length argv)])
@@ -74,9 +101,12 @@
         (for ([t (in-list (car ls))])
           (hash-set! dict t (+ (hash-ref dict t (λ [] 0)) 1))))
 
-      (when (> n 1)
-        (printf "~ncommon:")
-        (for ([(t c) (in-hash dict)])
-          (when (= c n)
-            (printf " ~a" t)))
-        (newline))))
+      (when (> n 1)       
+        (define-values (e-share e-diff)
+          (for/fold ([cs : (Listof Symbol) null] [ds : (Listof Symbol) null])
+                    ([(t c) (in-hash dict)])
+            (if (= c n)
+                (values (cons t cs) ds)
+                (values cs (cons t ds)))))
+        (printf "~n+[~a]: ~a~n" (length e-share) (sort e-share symbol<?))
+        (printf "-[~a]: ~a~n" (length e-diff) (sort e-diff symbol<?)))))
