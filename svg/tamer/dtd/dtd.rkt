@@ -15,16 +15,16 @@
 (define attribs : (HashTable Keyword (Listof Symbol)) (make-hasheq))
 
 (define registered-groups : (Listof Keyword)
-  '(#:SVG.FilterPrimitiveWithIn.attrib #:SVG.FilterPrimitive.attrib
+  '(#:SVG.FilterPrimitiveWithIn.attrib #:SVG.FilterPrimitive.attrib #:SVG.Style.attrib
     #:SVG.Presentation.attrib #:SVG.Conditional.attrib #:SVG.External.attrib
-    #:SVG.AnimationAttribute.attrib #:SVG.AnimationAddition.attrib
-    #:SVG.GraphicalEvents.attrib #:SVG.AnimationEvents.attrib
+    #:SVG.AnimationAttribute.attrib #:SVG.AnimationTiming.attrib #:SVG.AnimationValue.attrib #:SVG.AnimationAddtion.attrib
+    #:SVG.GraphicalEvents.attrib #:SVG.AnimationEvents.attrib #:SVG.DocumentEvents.attrib 
     #:SVG.XLink.attrib))
 
 (define hidden-groups : (Listof Keyword)
   '(#:SVG.id.attrib #:SVG.lang.attrib #:SVG.base.attrib #:SVG.Core.attrib
     #:SVG.XLinkRequired.attrib #:SVG.XLinkEmbed.attrib #:SVG.XLinkReplace.attrib
-    #:SVG.Animation.attrib))
+    #:SVG.Animation.attrib #:SVG.xmlns.attrib))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (dtd-prepare-attlist!) : Void

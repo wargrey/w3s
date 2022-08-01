@@ -29,40 +29,40 @@
          (lambda [attrs [omits null] [elem #false]]
            (let extract ([_attrs : (Listof XML-Element-Attribute*) attrs]
                          [_srtta : (Listof XML-Element-Attribute*) null]
-                         [field : XML-Type false] ...)
+                         [field : (Option XML-Type) #false] ...)
              (cond [(pair? _attrs)
                     (let*-values ([(self rest) (values (car _attrs) (cdr _attrs))])
                       (case (xml:name-datum (car self))
-                        [(field) (with-a-field-replaced (extract rest _srtta #:fields (field ...)) #:for field #:set self)] ...
+                        [(field) (with-a-field-replaced (extract rest _srtta #:fields (field ...))
+                                   #:for field #:set (svg-attribute->datum/safe self xml-attribute-value->datum #false omits elem))] ...
                         [else (extract rest (cons self _srtta) field ...)]))]
-                   [(or field ...)
-                    (values (svg-attr (svg-attribute->datum/safe field xml-attribute-value->datum (or defval ...) omits elem) ...) _srtta)]
+                   [(or field ...) (values (svg-attr (or field defval ...) ...) _srtta)]
                    [else (values #false attrs)])))))]
     [(_ extract-attr : SVG-Attr #:vector (svg-attr [field : [XML-Type field-idx false] xml-attribute-value->datum defval ...] ...))
      (syntax/loc stx
        (define extract-attr : (->* ((Listof XML-Element-Attribute*)) ((Listof Symbol) (Option XML:Name)) (Values (Option SVG-Attr) (Listof XML-Element-Attribute*)))
          (lambda [attrs [omits null] [elem #false]]
-           (let ([_values : (Vector XML-Type ...) (vector false ...)])
+           (let ([avec : (Vector (Option XML-Type) ...) (vector false ...)])
              (let extract ([_attrs : (Listof XML-Element-Attribute*) attrs]
                            [_srtta : (Listof XML-Element-Attribute*) null]
                            [collected? : Any #false])
                (cond [(pair? _attrs)
                       (let*-values ([(self rest) (values (car _attrs) (cdr _attrs))])
                         (case (xml:name-datum (car self))
-                          [(field) (vector-set! _values field-idx self) (extract rest _srtta #true)] ...
+                          [(field) (vector-set! avec field-idx (svg-attribute->datum/safe self xml-attribute-value->datum #false omits elem))
+                                   (extract rest _srtta (or collected? (vector-ref avec field-idx)))] ...
                           [else (extract rest (cons self _srtta) collected?)]))]
                      [(not collected?) (values #false attrs)]
-                     [else (values (svg-attr (svg-attribute->datum/safe (vector-ref _values field-idx) xml-attribute-value->datum (or defval ...) omits elem) ...)
-                                   _srtta)]))))))]
+                     [else (values (svg-attr (or (vector-ref avec field-idx) defval ...) ...) _srtta)]))))))]
     [(_ extract-attr : SVG-Attr #:hash (svg-attr [field : [XML-Type field-idx false] xml-attribute-value->datum defval ...] ...))
      (syntax/loc stx
        (define extract-attr : (->* ((Listof XML-Element-Attribute*)) ((Listof Symbol) (Option XML:Name))
                                    (Values (Option SVG-Attr) (Listof XML-Element-Attribute*)))
          (lambda [attrs [omits null] [elem #false]]
-           (let-values ([(_attdict _srtta) (svg-attributes*-extract attrs '(field ...))])
-             (cond [(hash-empty? _attdict) (values #false attrs)]
+           (let-values ([(adict _srtta) (svg-attributes*-extract attrs '(field ...) omits elem)])
+             (cond [(hash-empty? adict) (values #false attrs)]
                    [else (let ([->f (λ [] #false)])
-                           (values (svg-attr (svg-attribute->datum/safe (hash-ref _attdict 'field ->f) xml-attribute-value->datum (or defval ...) omits elem)
+                           (values (svg-attr (svg-attribute->datum/safe (hash-ref adict 'field ->f) xml-attribute-value->datum (or defval ...))
                                              ...)
                                    _srtta))])))))]))
 
@@ -80,7 +80,7 @@
                               ;;; TODO: find a better strategy
                               ; #:inline is definitely bad for large structs, whereas
                               ; #:vector and #:hash are almost identical for large structs. 
-                              (cond [(<= count 10) #'#:inline]
+                              (cond ;[(<= count 10) #'#:inline]
                                     [(<= count 20) #'#:vector]
                                     [else          #'#:hash]))])
        (syntax/loc stx
@@ -93,7 +93,7 @@
                   (svg:attr (if (void? field) (field-ref src) field) ...))
 
                 (define-svg-attribute-extract extract-svg:attr : SVG:Attr switch
-                  (svg:attr [field : [(Option XML-Element-Attribute*) field-idx #false] xml-attribute-value->datum defval ...] ...))
+                  (svg:attr [field : [FieldType field-idx #false] xml-attribute-value->datum defval ...] ...))
 
                 (define (cascade-svg:attr [parent : SVG:Attr] [child : SVG:Attr]) : SVG:Attr
                   (svg:attr (or (field-ref child) (field-ref parent)) ... )))))]))
@@ -111,6 +111,9 @@
    [requiredExtensions : (Option String)        #:=> xml-attribute-value->string #false]
    [systemLanguage : (Option String)            #:=> xml-attribute-value->string #false]))
 
+(define-svg-attribute external
+  ([externalResourcesRequired : (Option String) #:=> xml-attribute-value->string #false]))
+
 (define-svg-attribute xlink
   ([xlink:actuate : (Option String) #:=> xml-attribute-value->string #false]
    [xlink:arcrole : (Option String) #:=> xml-attribute-value->string #false]
@@ -125,8 +128,19 @@
    [y : (Option String) #:=> xml-attribute-value->string #false]
    [width : (Option String) #:=> xml-attribute-value->string #false]
    [height : (Option String) #:=> xml-attribute-value->string #false]
+   [result : (Option String) #:=> xml-attribute-value->string #false]))
+
+(define-svg-attribute filter-primitive+in
+  ([x : (Option String) #:=> xml-attribute-value->string #false]
+   [y : (Option String) #:=> xml-attribute-value->string #false]
+   [width : (Option String) #:=> xml-attribute-value->string #false]
+   [height : (Option String) #:=> xml-attribute-value->string #false]
    [result : (Option String) #:=> xml-attribute-value->string #false]
    [in : (Option String) #:=> xml-attribute-value->string #false]))
+
+(define-svg-attribute style
+  ([class : (Listof Symbol)  #:=> xml-attribute-value->symbol-list null]
+   [style : (Option String)  #:=> xml-attribute-value->string #false]))
 
 (define-svg-attribute presentation
   ([alignment-baseline : (Option String) #:=> xml-attribute-value->string #false]
@@ -217,6 +231,14 @@
   ([accumulate : (Option String) #:=> xml-attribute-value->string #false]
    [additive : (Option String) #:=> xml-attribute-value->string #false]))
 
+(define-svg-attribute document-event
+  ([onabort : (Option String) #:=> xml-attribute-value->string #false]
+   [onerror : (Option String) #:=> xml-attribute-value->string #false]
+   [onresize : (Option String) #:=> xml-attribute-value->string #false]
+   [onscroll : (Option String) #:=> xml-attribute-value->string #false]
+   [onunload : (Option String) #:=> xml-attribute-value->string #false]
+   [onzoom : (Option String) #:=> xml-attribute-value->string #false]))
+
 (define-svg-attribute animation-event
   ([onbegin : (Option String)  #:=> xml-attribute-value->string #false]
    [onend : (Option String)    #:=> xml-attribute-value->string #false]
@@ -244,24 +266,26 @@
 
 (define svg-attributes*-extract
   : (case-> [(Listof XML-Element-Attribute*) Symbol -> (Values (Option XML-Element-Attribute-Value*) (Listof XML-Element-Attribute*))]
-            [(Listof XML-Element-Attribute*) (Listof Symbol) -> (Values (Immutable-HashTable Symbol XML-Element-Attribute*) (Listof XML-Element-Attribute*))])
-  (lambda [attrs names]
-    (if (symbol? names)
-        (let extract ([_attrs : (Listof XML-Element-Attribute*) attrs]
-                      [_srtta : (Listof XML-Element-Attribute*) null])
-          (cond [(null? _attrs) (values #false _srtta)]
-                [else (let-values ([(self rest) (values (car _attrs) (cdr _attrs))])
-                        (cond [(xml:name=:=? (car self) names) (values (cdr self) (append rest _srtta))]
-                              [else (extract rest (cons self _srtta))]))]))
-        (let extract ([_attrs : (Listof XML-Element-Attribute*) attrs]
-                      [_srtta : (Listof XML-Element-Attribute*) null]
-                      [attr-values : (Immutable-HashTable Symbol XML-Element-Attribute*) (hasheq)])
-          (cond [(null? _attrs) (values attr-values _srtta)]
-                [else (let*-values ([(self rest) (values (car _attrs) (cdr _attrs))]
-                                    [(attr) (xml:name-datum (car self))])
-                        (if (memq attr names)
-                            (extract rest _srtta (hash-set attr-values attr self))
-                            (extract rest (cons self _srtta) attr-values)))])))))
+            [(Listof XML-Element-Attribute*) (Listof Symbol) (Listof Symbol) (Option XML:Name)
+                                             -> (Values (Immutable-HashTable Symbol XML-Element-Attribute*) (Listof XML-Element-Attribute*))])
+  (case-lambda
+    [(attrs name)
+     (let extract ([_attrs : (Listof XML-Element-Attribute*) attrs]
+                   [_srtta : (Listof XML-Element-Attribute*) null])
+       (cond [(null? _attrs) (values #false _srtta)]
+             [else (let-values ([(self rest) (values (car _attrs) (cdr _attrs))])
+                     (cond [(xml:name=:=? (car self) name) (values (cdr self) (append rest _srtta))]
+                           [else (extract rest (cons self _srtta))]))]))]
+    [(attrs names omits elem)
+     (let extract ([_attrs : (Listof XML-Element-Attribute*) attrs]
+                   [_srtta : (Listof XML-Element-Attribute*) null]
+                   [adict : (Immutable-HashTable Symbol XML-Element-Attribute*) (hasheq)])
+       (cond [(null? _attrs) (values adict _srtta)]
+             [else (let*-values ([(self rest) (values (car _attrs) (cdr _attrs))]
+                                 [(attr) (xml:name-datum (car self))])
+                     (cond [(not (memq attr names)) (extract rest (cons self _srtta) adict)]
+                           [(not (memq attr omits)) (extract rest _srtta (hash-set adict attr self))]
+                           [else (svg-report-unrecognized-attributes elem (list self)) (extract rest _srtta adict)]))]))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define svg-report-unrecognized-attributes : (-> (Option XML:Name) (Listof XML-Element-Attribute*) Void)

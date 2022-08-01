@@ -178,7 +178,7 @@
                   #:xml->svg subsvg-refine
                   #:header subsvg ([sfield : SFieldType [sdefval ...] sfield-ref] ...)
                   #:sub-header extract-subheader ([subfield : SubFieldType [subdefval ...] subfield-ref] ...
-                                                  [attrib : (Option SVG:Attr) [#false] afield-ref] ...
+                                                  [svg:attr : (Option SVG:Attr) [#false] afield-ref] ...
                                                   [tfield : TFieldType [tdefval ...] tfield-ref] ...)
                   nested-rest ...) ...
 
@@ -186,7 +186,7 @@
                   #:xml->svg refine-elem
                   #:header subsvg ([sfield : SFieldType [sdefval ...] sfield-ref] ...)
                   #:sub-header extract-subheader ([subfield : SubFieldType [subdefval ...] subfield-ref] ...
-                                                  [attrib : (Option SVG:Attr) [#false] afield-ref] ...
+                                                  [svg:attr : (Option SVG:Attr) [#false] afield-ref] ...
                                                   [tfield : TFieldType [tdefval ...] tfield-ref] ...)
                   svg-elem-rest ...) ...)))]))
 
@@ -238,8 +238,7 @@
 
   #:subdom
   [(define-svg-subdom svg-stylish-element : SVG-Stylish-Element
-     ([class : (Listof Symbol)  #:=> xml-attribute-value->symbol-list null]
-      [style : (Option String)  #:=> xml-attribute-value->string #false])
+     #:attribute-categories [style] ()
 
      #:subdom
      [(define-svg-subdom svg-descriptive-element : SVG-Descriptive-Element ()
@@ -255,7 +254,13 @@
      
         (define-svg-element svg:svg : SVG:SVG
           #:attribute-categories []
-          ()))])
+          ([baseProfile : (Option String) #:=> xml-attribute-value->string #false]
+           [contentScriptType : (Option String) #:=> xml-attribute-value->string #false]
+           [contentStyleType : (Option String) #:=> xml-attribute-value->string #false]
+           [preserveAspectRatio : (Option String) #:=> xml-attribute-value->string #false]
+           [version : (Option String) #:=> xml-attribute-value->string #false]
+           [viewBox : (Option String) #:=> xml-attribute-value->string #false]
+           [zoomAndPan : (Option String) #:=> xml-attribute-value->string #false])))])
 
    (define-svg-subdom svg-light-source-element : SVG-Light-Source-Element ()
      (define-svg-element [svg:distant-light feDistantLight] : SVG:DistantLight
@@ -278,17 +283,28 @@
         [limitingConeAngle : (Option String) #:=> xml-attribute-value->string #false])))
 
    (define-svg-subdom svg-animation-element : SVG-Animation-Element
-     #:attribute-categories [condition animation-event xlink animation-timing]
-     ([externalResourcesRequired : (Option String) #:=> xml-attribute-value->string #false])
+     #:attribute-categories [condition external xlink animation-event animation-timing] ()
 
      (define-svg-element svg:animate : SVG:Animate
        #:attribute-categories [animation-target animation-value animation-addition presentation] ())
+
+     (define-svg-element svg:set : SVG:Set
+       #:attribute-categories [animation-target]
+       ([to : (Option String) #:=> xml-attribute-value->string #false]))
      
      (define-svg-element [svg:animate-color animateColor] : SVG:AnimateColor
        #:attribute-categories [animation-target animation-value animation-addition presentation] ())
+
+     (define-svg-element [svg:animate-motion animateMotion] : SVG:AnimateMotion
+       #:attribute-categories [animation-value animation-addition]
+       ([path : (Option String) #:=> xml-attribute-value->string #false]
+        [keyPoints : (Option String) #:=> xml-attribute-value->string #false]
+        [rotate : (Option String) #:=> xml-attribute-value->string #false]
+        [origin : (Option String) #:=> xml-attribute-value->string #false]))
      
      (define-svg-element [svg:animate-transform animateTransform] : SVG:AnimateTransform
-       #:attribute-categories [animation-target animation-value animation-addition presentation] ()))])
+       #:attribute-categories [animation-target animation-value animation-addition presentation]
+       ([type : (Option String) #:=> xml-attribute-value->string #false])))])
 
 (struct svg-unknown svg-element
   ([tag : Symbol]
