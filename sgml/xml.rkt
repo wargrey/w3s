@@ -12,6 +12,14 @@
 (provide XML-DTD-Guard XML-XXE-Guard make-xml-dtd-guard xml-dtd-guard? xml-xxe-guard?)
 (provide default-xml-error-topic)
 
+(provide XML-Element XML-Element-Attribute XML-Element-Attribute-Value)
+(provide XML-Processing-Instruction XML-Content XML-Subdatum)
+(provide (rename-out [xml-root-xexpr xml-doc-root]
+                     [xexpr-attr-ref xml-attr-ref]
+                     [xexpr-children-seek xml-children-seek]
+                     [Xexpr-Element-Children XML-Element-Children]
+                     [Xexpr-Attribute-Datum XML-Attribute-Datum]))
+
 (require "dtd.rkt")
 (require "xexpr.rkt")
 

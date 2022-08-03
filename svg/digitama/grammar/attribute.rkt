@@ -257,6 +257,15 @@
    [onmouseout : (Option String)  #:=> xml-attribute-value->string #false]
    [onload : (Option String)      #:=> xml-attribute-value->string #false]))
 
+(define-svg-attribute transfer-function-elmenet
+  ([amplitude : (Option String) #:=> xml-attribute-value->string #false]
+   [exponent : (Option String) #:=> xml-attribute-value->string #false]
+   [intercept : (Option String) #:=> xml-attribute-value->string #false]
+   [offset : (Option String) #:=> xml-attribute-value->string #false]
+   [slope : (Option String) #:=> xml-attribute-value->string #false]
+   [tableValues : (Option String) #:=> xml-attribute-value->string #false]
+   [type : (Option String) #:=> xml-attribute-value->string #false]))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define svg-attributes*-extract-core : (-> (Listof XML-Element-Attribute*) (Values (Option Symbol) (Option SVG:Attr:Core) (Listof XML-Element-Attribute*)))
   (lambda [attrs]
