@@ -13,9 +13,4 @@
                     (string->symbol arg))])))
 
   (svgdoc-info-displayln svgdb elements 'ATTLIST svg-database-list-attributes)
-  
-  (printf "~n=================== Attribute Groups ===================")
-  (for ([e (in-list elements)])
-    (let ([cs (svg-database-list-categories svgdb e)])
-      (printf "~n~a: ~a~n" e (if (null? cs) 'NONE cs))
-      (svgdoc-attr-group-displayln svgdb (svg-database-list-attributes svgdb e) "    "))))
+  (svgdoc-element-attgroup-displayln svgdb elements))

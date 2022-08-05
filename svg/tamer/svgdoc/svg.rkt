@@ -33,8 +33,7 @@
    [categories : (Immutable-HashTable Keyword (Listof Symbol))]
    [attlists : (Immutable-HashTable Symbol (Listof Keyword))]
    [attribs : (Immutable-HashTable Keyword (Listof Symbol))])
-  #:type-name SVG-Database
-  #:prefab)
+  #:type-name SVG-Database)
 
 (struct svg-element
   ([name : Symbol]
@@ -108,14 +107,11 @@
   (cond [(not e) null]
         [else (caddr e)]))
 
-(define (svg-database-list-attributes [svgdb : SVG-Database] [tag-name : Symbol]) : (Listof Symbol)
+(define (svg-database-list-attributes [svgdb : SVG-Database] [tag-name : Symbol]) : (Listof (U Keyword Symbol))
   (define e : (Option SVG-Element-Datum) (assq tag-name (svg-database-elements svgdb)))
 
   (cond [(not e) null]
-        [else (append (cadddr e)
-                      (apply append
-                             (for/list : (Listof (Listof Symbol)) ([ac (in-list (caddr e))])
-                               (hash-ref (svg-database-attribs svgdb) ac))))]))
+        [else (append (caddr e) (cadddr e))]))
 
 (define (svg-database-list-elements-of-category [svgdb : SVG-Database] [category : (Option Keyword)]) : (Listof Symbol)
   (if (not category)
@@ -125,14 +121,21 @@
               [else es]))
       (hash-ref (svg-database-categories svgdb) category (inst list Symbol))))
 
-(define (svg-database-list-elements-of-attribute [svgdb : SVG-Database] [att-name : Symbol]) : (Listof Symbol)
-  (for/fold ([es : (Listof Symbol) null])
-            ([e (in-list (svg-database-elements svgdb))])
-    (cond [(memq att-name (cadddr e)) (cons (car e) es)]
-          [(for/or : Any ([ac (in-list (caddr e))])
-             (memq att-name (hash-ref (svg-database-attribs svgdb) ac)))
-           (cons (car e) es)]
-          [else es])))
+(define (svg-database-list-elements-of-attribute [svgdb : SVG-Database] [att-name : (U Keyword Symbol)]) : (Listof Symbol)
+  (define attribs (svg-database-attribs svgdb))
+
+  (if (keyword? att-name)
+      (for/fold ([es : (Listof Symbol) null])
+                ([e (in-list (svg-database-elements svgdb))])
+        (cond [(memq att-name (caddr e)) (cons (car e) es)]
+              [else es]))
+      (for/fold ([es : (Listof Symbol) null])
+                ([e (in-list (svg-database-elements svgdb))])
+        (cond [(memq att-name (cadddr e)) (cons (car e) es)]
+              [(for/or : Any ([ac (in-list (caddr e))])
+                 (memq att-name (hash-ref attribs ac)))
+               (cons (car e) es)]
+              [else es]))))
 
 (define (svg-database-list-elements-of-attgroup [svgdb : SVG-Database] [group : Keyword]) : (Listof Symbol)
   (for/fold ([es : (Listof Symbol) null])
@@ -292,14 +295,9 @@
   (svg-elements->database elements))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define (svgdoc-attr-group-displayln [svgdb : SVG-Database] [attrs : (Listof Symbol)] [indent : String ""]) : Void
-  (define-values (groups extra)
-    (for/fold ([groups : (Listof Keyword) null] [extra : (Listof Symbol) null])
-              ([attr (in-list attrs)])
-      (define group (hash-ref (svg-database-attlists svgdb) attr (λ [] #false)))
-      (cond [(or group) (values (append group groups) extra)]
-            [(memq attr extra) (values groups extra)]
-            [else (values groups (cons attr extra))])))
+(define (svgdoc-attr-group-displayln [svgdb : SVG-Database] [attrs : (Listof (U Keyword Symbol))] [indent : String ""]) : Void
+  (define groups (filter keyword? attrs))
+  (define extra (filter symbol? attrs))
   
   (for ([group (in-list (remove-duplicates groups))])
     (define attrs (sort (hash-ref (svg-database-attribs svgdb) group (inst list Symbol)) symbol<?))
@@ -333,34 +331,37 @@
                 (svg-database-list-categories svgdb ce)))))
     
     (for ([c (in-list (append categories (list #false)))])
-      (printf "~a~a:~n" indent (or c 'NONE))
+      (printf "~n~a~a:~n" indent (or c 'NONE))
       (let* ([es (svg-database-list-elements-of-category svgdb c)]
              [total (length es)])
         (for ([attr (in-list attrs)])
-          (printf "~a    ~a[~a/~a]~n" indent attr
-                  (for/sum ([e (in-list es)])
-                    (let ([e-as (list-for-element svgdb e)])
-                      (if (memq attr e-as) 1 0)))
-                  total))))
+          (define matches : (Listof Symbol)
+            (for/list ([e (in-list es)]
+                       #:when (let ([e-as (list-for-element svgdb e)])
+                                (memq attr e-as)))
+              e))
+          (printf "~a    ~a[~a/~a]: ~a~n" indent attr
+                  (length matches) total
+                  matches))))
 
     (when (pair? categories)
       (printf "~a~a~n" indent (length categories)))))
 
-(define svgdoc-info-displayln : (All (a) (-> SVG-Database (Listof a) Symbol (-> SVG-Database a (Listof Symbol)) Void))
+(define svgdoc-info-displayln : (All (a) (-> SVG-Database (Listof a) Symbol (-> SVG-Database a (Listof (U Keyword Symbol))) Void))
   (lambda [svgdb argv type svg-list]
-    (define lists : (Listof (Pairof (Listof Symbol) a))
+    (define lists : (Listof (Pairof (Listof (U Keyword Symbol)) a))
       (for/list ([tag (in-list argv)])
         (cons (remove-duplicates (svg-list svgdb tag)) tag)))
 
-    (printf "=================== ~a ===================" type)
+    (printf "~n=================== ~a ===================~n" type)
     
     (for ([ls (in-list lists)])
       (when (pair? (car ls))
         (printf "~n~a[~a, ~a]: ~a~n"
                 (or (cdr ls) 'NONE) type (length (car ls))
-                (sort (car ls) symbol<?))))
+                (sort (car ls) attrib<?))))
 
-    (let ([dict : (HashTable Symbol Natural) (make-hasheq)]
+    (let ([dict : (HashTable (U Keyword Symbol) Natural) (make-hasheq)]
           [n (length argv)])
       (for ([ls (in-list lists)])
         (for ([t (in-list (car ls))])
@@ -368,13 +369,27 @@
 
       (when (> n 1)       
         (define-values (e-share e-diff)
-          (for/fold ([cs : (Listof Symbol) null] [ds : (Listof Symbol) null])
+          (for/fold ([cs : (Listof (U Keyword Symbol)) null] [ds : (Listof (U Keyword Symbol)) null])
                     ([(t c) (in-hash dict)])
             (if (= c n)
                 (values (cons t cs) ds)
                 (values cs (cons t ds)))))
-        (printf "~n+[~a]: ~a~n" (length e-share) (sort e-share symbol<?))
-        (printf "-[~a]: ~a~n" (length e-diff) (sort e-diff symbol<?))))))
+        (printf "~n+[~a]: ~a~n" (length e-share) (sort e-share attrib<?))
+        (printf "-[~a]: ~a~n" (length e-diff) (sort e-diff attrib<?))))))
+
+(define (svgdoc-element-attgroup-displayln [svgdb : SVG-Database] [elements : (Listof Symbol)]) : Void
+  (printf "~n=================== Attribute Groups ===================~n")
+  (for ([e (in-list elements)])
+    (let ([cs (svg-database-list-categories svgdb e)])
+      (printf "~n~a: ~a~n" e (if (null? cs) 'NONE cs))
+      (svgdoc-attr-group-displayln svgdb (svg-database-list-attributes svgdb e) "    "))))
+
+(define attrib<? : (-> (U Symbol Keyword) (U Symbol Keyword) Boolean)
+  (lambda [a1 a2]
+    (cond [(and (keyword? a1) (keyword? a2)) (keyword<? a1 a2)]
+          [(and (symbol? a1) (symbol? a2)) (symbol<? a1 a2)]
+          [(keyword? a1) #true]
+          [else #false])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (module+ main

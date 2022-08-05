@@ -10,6 +10,15 @@
     (let ([argv (current-command-line-arguments)])
       (cond [(= (vector-length argv) 0) (append (svg-database-list-all-categories svgdb) (list #false))]
             [else (for/list ([arg (in-vector argv)])
-                    (string->keyword arg))])))
+                    (let ([cn (string->keyword arg)])
+                      (cond [(eq? cn '#:misc) #false]
+                            [else cn])))])))
 
-  (svgdoc-info-displayln svgdb categories 'ELEMENT svg-database-list-elements-of-category))
+  (define elements : (Listof Symbol)
+    (apply append
+           (for/list : (Listof (Listof Symbol)) ([es (in-list categories)])
+             (svg-database-list-elements-of-category svgdb es))))
+
+  (svgdoc-info-displayln svgdb categories 'ELEMENT svg-database-list-elements-of-category)
+  (svgdoc-info-displayln svgdb elements 'ATTLIST svg-database-list-attributes)
+  (svgdoc-element-attgroup-displayln svgdb elements))
