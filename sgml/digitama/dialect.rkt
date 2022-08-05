@@ -3,6 +3,7 @@
 (provide (all-defined-out))
 
 (require digimon/syntax)
+(require digimon/digitama/stdio)
 
 (require "digicore.rkt")
 (require "document.rkt")
@@ -98,6 +99,12 @@
                    [extfield : ExtFieldType] ...)
                   #:type-name DOM-Elem
                   #:transparent
+                  #:property prop:custom-write
+                  (λ [[self : DOM-Elem] [/dev/stdout : Output-Port] [mode : (U Zero One Boolean)]]
+                    (xml-element-write 'dom-elem /dev/stdout mode
+                                       (list 'hfield ... 'attrib ... 'field ...)
+                                       (list (hfield-ref self) ... (attfield-ref self) ... (selfield-ref self) ...)
+                                       (list (bdyfield-ref self) ... (extfield-ref self) ...)))
                   options ...)
 
                 (define (make-dom kw-hdrargs ... kw-attargs ... kw-slfargs ... kw-bdyargs ... kw-extargs ...) : DOM-Elem
@@ -304,7 +311,12 @@
                                     [(<= count 20) #'#:vector]
                                     [else          #'#:hash]))])
        (syntax/loc stx
-         (begin (struct attr super ([field : FieldType] ...) #:type-name Attr #:transparent options ...)
+         (begin (struct attr super ([field : FieldType] ...)
+                  #:type-name Attr #:transparent
+                  #:property prop:custom-write
+                  (λ [[self : Attr] [/dev/stdout : Output-Port] [mode : (U Zero One Boolean)]]
+                    (xml-attributes-write 'attr /dev/stdout mode (list 'field ...) (list (field-ref self) ...)))
+                  options ...)
 
                 (define (make-attr kw-args ...) : Attr
                   (attr field ...))
@@ -359,3 +371,55 @@
           [(null? omits) (value->datum (cdr attr))]
           [(xml:name=<-? (car attr) omits) (report-unknown elem (list attr)) defvalue]
           [else (value->datum (cdr attr))])))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define xml-element-write : (-> Symbol Output-Port (U Zero One Boolean) (Pairof Symbol (Listof Symbol)) (Pairof Any (Listof Any)) (Listof Any) Void)
+  (lambda [id /dev/stdout mode fields all-data body-data]
+    (define write-datum : (-> Any Output-Port Void) (stdio-select-writer mode))
+    (define-values (line column pos) (port-next-location /dev/stdout))
+    (define indent : String (list->string (cons #\newline (if (not column) null (make-list (+ column 2) #\space)))))
+    (define-values (srtta atad)
+      (for/fold ([attrs : (Listof Any) null]
+                 [data : (Listof (Pairof Symbol Any)) null])
+                ([datum (in-list (cdr all-data))]
+                 [fname (in-list (cdr fields))]
+                 #:unless (or (not datum) (null? datum)))
+        (cond [(struct? datum) (values (cons datum attrs) data)]
+              [else (values attrs (cons (cons fname datum) data))])))
+      
+    (display #\( /dev/stdout)
+    (display id /dev/stdout)
+    (display #\space /dev/stdout)
+    (write-datum (car all-data) /dev/stdout)
+
+    (when (pair? srtta)
+      (for ([attr (in-list (reverse srtta))])
+        (display indent /dev/stdout)
+        (write-datum attr /dev/stdout)))
+
+    (display indent /dev/stdout)
+    (when (pair? atad)
+      (write-datum (reverse atad) /dev/stdout)
+      (display indent /dev/stdout))
+    
+    (write-datum body-data /dev/stdout)
+    (write-char #\) /dev/stdout)
+    (write-string indent /dev/stdout 0 (or column 1))
+    (flush-output /dev/stdout)))
+
+(define xml-attributes-write : (-> Symbol Output-Port (U Zero One Boolean) (Listof Symbol) (Listof Any) Void)
+  (lambda [id /dev/stdout mode fields all-data]
+    (define write-datum : (-> Any Output-Port Void) (stdio-select-writer mode))
+    (define data : (Listof (Pairof Symbol Any))
+      (for/list ([datum (in-list all-data)]
+                 [fname (in-list fields)]
+                 #:unless (or (not datum) (null? datum)))
+        (cons fname datum)))
+    
+    (display (if (eq? mode 0) "(" "#<") /dev/stdout)
+    (display id /dev/stdout)
+    (when (pair? data)
+      (display #\space /dev/stdout)
+      (write-datum data /dev/stdout))
+    (write-char (if (eq? mode 0) #\) #\>) /dev/stdout)
+    (flush-output /dev/stdout)))

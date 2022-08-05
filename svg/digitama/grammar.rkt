@@ -18,14 +18,16 @@
 
 (require (for-syntax racket/list))
 (require (for-syntax syntax/parse))
+(require (for-syntax digimon/symbol))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-for-syntax (racket->svg-name <e>)
-  (define defname (syntax-e <e>))
-
-  (cond [(symbol? defname) (list <e> (datum->syntax <e> (string->symbol (substring (symbol->immutable-string defname) 4))))]
-        [(and (list? defname) (= (length defname) 2)) (list (car defname) (cadr defname))]
-        [else (raise-syntax-error 'define-svg-element "invalid element name" <e>)]))
+  (syntax-parse <e> #:literals [:]
+    [(id tag : ID) (list (make-identifier #'id "svg:~a") #'tag (make-identifier #'ID "SVG:~a"))]
+    [(id tag) (list (make-identifier #'id "svg:~a") #'tag (make-identifier #'id "SVG:~a" symbol-titlecase))]
+    [(tag : ID) (list (make-identifier #'tag "svg:~a") #'tag (make-identifier #'ID "SVG:~a"))]
+    [tag:id (list (make-identifier #'tag "svg:~a") #'tag (make-identifier #'tag "SVG:~a" symbol-titlecase))]
+    [_ (raise-syntax-error 'define-svg-element "invalid element name" <e>)]))
 
 (define-for-syntax (racket->attr-names <a>)
   (define attrib (symbol->immutable-string (syntax-e <a>)))
@@ -51,10 +53,10 @@
         #:subdom-refine refine-def #:head head-defs #:body body-defs
         (~optional (~seq #:attribute-categories [attrib ...]) #:defaults ([(attrib 1) null]))
         subfield-defs
-        (defsvg svg-elem+name : SVG-Elem defs-rest ...) ...
+        (defsvg svg-elem+name defs-rest ...) ...
         (~optional (~seq #:subdom [sub-defs ...]) #:defaults ([(sub-defs 1) null])))
      (with-syntax* ([([svg:attr SVG:Attr extract-svg:attr] ...) (map racket->attr-names (syntax->list #'(attrib ...)))]
-                    [([svg-elem svg-tagname] ...) (map racket->svg-name (syntax->list #'(svg-elem+name ...)))])
+                    [([svg-elem svg-tagname SVG-Elem] ...) (map racket->svg-name (syntax->list #'(svg-elem+name ...)))])
        (syntax/loc stx
          (define-xml-subdom subsvg : SubSVG
            #:subdom-refine refine-def #:head head-defs #:body body-defs
@@ -70,7 +72,7 @@
     [(_ svg : SVG #:dom-refine refine head-defs body-defs
         (defsvg svg-elem+name : SVG-Elem defs-rest ...) ...
         (~optional (~seq #:subdom [sub-defs ...]) #:defaults ([(sub-defs 1) null])))
-     (with-syntax* ([([svg-elem svg-tagname] ...) (map racket->svg-name (syntax->list #'(svg-elem+name ...)))]
+     (with-syntax* ([([svg-elem svg-tagname SVG-Elem] ...) (map racket->svg-name (syntax->list #'(svg-elem+name ...)))]
                     [(unknown Unknown refine-unknown)
                      (for/list ([id (in-list '(svg-unknown SVG-Unknown svg-refine-unknown))])
                        (datum->syntax #'svg id))])
@@ -94,9 +96,9 @@
   
   #:subdom
   [(define-svg-subdom svg-descriptive-element : SVG-Descriptive-Element ()
-     (define-svg-element svg:desc : SVG:Desc #:attribute-categories [style] ())
-     (define-svg-element svg:title : SVG:Title #:attribute-categories [style] ())
-     (define-svg-element svg:metadata : SVG:Metadata ()))
+     (define-svg-element desc #:attribute-categories [style] ())
+     (define-svg-element title #:attribute-categories [style] ())
+     (define-svg-element metadata ()))
 
    (define-svg-subdom svg-stylish-element : SVG-Stylish-Element
      #:attribute-categories [style presentation] ()
@@ -107,8 +109,7 @@
 
         #:subdom
         [(define-svg-subdom svg-structural-element : SVG-Structural-Element ()
-         
-           (define-svg-element svg:svg : SVG:SVG
+           (define-svg-element [svg : SVG]
              #:attribute-categories [condition document-event]
              ([x : (Option String) #:=> xml-attribute-value->string #false]
               [y : (Option String) #:=> xml-attribute-value->string #false]
@@ -122,15 +123,15 @@
               [viewBox : (Option String) #:=> xml-attribute-value->string #false]
               [zoomAndPan : (Option String) #:=> xml-attribute-value->string #false]))
 
-           (define-svg-element svg:g : SVG:G
+           (define-svg-element g
              #:attribute-categories [condition]
              ([transform : (Option String) #:=> xml-attribute-value->string #false]))
 
-           (define-svg-element svg:defs : SVG:Defs
+           (define-svg-element defs
              #:attribute-categories [condition]
              ([transform : (Option String) #:=> xml-attribute-value->string #false]))
 
-           (define-svg-element svg:symbol : SVG:Symbol
+           (define-svg-element symbol
              #:attribute-categories []
              ([preserveAspectRatio : (Option String) #:=> xml-attribute-value->string #false]
               [viewBox : (Option String) #:=> xml-attribute-value->string #false])))
@@ -139,20 +140,28 @@
            #:attribute-categories [condition]
            ([transform : (Option String) #:=> xml-attribute-value->string #false])
 
+           (define-svg-element text
+             ([x : (Option String) #:=> xml-attribute-value->string #false]
+              [y : (Option String) #:=> xml-attribute-value->string #false]
+              [dx : (Option String) #:=> xml-attribute-value->string #false]
+              [dy : (Option String) #:=> xml-attribute-value->string #false]
+              [lengthAdjust : (Option String) #:=> xml-attribute-value->string #false]
+              [rotate : (Option String) #:=> xml-attribute-value->string #false]
+              [textLength : (Option String) #:=> xml-attribute-value->string #false]))
+           
            #:subdom
            [(define-svg-subdom svg-shape-element : SVG-Shape-Element ()
-
-              (define-svg-element svg:path : SVG:Path
+              (define-svg-element path
                 ([d : (Option String) #:=> xml-attribute-value->string #false]
                  [pathLength : (Option String) #:=> xml-attribute-value->string #false]))
 
-              (define-svg-element svg:line : SVG:Line
+              (define-svg-element line
                 ([x1 : (Option String) #:=> xml-attribute-value->string #false]
                  [x2 : (Option String) #:=> xml-attribute-value->string #false]
                  [y1 : (Option String) #:=> xml-attribute-value->string #false]
                  [y2 : (Option String) #:=> xml-attribute-value->string #false]))
               
-              (define-svg-element svg:rect : SVG:Rect
+              (define-svg-element rect
                 ([x : (Option String) #:=> xml-attribute-value->string #false]
                  [y : (Option String) #:=> xml-attribute-value->string #false]
                  [width : (Option String) #:=> xml-attribute-value->string #false]
@@ -160,21 +169,21 @@
                  [rx : (Option String) #:=> xml-attribute-value->string #false]
                  [ry : (Option String) #:=> xml-attribute-value->string #false]))
               
-              (define-svg-element svg:circle : SVG:Circle
+              (define-svg-element circle
                 ([cx : (Option String) #:=> xml-attribute-value->string #false]
                  [cy : (Option String) #:=> xml-attribute-value->string #false]
                  [r : (Option String) #:=> xml-attribute-value->string #false]))
               
-              (define-svg-element svg:ellipse : SVG:Ellipse
+              (define-svg-element ellipse
                 ([cx : (Option String) #:=> xml-attribute-value->string #false]
                  [cy : (Option String) #:=> xml-attribute-value->string #false]
                  [rx : (Option String) #:=> xml-attribute-value->string #false]
                  [ry : (Option String) #:=> xml-attribute-value->string #false]))
 
-              (define-svg-element svg:polyline : SVG:PolyLine
+              (define-svg-element polyline
                 ([points : (Option String) #:=> xml-attribute-value->string #false]))
               
-              (define-svg-element svg:polygon : SVG:Polygon
+              (define-svg-element polygon
                 ([points : (Option String) #:=> xml-attribute-value->string #false])))
 
             (define-svg-subdom svg-graphics-referencing-element : SVG-Graphics-Referencing-Element
@@ -184,22 +193,50 @@
                [width : (Option String) #:=> xml-attribute-value->string #false]
                [height : (Option String) #:=> xml-attribute-value->string #false])
 
-              (define-svg-element svg:use : SVG:USE ())
+              (define-svg-element use ())
               
-              (define-svg-element svg:image : SVG:Image
-                ([preserveAspectRatio : (Option String) #:=> xml-attribute-value->string #false])))])])])
+              (define-svg-element image
+                ([preserveAspectRatio : (Option String) #:=> xml-attribute-value->string #false])))])
+
+         (define-svg-subdom svg-text-content-element : SVG-Text-Content-Element ()
+           (define-svg-element tspan
+             ([x : (Option String) #:=> xml-attribute-value->string #false]
+              [y : (Option String) #:=> xml-attribute-value->string #false]
+              [dx : (Option String) #:=> xml-attribute-value->string #false]
+              [dy : (Option String) #:=> xml-attribute-value->string #false]
+              [rotate : (Option String) #:=> xml-attribute-value->string #false]
+              [textLength : (Option String) #:=> xml-attribute-value->string #false]
+              [lengthAdjust : (Option String) #:=> xml-attribute-value->string #false]))
+           
+           (define-svg-element tref #:attribute-categories [xlink] ())
+
+           (define-svg-element [text-path textPath]
+             #:attribute-categories [xlink]
+             ([method : (Option String) #:=> xml-attribute-value->string #false]
+              [spacing : (Option String) #:=> xml-attribute-value->string #false]
+              [startOffset : (Option String) #:=> xml-attribute-value->string #false]))
+
+           (define-svg-element [alt-glyph altGlyph]
+             #:attribute-categories [xlink]
+             ([x : (Option String) #:=> xml-attribute-value->string #false]
+              [y : (Option String) #:=> xml-attribute-value->string #false]
+              [dx : (Option String) #:=> xml-attribute-value->string #false]
+              [dy : (Option String) #:=> xml-attribute-value->string #false]
+              [glyphRef : (Option String) #:=> xml-attribute-value->string #false]
+              [format : (Option String) #:=> xml-attribute-value->string #false]
+              [rotate : (Option String) #:=> xml-attribute-value->string #false])))])])
 
    (define-svg-subdom svg-light-source-element : SVG-Light-Source-Element ()
-     (define-svg-element [svg:distant-light feDistantLight] : SVG:DistantLight
+     (define-svg-element [distant-light feDistantLight]
        ([azimuth : (Option String)   #:=> xml-attribute-value->string #false]
         [elevation : (Option String) #:=> xml-attribute-value->string #false]))
 
-     (define-svg-element [svg:point-light fePointLight] : SVG:PointLight
+     (define-svg-element [svg:point-light fePointLight]
        ([x : (Option String) #:=> xml-attribute-value->string #false]
         [y : (Option String) #:=> xml-attribute-value->string #false]
         [z : (Option String) #:=> xml-attribute-value->string #false]))
      
-     (define-svg-element [svg:spot-light feSpotLight] : SVG:SpotLight
+     (define-svg-element [svg:spot-light feSpotLight]
        ([x : (Option String) #:=> xml-attribute-value->string #false]
         [y : (Option String) #:=> xml-attribute-value->string #false]
         [z : (Option String) #:=> xml-attribute-value->string #false]
@@ -212,24 +249,24 @@
    (define-svg-subdom svg-animation-element : SVG-Animation-Element
      #:attribute-categories [condition external xlink animation-event animation-timing] ()
 
-     (define-svg-element svg:animate : SVG:Animate
+     (define-svg-element animate
        #:attribute-categories [animation-target animation-value animation-addition presentation] ())
 
-     (define-svg-element svg:set : SVG:Set
+     (define-svg-element set
        #:attribute-categories [animation-target]
        ([to : (Option String) #:=> xml-attribute-value->string #false]))
      
-     (define-svg-element [svg:animate-color animateColor] : SVG:AnimateColor
+     (define-svg-element [animate-color animateColor]
        #:attribute-categories [animation-target animation-value animation-addition presentation] ())
 
-     (define-svg-element [svg:animate-motion animateMotion] : SVG:AnimateMotion
+     (define-svg-element [animate-motion animateMotion]
        #:attribute-categories [animation-value animation-addition]
        ([path : (Option String) #:=> xml-attribute-value->string #false]
         [keyPoints : (Option String) #:=> xml-attribute-value->string #false]
         [rotate : (Option String) #:=> xml-attribute-value->string #false]
         [origin : (Option String) #:=> xml-attribute-value->string #false]))
      
-     (define-svg-element [svg:animate-transform animateTransform] : SVG:AnimateTransform
+     (define-svg-element [animate-transform animateTransform]
        #:attribute-categories [animation-target animation-value animation-addition presentation]
        ([type : (Option String) #:=> xml-attribute-value->string #false])))])
 
