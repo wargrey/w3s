@@ -4,12 +4,12 @@
 
 (require digimon/syntax)
 
-(require "../digicore.rkt")
-(require "../document.rkt")
-(require "../namespace.rkt")
+(require "digicore.rkt")
+(require "document.rkt")
+(require "namespace.rkt")
 
-(require "../plain/grammar.rkt")
-(require "../grammar.rkt")
+(require "plain/grammar.rkt")
+(require "grammar.rkt")
 
 (require (for-syntax syntax/parse))
 
@@ -238,6 +238,109 @@
                                       #:values extract-header #:-> DOM-Element]
                   #:body [([bfield : BFieldType [bdefval ...]] ...) #:values body-extract]
                   dom-rest-definition ...) ...)))]))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define-syntax (define-xml-attribute-extract stx)
+  (syntax-parse stx #:literals [:]
+    [(_ extract-attr : SVG-Attr #:inline #:with report-unknown (svg-attr [field : [XML-Type field-idx false] xml-attribute-value->datum defval ...] ...))
+     (syntax/loc stx
+       (define extract-attr : (->* ((Listof XML-Element-Attribute*)) ((Listof Symbol) (Option XML:Name)) (Values (Option SVG-Attr) (Listof XML-Element-Attribute*)))
+         (lambda [attrs [omits null] [elem #false]]
+           (let extract ([_attrs : (Listof XML-Element-Attribute*) attrs]
+                         [_srtta : (Listof XML-Element-Attribute*) null]
+                         [field : (Option XML-Type) #false] ...)
+             (cond [(pair? _attrs)
+                    (let*-values ([(self rest) (values (car _attrs) (cdr _attrs))])
+                      (case (xml:name-datum (car self))
+                        [(field) (with-a-field-replaced (extract rest _srtta #:fields (field ...))
+                                   #:for field #:set (xml-attribute->datum/safe self xml-attribute-value->datum #false report-unknown omits elem))] ...
+                        [else (extract rest (cons self _srtta) field ...)]))]
+                   [(or field ...) (values (svg-attr (or field defval ...) ...) _srtta)]
+                   [else (values #false attrs)])))))]
+    [(_ extract-attr : SVG-Attr #:vector #:with report-unknown (svg-attr [field : [XML-Type field-idx false] xml-attribute-value->datum defval ...] ...))
+     (syntax/loc stx
+       (define extract-attr : (->* ((Listof XML-Element-Attribute*)) ((Listof Symbol) (Option XML:Name)) (Values (Option SVG-Attr) (Listof XML-Element-Attribute*)))
+         (lambda [attrs [omits null] [elem #false]]
+           (let ([avec : (Vector (Option XML-Type) ...) (vector false ...)])
+             (let extract ([_attrs : (Listof XML-Element-Attribute*) attrs]
+                           [_srtta : (Listof XML-Element-Attribute*) null]
+                           [collected? : Any #false])
+               (cond [(pair? _attrs)
+                      (let*-values ([(self rest) (values (car _attrs) (cdr _attrs))])
+                        (case (xml:name-datum (car self))
+                          [(field) (vector-set! avec field-idx (xml-attribute->datum/safe self xml-attribute-value->datum #false report-unknown omits elem))
+                                   (extract rest _srtta (or collected? (vector-ref avec field-idx)))] ...
+                          [else (extract rest (cons self _srtta) collected?)]))]
+                     [(not collected?) (values #false attrs)]
+                     [else (values (svg-attr (or (vector-ref avec field-idx) defval ...) ...) _srtta)]))))))]
+    [(_ extract-attr : SVG-Attr #:hash #:with report-unknown (svg-attr [field : [XML-Type field-idx false] xml-attribute-value->datum defval ...] ...))
+     (syntax/loc stx
+       (define extract-attr : (->* ((Listof XML-Element-Attribute*)) ((Listof Symbol) (Option XML:Name))
+                                   (Values (Option SVG-Attr) (Listof XML-Element-Attribute*)))
+         (lambda [attrs [omits null] [elem #false]]
+           (let-values ([(adict _srtta) (xml-attributes*-extract attrs '(field ...) report-unknown omits elem)])
+             (cond [(hash-empty? adict) (values #false attrs)]
+                   [else (let ([->f (λ [] #false)])
+                           (values (svg-attr (xml-attribute->datum/safe (hash-ref adict 'field ->f) xml-attribute-value->datum (or defval ...) report-unknown)
+                                             ...)
+                                   _srtta))])))))]))
+
+(define-syntax (define-xml-attribute stx)
+  (syntax-parse stx #:literals [:]
+    [(_ attr : Attr #:-> super #:with extract-attr
+        ([field : FieldType #:=> attribute->datum defval ...] ...)
+        #:report-unknown report-unknown options ...)
+     (with-syntax* ([make-attr (format-id #'attr "make-~a" (syntax-e #'attr))]
+                    [remake-attr (format-id #'attr "remake-~a" (syntax-e #'attr))]
+                    [cascade-attr (format-id #'attr "cascade-~a" (syntax-e #'attr))]
+                    [(field-total field-idx ...) (make-identifier-indices #'(field ...))]
+                    [(field-ref ...) (make-identifiers #'attr #'(field ...))]
+                    [([kw-args ...] [kw-reargs ...]) (make-keyword-arguments #'(field ...) #'(FieldType ...) #'([defval ...] ...))]
+                    [switch (let ([count (syntax-e #'field-total)])
+                              ;;; TODO: find a better strategy
+                              ; #:inline is definitely bad for large structs, whereas
+                              ; #:vector and #:hash are almost identical for large structs. 
+                              (cond [(<= count 10) #'#:inline]
+                                    [(<= count 20) #'#:vector]
+                                    [else          #'#:hash]))])
+       (syntax/loc stx
+         (begin (struct attr super ([field : FieldType] ...) #:type-name Attr #:transparent options ...)
+
+                (define (make-attr kw-args ...) : Attr
+                  (attr field ...))
+
+                (define (remake-attr [src : Attr] kw-reargs ...) : Attr
+                  (attr (if (void? field) (field-ref src) field) ...))
+
+                (define-xml-attribute-extract extract-attr : Attr switch #:with report-unknown
+                  (attr [field : [FieldType field-idx #false] attribute->datum defval ...] ...))
+
+                (define (cascade-attr [parent : Attr] [child : Attr]) : Attr
+                  (attr (or (field-ref child) (field-ref parent)) ... )))))]))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define xml-attributes*-extract
+  : (case-> [(Listof XML-Element-Attribute*) Symbol -> (Values (Option XML-Element-Attribute-Value*) (Listof XML-Element-Attribute*))]
+            [(Listof XML-Element-Attribute*) (Listof Symbol) (-> (Option XML:Name) (Listof XML-Element-Attribute*) Void) (Listof Symbol) (Option XML:Name)
+                                             -> (Values (Immutable-HashTable Symbol XML-Element-Attribute*) (Listof XML-Element-Attribute*))])
+  (case-lambda
+    [(attrs name)
+     (let extract ([_attrs : (Listof XML-Element-Attribute*) attrs]
+                   [_srtta : (Listof XML-Element-Attribute*) null])
+       (cond [(null? _attrs) (values #false _srtta)]
+             [else (let-values ([(self rest) (values (car _attrs) (cdr _attrs))])
+                     (cond [(xml:name=:=? (car self) name) (values (cdr self) (append rest _srtta))]
+                           [else (extract rest (cons self _srtta))]))]))]
+    [(attrs names report-unknown omits elem)
+     (let extract ([_attrs : (Listof XML-Element-Attribute*) attrs]
+                   [_srtta : (Listof XML-Element-Attribute*) null]
+                   [adict : (Immutable-HashTable Symbol XML-Element-Attribute*) (hasheq)])
+       (cond [(null? _attrs) (values adict _srtta)]
+             [else (let*-values ([(self rest) (values (car _attrs) (cdr _attrs))]
+                                 [(attr) (xml:name-datum (car self))])
+                     (cond [(not (memq attr names)) (extract rest (cons self _srtta) adict)]
+                           [(not (memq attr omits)) (extract rest _srtta (hash-set adict attr self))]
+                           [else (report-unknown elem (list self)) (extract rest _srtta adict)]))]))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-token->source : (-> XML-Token (Option XML-Source))

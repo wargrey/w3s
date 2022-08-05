@@ -5,7 +5,7 @@
 
 (require digimon/syntax)
 
-(require sgml/digitama/dialect/grammar)
+(require sgml/digitama/dialect)
 (require sgml/digitama/digicore)
 (require sgml/digitama/document)
 (require sgml/digitama/namespace)
