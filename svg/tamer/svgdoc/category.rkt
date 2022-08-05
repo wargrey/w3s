@@ -20,5 +20,5 @@
              (svg-database-list-elements-of-category svgdb es))))
 
   (svgdoc-info-displayln svgdb categories 'ELEMENT svg-database-list-elements-of-category)
-  (svgdoc-info-displayln svgdb elements 'ATTLIST svg-database-list-attributes)
+  (svgdoc-info-displayln svgdb elements 'ATTLIST svg-database-list-attribute/groups)
   (svgdoc-element-attgroup-displayln svgdb elements))

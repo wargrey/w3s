@@ -18,10 +18,10 @@
   '(#:presentation #:filter-primitive #:conditional-processing #:transfer-function-element
     #:animation-attribute-target #:animation-timing #:animation-value #:animation-addition
     #:graphical-event #:animation-event #:document-event 
-    #:xlink))
+    #:xlink #:style #:external))
 
 (define hidden-groups : (Listof Keyword)
-  '(#:core))
+  '(#:core #:presentation))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type SAX-Toclist-Statue (Pairof (Listof String) (Option Symbol)))
@@ -57,7 +57,7 @@
         
         (values (cons (list (svg-element-name e)
                             (svg-element-categories e)
-                            (map (inst car Keyword (Listof Symbol)) cs)
+                            (remove-duplicates (map (inst car Keyword (Listof Symbol)) cs))
                             as)
                       elements)
 
@@ -107,7 +107,15 @@
   (cond [(not e) null]
         [else (caddr e)]))
 
-(define (svg-database-list-attributes [svgdb : SVG-Database] [tag-name : Symbol]) : (Listof (U Keyword Symbol))
+(define (svg-database-list-attributes [svgdb : SVG-Database] [tag-name : Symbol]) : (Listof Symbol)
+  (define e : (Option SVG-Element-Datum) (assq tag-name (svg-database-elements svgdb)))
+
+  (cond [(not e) null]
+        [else (for/fold ([attrs : (Listof Symbol) (cadddr e)])
+                        ([c (in-list (caddr e))])
+                (append attrs (hash-ref (svg-database-attribs svgdb) c)))]))
+
+(define (svg-database-list-attribute/groups [svgdb : SVG-Database] [tag-name : Symbol]) : (Listof (U Keyword Symbol))
   (define e : (Option SVG-Element-Datum) (assq tag-name (svg-database-elements svgdb)))
 
   (cond [(not e) null]
@@ -163,7 +171,12 @@
     (define children.li : (Listof XML-Element-Children) (caddr (assert e list?)))
     (case (length children.li)
       [(1) #| self attributes |#
-       (xml-pcdata-element->name (car (caddr (assert (car children.li) list?))))]
+       (let ([attr (xml-pcdata-element->name (car (caddr (assert (car children.li) list?))))])
+         (case attr
+           [(class) (cons '#:style (list attr 'style))]
+           [(style) (cons '#:style (list attr 'class))]
+           [(externalResourcesRequired) (cons '#:external (list attr))]
+           [else attr]))]
       [(2) #| group attributes |#
        (let ([group (xml-pcdata-element->text (car children.li))])
          (and (string? group)
@@ -297,16 +310,19 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (svgdoc-attr-group-displayln [svgdb : SVG-Database] [attrs : (Listof (U Keyword Symbol))] [indent : String ""]) : Void
   (define groups (filter keyword? attrs))
-  (define extra (filter symbol? attrs))
+  (define extra (remove-duplicates (filter symbol? attrs)))
   
   (for ([group (in-list (remove-duplicates groups))])
     (define attrs (sort (hash-ref (svg-database-attribs svgdb) group (inst list Symbol)) symbol<?))
 
     (unless (memq group hidden-groups)
-      (printf "~a~a[~a]:~n" indent group (length attrs))
-      (unless (memq group registered-groups)
-        (for ([attr (in-list (sort attrs symbol<?))])
-          (printf "~a    [~a : (Option String) #:=> xml-attribute-value->string #false]~n" indent attr)))))
+      (printf "~a~a[~a]:" indent group (length attrs))
+      (cond [(not (memq group registered-groups))
+             (newline)
+             (for ([attr (in-list (sort attrs symbol<?))])
+               (printf "~a    [~a : (Option String) #:=> xml-attribute-value->string #false]~n"
+                       indent attr))]
+            [else (printf " ~a~n" (sort attrs symbol<?))])))
 
   (when (pair? extra)
     (printf "~aREST[~a]:~n" indent (length extra))
@@ -315,7 +331,9 @@
 
 (define svgdoc-category-displayln : (All (a) (->* (SVG-Database (Listof a) (-> SVG-Database a (Listof Symbol)) (-> SVG-Database Symbol (Listof a))) (String) Void))
   (lambda [svgdb attrs svg-list list-for-element [indent ""]]
-    (define element-lists : (Listof (Listof Symbol)) (for/list ([attr (in-list attrs)]) (svg-list svgdb attr)))
+    (define element-lists : (Listof (Listof Symbol))
+      (for/list ([attr (in-list attrs)])
+        (svg-list svgdb attr)))
   
     (define common-elements : (Listof Symbol)
       (cond [(null? element-lists) null]
@@ -382,7 +400,7 @@
   (for ([e (in-list elements)])
     (let ([cs (svg-database-list-categories svgdb e)])
       (printf "~n~a: ~a~n" e (if (null? cs) 'NONE cs))
-      (svgdoc-attr-group-displayln svgdb (svg-database-list-attributes svgdb e) "    "))))
+      (svgdoc-attr-group-displayln svgdb (svg-database-list-attribute/groups svgdb e) "    "))))
 
 (define attrib<? : (-> (U Symbol Keyword) (U Symbol Keyword) Boolean)
   (lambda [a1 a2]
