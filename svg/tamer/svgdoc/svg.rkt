@@ -17,46 +17,46 @@
 (define registered-groups : (Listof Keyword)
   '(#:presentation #:filter-primitive #:conditional-processing #:transfer-function-element
     #:animation-attribute-target #:animation-timing #:animation-value #:animation-addition
-    #:graphical-event #:animation-event #:document-event 
+    #:graphical-event #:animation-event #:document-event #:presentation
     #:xlink #:style #:external))
 
 (define hidden-groups : (Listof Keyword)
-  '(#:core #:presentation))
+  '(#:core))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type SAX-Toclist-Statue (Pairof (Listof String) (Option Symbol)))
 (define-type SVG-Attribute-Datum (U (Pairof Keyword (Listof Symbol)) Symbol))
 (define-type SVG-Element-Datum (List Symbol (Listof Keyword) (Listof Keyword) (Listof Symbol)))
 
-(struct svg-database
+(struct svgdoc-database
   ([elements : (Listof SVG-Element-Datum)]
    [categories : (Immutable-HashTable Keyword (Listof Symbol))]
    [attlists : (Immutable-HashTable Symbol (Listof Keyword))]
    [attribs : (Immutable-HashTable Keyword (Listof Symbol))])
-  #:type-name SVG-Database)
+  #:type-name SvgDoc-Database)
 
-(struct svg-element
+(struct svgdoc-element
   ([name : Symbol]
    [categories : (Listof Keyword)]
    [attributes : (Listof SVG-Attribute-Datum)])
-  #:type-name SVG-Element
+  #:type-name SvgDoc-Element
   #:transparent
   #:mutable)
 
-(define svg-elements->database : (-> (Listof SVG-Element) SVG-Database)
+(define svg-elements->database : (-> (Listof SvgDoc-Element) SvgDoc-Database)
   (lambda [elems]
     (define-values (elements attributes)
       (for/fold ([elements : (Listof SVG-Element-Datum) null]
                  [attribs : (Immutable-HashTable Keyword (Listof Symbol)) (hasheq)])
                 ([e (in-list elems)])
-        (define as : (Listof Symbol) (filter symbol? (svg-element-attributes e)))
+        (define as : (Listof Symbol) (filter symbol? (svgdoc-element-attributes e)))
         (define cs : (Listof (Pairof Keyword (Listof Symbol)))
-          (for/list ([a (in-list (svg-element-attributes e))]
+          (for/list ([a (in-list (svgdoc-element-attributes e))]
                      #:when (pair? a))
             a))
         
-        (values (cons (list (svg-element-name e)
-                            (svg-element-categories e)
+        (values (cons (list (svgdoc-element-name e)
+                            (svgdoc-element-categories e)
                             (remove-duplicates (map (inst car Keyword (Listof Symbol)) cs))
                             as)
                       elements)
@@ -70,8 +70,8 @@
       (for/fold ([cs : (Immutable-HashTable Keyword (Listof Symbol)) (hasheq)])
                 ([e (in-list elems)])
         (for/fold ([acs : (Immutable-HashTable Keyword (Listof Symbol)) cs])
-                  ([c (in-list (svg-element-categories e))])
-          (hash-set acs c (cons (svg-element-name e) (hash-ref acs c (inst list Symbol)))))))
+                  ([c (in-list (svgdoc-element-categories e))])
+          (hash-set acs c (cons (svgdoc-element-name e) (hash-ref acs c (inst list Symbol)))))))
 
     (define attlists : (Immutable-HashTable Symbol (Listof Keyword))
       (for/fold ([als : (Immutable-HashTable Symbol (Listof Keyword)) (hasheq)])
@@ -80,74 +80,74 @@
                   ([attr (in-list as)])
           (hash-set als attr (cons ac (hash-ref als attr (inst list Keyword)))))))
 
-    (svg-database (reverse elements) categories attlists attributes)))
+    (svgdoc-database (reverse elements) categories attlists attributes)))
 
-(define svg-database-list-all-elements : (-> SVG-Database (Listof Symbol))
+(define svg-database-list-all-elements : (-> SvgDoc-Database (Listof Symbol))
   (lambda [svgdb]
-    (for/list ([es (in-list (svg-database-elements svgdb))])
+    (for/list ([es (in-list (svgdoc-database-elements svgdb))])
       (car es))))
 
-(define svg-database-list-all-categories : (-> SVG-Database (Listof Keyword))
+(define svg-database-list-all-categories : (-> SvgDoc-Database (Listof Keyword))
   (lambda [svgdb]
-    (hash-keys (svg-database-categories svgdb))))
+    (hash-keys (svgdoc-database-categories svgdb))))
 
-(define svg-database-list-all-attgroups : (-> SVG-Database (Listof Keyword))
+(define svg-database-list-all-attgroups : (-> SvgDoc-Database (Listof Keyword))
   (lambda [svgdb]
-    (hash-keys (svg-database-attribs svgdb))))
+    (hash-keys (svgdoc-database-attribs svgdb))))
 
-(define (svg-database-list-categories [svgdb : SVG-Database] [tag-name : Symbol]) : (Listof Keyword)
-  (define e : (Option SVG-Element-Datum) (assq tag-name (svg-database-elements svgdb)))
+(define (svg-database-list-categories [svgdb : SvgDoc-Database] [tag-name : Symbol]) : (Listof Keyword)
+  (define e : (Option SVG-Element-Datum) (assq tag-name (svgdoc-database-elements svgdb)))
 
   (cond [(not e) null]
         [else (cadr e)]))
 
-(define (svg-database-list-attgroups [svgdb : SVG-Database] [tag-name : Symbol]) : (Listof Keyword)
-  (define e : (Option SVG-Element-Datum) (assq tag-name (svg-database-elements svgdb)))
+(define (svg-database-list-attgroups [svgdb : SvgDoc-Database] [tag-name : Symbol]) : (Listof Keyword)
+  (define e : (Option SVG-Element-Datum) (assq tag-name (svgdoc-database-elements svgdb)))
 
   (cond [(not e) null]
         [else (caddr e)]))
 
-(define (svg-database-list-attributes [svgdb : SVG-Database] [tag-name : Symbol]) : (Listof Symbol)
-  (define e : (Option SVG-Element-Datum) (assq tag-name (svg-database-elements svgdb)))
+(define (svg-database-list-attributes [svgdb : SvgDoc-Database] [tag-name : Symbol]) : (Listof Symbol)
+  (define e : (Option SVG-Element-Datum) (assq tag-name (svgdoc-database-elements svgdb)))
 
   (cond [(not e) null]
         [else (for/fold ([attrs : (Listof Symbol) (cadddr e)])
                         ([c (in-list (caddr e))])
-                (append attrs (hash-ref (svg-database-attribs svgdb) c)))]))
+                (append attrs (hash-ref (svgdoc-database-attribs svgdb) c)))]))
 
-(define (svg-database-list-attribute/groups [svgdb : SVG-Database] [tag-name : Symbol]) : (Listof (U Keyword Symbol))
-  (define e : (Option SVG-Element-Datum) (assq tag-name (svg-database-elements svgdb)))
+(define (svg-database-list-attribute/groups [svgdb : SvgDoc-Database] [tag-name : Symbol]) : (Listof (U Keyword Symbol))
+  (define e : (Option SVG-Element-Datum) (assq tag-name (svgdoc-database-elements svgdb)))
 
   (cond [(not e) null]
         [else (append (caddr e) (cadddr e))]))
 
-(define (svg-database-list-elements-of-category [svgdb : SVG-Database] [category : (Option Keyword)]) : (Listof Symbol)
+(define (svg-database-list-elements-of-category [svgdb : SvgDoc-Database] [category : (Option Keyword)]) : (Listof Symbol)
   (if (not category)
       (for/fold ([es : (Listof Symbol) null])
-                ([e (in-list (svg-database-elements svgdb))])
+                ([e (in-list (svgdoc-database-elements svgdb))])
         (cond [(null? (cadr e)) (cons (car e) es)]
               [else es]))
-      (hash-ref (svg-database-categories svgdb) category (inst list Symbol))))
+      (hash-ref (svgdoc-database-categories svgdb) category (inst list Symbol))))
 
-(define (svg-database-list-elements-of-attribute [svgdb : SVG-Database] [att-name : (U Keyword Symbol)]) : (Listof Symbol)
-  (define attribs (svg-database-attribs svgdb))
+(define (svg-database-list-elements-of-attribute [svgdb : SvgDoc-Database] [att-name : (U Keyword Symbol)]) : (Listof Symbol)
+  (define attribs (svgdoc-database-attribs svgdb))
 
   (if (keyword? att-name)
       (for/fold ([es : (Listof Symbol) null])
-                ([e (in-list (svg-database-elements svgdb))])
+                ([e (in-list (svgdoc-database-elements svgdb))])
         (cond [(memq att-name (caddr e)) (cons (car e) es)]
               [else es]))
       (for/fold ([es : (Listof Symbol) null])
-                ([e (in-list (svg-database-elements svgdb))])
+                ([e (in-list (svgdoc-database-elements svgdb))])
         (cond [(memq att-name (cadddr e)) (cons (car e) es)]
               [(for/or : Any ([ac (in-list (caddr e))])
                  (memq att-name (hash-ref attribs ac)))
                (cons (car e) es)]
               [else es]))))
 
-(define (svg-database-list-elements-of-attgroup [svgdb : SVG-Database] [group : Keyword]) : (Listof Symbol)
+(define (svg-database-list-elements-of-attgroup [svgdb : SvgDoc-Database] [group : Keyword]) : (Listof Symbol)
   (for/fold ([es : (Listof Symbol) null])
-            ([e (in-list (svg-database-elements svgdb))])
+            ([e (in-list (svgdoc-database-elements svgdb))])
     (cond [(memq group (caddr e)) (cons (car e) es)]
           [else es])))
   
@@ -275,7 +275,7 @@
                 (cond [(not docs.xml) null]
                       [else (xml-children-seek docs.xml 'class "element-summary")]))]))
 
-(define (svgdoc-element->datum [div : XML-Element]) : SVG-Element
+(define (svgdoc-element->datum [div : XML-Element]) : SvgDoc-Element
   (define children : (Listof XML-Element-Children) (caddr div))
   (define name.span : XML-Element-Children (car (caddr (assert (car children) list?))))
   (define details.dl : (Listof XML-Element-Children) (caddr (assert (cadr children) list?)))
@@ -283,7 +283,7 @@
   (define contents.dd : XML-Element-Children (list-ref details.dl 3))
   (define attributes.dd : XML-Element-Children (car (caddr (assert (list-ref details.dl 5) list?))))
 
-  (svg-element (xml-pcdata-element->name name.span)
+  (svgdoc-element (xml-pcdata-element->name name.span)
                (xml-pcdata-element->categories categories.dd)
                (xml-pcdata-element->attributes attributes.dd)))
 
@@ -300,20 +300,20 @@
   (define element.divs : (Listof (Listof XML-Element))
     (map svgdoc-element-xexpr-list/file chapters))
 
-  (define elements : (Listof SVG-Element)
-    (for/fold ([es : (Listof SVG-Element) null])
+  (define elements : (Listof SvgDoc-Element)
+    (for/fold ([es : (Listof SvgDoc-Element) null])
               ([e.div (in-list element.divs)])
       (append es (map svgdoc-element->datum e.div))))
 
   (svg-elements->database elements))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define (svgdoc-attr-group-displayln [svgdb : SVG-Database] [attrs : (Listof (U Keyword Symbol))] [indent : String ""]) : Void
+(define (svgdoc-attr-group-displayln [svgdb : SvgDoc-Database] [attrs : (Listof (U Keyword Symbol))] [indent : String ""]) : Void
   (define groups (filter keyword? attrs))
   (define extra (remove-duplicates (filter symbol? attrs)))
   
   (for ([group (in-list (remove-duplicates groups))])
-    (define attrs (sort (hash-ref (svg-database-attribs svgdb) group (inst list Symbol)) symbol<?))
+    (define attrs (sort (hash-ref (svgdoc-database-attribs svgdb) group (inst list Symbol)) symbol<?))
 
     (unless (memq group hidden-groups)
       (printf "~a~a[~a]:" indent group (length attrs))
@@ -329,7 +329,7 @@
     (for ([attr (in-list (sort extra symbol<?))])
       (printf "~a    [~a : (Option String) #:=> xml-attribute-value->string #false]~n" indent attr))))
 
-(define svgdoc-category-displayln : (All (a) (->* (SVG-Database (Listof a) (-> SVG-Database a (Listof Symbol)) (-> SVG-Database Symbol (Listof a))) (String) Void))
+(define svgdoc-category-displayln : (All (a) (->* (SvgDoc-Database (Listof a) (-> SvgDoc-Database a (Listof Symbol)) (-> SvgDoc-Database Symbol (Listof a))) (String) Void))
   (lambda [svgdb attrs svg-list list-for-element [indent ""]]
     (define element-lists : (Listof (Listof Symbol))
       (for/list ([attr (in-list attrs)])
@@ -365,7 +365,7 @@
     (when (pair? categories)
       (printf "~a~a~n" indent (length categories)))))
 
-(define svgdoc-info-displayln : (All (a) (-> SVG-Database (Listof a) Symbol (-> SVG-Database a (Listof (U Keyword Symbol))) Void))
+(define svgdoc-info-displayln : (All (a) (-> SvgDoc-Database (Listof a) Symbol (-> SvgDoc-Database a (Listof (U Keyword Symbol))) Void))
   (lambda [svgdb argv type svg-list]
     (define lists : (Listof (Pairof (Listof (U Keyword Symbol)) a))
       (for/list ([tag (in-list argv)])
@@ -395,7 +395,7 @@
         (printf "~n+[~a]: ~a~n" (length e-share) (sort e-share attrib<?))
         (printf "-[~a]: ~a~n" (length e-diff) (sort e-diff attrib<?))))))
 
-(define (svgdoc-element-attgroup-displayln [svgdb : SVG-Database] [elements : (Listof Symbol)]) : Void
+(define (svgdoc-element-attgroup-displayln [svgdb : SvgDoc-Database] [elements : (Listof Symbol)]) : Void
   (printf "~n=================== Attribute Groups ===================~n")
   (for ([e (in-list elements)])
     (let ([cs (svg-database-list-categories svgdb e)])

@@ -4,7 +4,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (module+ main
-  (define svgdb : SVG-Database (svgdoc-load-database))
+  (define svgdb : SvgDoc-Database (svgdoc-load-database))
   
   (define argv : (Listof Symbol)
     (for/list ([arg (in-vector (current-command-line-arguments))])

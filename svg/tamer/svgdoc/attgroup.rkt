@@ -6,7 +6,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (module+ main
-  (define svgdb : SVG-Database (svgdoc-load-database))
+  (define svgdb : SvgDoc-Database (svgdoc-load-database))
   
   (define groups : (Listof Keyword)
     (let ([argv (current-command-line-arguments)])
