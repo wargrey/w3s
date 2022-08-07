@@ -65,7 +65,7 @@
                    #:defaults ([(attrib 1) null] [(Attrib 1) null] [(extract-attrib 1) null]))
         (~optional (~seq #:omit-header-fields [excfield-name ...])
                    #:defaults ([(excfield-name 1) null]))
-        ([field : FieldType #:=> xml->datum defval ...] ...)
+        ([field : FieldType #:-> xml->datum defval ...] ...)
         (~optional (~seq #:extra ([extfield : ExtFieldType extdefval ...] ...))
                    #:defaults ([(extfield 1) null] [(ExtFieldType 1) null] [(extdefval 2) null]))
         options ...)
@@ -139,10 +139,10 @@
         #:body [([bfield : BFieldType [bdefval ...]] ...) #:values extract-body]
         (~optional (~seq #:attribute-categories [[attrib : Attrib extract-attrib] ...])
                    #:defaults ([(attrib 1) null] [(Attrib 1) null] [(extract-attrib 1) null]))
-        ([mfield : MFieldType #:=> xml->datum mdefval ...] ...)
-        (defdom [dom-elem dom-tagname] : DOM-Elem dom-elem-rest ...) ...
+        ([mfield : MFieldType #:-> xml->datum mdefval ...] ...)
         (~optional (~seq #:subdom [(deftree subsubdom : SubsubDOM subsubrest ...) ...])
-                   #:defaults ([(deftree 1) null] [(subsubdom 1) null] [(SubsubDOM 1) null] [(subsubrest 2) null])))
+                   #:defaults ([(deftree 1) null] [(subsubdom 1) null] [(SubsubDOM 1) null] [(subsubrest 2) null]))
+        (defdom [dom-elem dom-tagname] : DOM-Elem dom-elem-rest ...) ...)
      (with-syntax* ([subdom-refine (make-identifier #'subdom "~a-refine")]
                     [(afield-ref ...) (make-identifiers #'subdom #'(attrib ...))]
                     [(mfield-ref ...) (make-identifiers #'subdom #'(mfield ...))]
@@ -190,9 +190,9 @@
         #:dom-refine [header-extract refine report-unknown body-extract]
         ([hfield : HFieldType hdefval ...] ...) ([bfield : BFieldType bdefval ...] ...)
         #:unknown [dom-unknown : DOM-Unknown #:refine refine-unknown]
-        (defelem [dom-elem dom-tagname] : DOM-Elem dom-rest-definition ...) ...
         (~optional (~seq #:subdom [(deftree subdom : SubDOM subrest ...) ...])
-                   #:defaults ([(deftree 1) null] [(subdom 1) null] [(SubDOM 1) null] [(subrest 2) null])))
+                   #:defaults ([(deftree 1) null] [(subdom 1) null] [(SubDOM 1) null] [(subrest 2) null]))
+        (defelem [dom-elem dom-tagname] : DOM-Elem dom-rest-definition ...) ...)
      (with-syntax* ([(hfield-ref ...) (make-identifiers #'dom-element #'(hfield ...))]
                     [(subdom-refine ...) (map-identifiers #'(subdom ...) "~a-refine")]
                     [(refine-elem ...) (map-identifiers #'(dom-elem ...) "refine-~a")])
@@ -295,7 +295,7 @@
 (define-syntax (define-xml-attribute stx)
   (syntax-parse stx #:literals [:]
     [(_ attr : Attr #:-> super #:with extract-attr
-        ([field : FieldType #:=> attribute->datum defval ...] ...)
+        ([field : FieldType #:-> attribute->datum defval ...] ...)
         #:report-unknown report-unknown options ...)
      (with-syntax* ([make-attr (format-id #'attr "make-~a" (syntax-e #'attr))]
                     [remake-attr (format-id #'attr "remake-~a" (syntax-e #'attr))]

@@ -26,7 +26,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type SAX-Toclist-Statue (Pairof (Listof String) (Option Symbol)))
 (define-type SVG-Attribute-Datum (U (Pairof Keyword (Listof Symbol)) Symbol))
-(define-type SVG-Element-Datum (List Symbol (Listof Keyword) (Listof Keyword) (Listof Symbol)))
+(define-type SVG-Element-Datum (List Symbol (Listof Keyword) (Listof Keyword) (Listof Symbol) (Option Path)))
+
+(define current-source-path : (Parameterof (Option Path)) (make-parameter #false))
 
 (struct svgdoc-database
   ([elements : (Listof SVG-Element-Datum)]
@@ -36,7 +38,8 @@
   #:type-name SvgDoc-Database)
 
 (struct svgdoc-element
-  ([name : Symbol]
+  ([source : (Option Path)]
+   [name : Symbol]
    [categories : (Listof Keyword)]
    [attributes : (Listof SVG-Attribute-Datum)])
   #:type-name SvgDoc-Element
@@ -58,7 +61,8 @@
         (values (cons (list (svgdoc-element-name e)
                             (svgdoc-element-categories e)
                             (remove-duplicates (map (inst car Keyword (Listof Symbol)) cs))
-                            as)
+                            as
+                            (svgdoc-element-source e))
                       elements)
 
                 (for/fold ([adb : (Immutable-HashTable Keyword (Listof Symbol)) attribs])
@@ -150,6 +154,11 @@
             ([e (in-list (svgdoc-database-elements svgdb))])
     (cond [(memq group (caddr e)) (cons (car e) es)]
           [else es])))
+
+(define (svg-database-get-source-of-element [svgdb : SvgDoc-Database] [tag-name : Symbol]) : (Option Path)
+  (define e : (Option SVG-Element-Datum) (assq tag-name (svgdoc-database-elements svgdb)))
+
+  (and e (car (cddddr e))))
   
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-pcdata-element->text : (-> XML-Element-Children (U Symbol String False))
@@ -283,9 +292,10 @@
   (define contents.dd : XML-Element-Children (list-ref details.dl 3))
   (define attributes.dd : XML-Element-Children (car (caddr (assert (list-ref details.dl 5) list?))))
 
-  (svgdoc-element (xml-pcdata-element->name name.span)
-               (xml-pcdata-element->categories categories.dd)
-               (xml-pcdata-element->attributes attributes.dd)))
+  (svgdoc-element (current-source-path)
+                  (xml-pcdata-element->name name.span)
+                  (xml-pcdata-element->categories categories.dd)
+                  (xml-pcdata-element->attributes attributes.dd)))
 
 (define (svgdoc-load-database)
   (define svgdoc.dir : Path (collection-file-path "svgdoc" "svg" "tamer" "svgdoc" "compiled"))
@@ -302,8 +312,10 @@
 
   (define elements : (Listof SvgDoc-Element)
     (for/fold ([es : (Listof SvgDoc-Element) null])
-              ([e.div (in-list element.divs)])
-      (append es (map svgdoc-element->datum e.div))))
+              ([chapter (in-list chapters)]
+               [e.div (in-list element.divs)])
+      (parameterize ([current-source-path (file-name-from-path chapter)])
+        (append es (map svgdoc-element->datum e.div)))))
 
   (svg-elements->database elements))
 
@@ -398,8 +410,9 @@
 (define (svgdoc-element-attgroup-displayln [svgdb : SvgDoc-Database] [elements : (Listof Symbol)]) : Void
   (printf "~n=================== Attribute Groups ===================~n")
   (for ([e (in-list elements)])
-    (let ([cs (svg-database-list-categories svgdb e)])
-      (printf "~n~a: ~a~n" e (if (null? cs) 'NONE cs))
+    (let ([cs (svg-database-list-categories svgdb e)]
+          [src (svg-database-get-source-of-element svgdb e)])
+      (printf "~n~a: ~a (~a)~n" e (if (null? cs) 'NONE cs) (if (not src) '/dev/stdin (path->string src)))
       (svgdoc-attr-group-displayln svgdb (svg-database-list-attribute/groups svgdb e) "    "))))
 
 (define attrib<? : (-> (U Symbol Keyword) (U Symbol Keyword) Boolean)
