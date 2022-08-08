@@ -74,3 +74,17 @@
         (char<=? #\uF900 ch #\uFDCF)
         (char<=? #\uFDF0 ch #\uFFFD)
         (char<=? #\U10000 ch #\UEFFFF))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define xml-name? : (-> String Boolean)
+  (lambda [v]
+    (cond [(string=? v "") #false]
+          [else (and (xml-name-start-char? (string-ref v 0))
+                     (for/and ([c (in-string v 1)])
+                       (xml-name-char? c)))])))
+
+(define xml-name-fix : (->* (String) (Char) String)
+  (lambda [name [errchar #\_]]
+    (list->string
+     (for/list ([c (in-string name)])
+       (if (xml-name-char? c) c errchar)))))

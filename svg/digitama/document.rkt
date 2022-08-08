@@ -2,10 +2,13 @@
 
 (provide (all-defined-out))
 
+(require typed/file/convertible)
+
 (require sgml/digitama/stdin)
 (require sgml/digitama/doctype)
 (require sgml/digitama/document)
 (require sgml/digitama/digicore)
+(require sgml/digitama/dialect)
 
 (require "grammar.rkt")
 
@@ -15,7 +18,12 @@
    [doctype : XML-DocType]
    [root : SVG:SVG])
   #:type-name SVG
-  #:transparent)
+  #:transparent
+  #:property prop:convertible
+  (λ [[self : SVG] [mime : Symbol] [fallback : Any]] : Any
+    (case mime
+      [(svg-bytes) (xml-element->bytes (svg-root self) mime svg:svg-flatten-attributes)]
+      [else fallback])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define read-svg-document : (-> SGML-StdIn SVG)

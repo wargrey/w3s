@@ -2,13 +2,18 @@
 
 (provide (all-defined-out))
 
+(require racket/symbol)
+(require racket/path)
+
 (require digimon/syntax)
 (require digimon/digitama/stdio)
 
 (require "digicore.rkt")
 (require "document.rkt")
 (require "namespace.rkt")
+(require "datatype.rkt")
 
+(require "tokenizer/characters.rkt")
 (require "plain/grammar.rkt")
 (require "grammar.rkt")
 
@@ -54,26 +59,44 @@
                            post-argl ...)
                      _srtta))))]))
 
+(define-syntax (dom-attribute-list stx)
+  (syntax-case stx [:]
+    [(_ [field value #:~> datum->value] ...)
+     (syntax/loc stx
+       (for/list : (Listof (Pairof Symbol String))
+         ([fname (in-list ((inst list Symbol) 'field ...))]
+          [datum (in-list ((inst list (Option String)) (and value (datum->value value)) ...))]
+          #:when datum)
+         (cons fname datum)))]
+    [(_ header [attr #:=> attr->xml] ...)
+     (syntax/loc stx
+       (for/fold ([attrs : (Listof (Pairof Symbol String)) header])
+                 ([alist (in-list ((inst list (Option (Listof (Pairof Symbol String)))) (and attr (attr->xml attr)) ...))]
+                  #:when alist)
+         (append attrs alist)))]))
+
 (define-syntax (define-dom-element stx)
   (syntax-parse stx #:literals [:]
     [(_ dom-elem : DOM-Elem
-        #:refine-element [refine-element #:report-unknown report-unknown]
+        #:element-interface [refine-element dom-flatten-attributes #:report-unknown report-unknown]
         #:head [super ([hfield : HFieldType [hdefval ...] hfield-ref] ...)
-                        #:values header-values #:-> DOM-Element]
+                      #:with header-values header->xexpr #:-> DOM-Element]
         #:body [([bfield : BFieldType [bdefval ...]] ...) #:values body-values]
-        (~optional (~seq #:attribute-categories [[attrib : Attrib extract-attrib] ...])
-                   #:defaults ([(attrib 1) null] [(Attrib 1) null] [(extract-attrib 1) null]))
+        (~optional (~seq #:attribute-categories [[attrib : Attrib extract-attrib attrib->xexpr] ...])
+                   #:defaults ([(attrib 1) null] [(Attrib 1) null] [(extract-attrib 1) null] [(attrib->xexpr 1) null]))
         (~optional (~seq #:omit-header-fields [excfield-name ...])
                    #:defaults ([(excfield-name 1) null]))
-        ([field : FieldType #:-> xml->datum defval ...] ...)
-        (~optional (~seq #:extra ([extfield : ExtFieldType extdefval ...] ...))
-                   #:defaults ([(extfield 1) null] [(ExtFieldType 1) null] [(extdefval 2) null]))
+        ([field : FieldType
+                (~optional (~seq #:= defval ...) #:defaults ([(defval 1) null]))
+                (~seq #:<-> xml->datum (~optional datum->xml #:defaults ([datum->xml #'xml-attribute-datum->value])))] ...)
+        (~optional (~seq #:extra ([efield : EFieldType edefval ...] ...))
+                   #:defaults ([(efield 1) null] [(EFieldType 1) null] [(edefval 2) null]))
         options ...)
      (with-syntax* ([make-dom (make-identifier #'dom-elem "make-~a")]
                     [remake-dom (make-identifier #'dom-elem "remake-~a")]
-                    [([(incfield IncFieldType [incdefval ...]) ...] [(excfield ExcFieldType [excdefval ...]) ...])
+                    [([(ifield IFieldType [idefval  ...] ifield-ref) ...] [(excfield ExcFieldType [excdefval ...] excfield-ref) ...])
                      (let ([omitted-fields (syntax->datum #'(excfield-name ...))]
-                           [<supfield>s (syntax->list #'([hfield HFieldType [hdefval ...]] ...))])
+                           [<supfield>s (syntax->list #'([hfield HFieldType [hdefval ...] hfield-ref] ...))])
                        (cond [(null? omitted-fields) (list <supfield>s null)]
                              [(null? <supfield>s) (list <supfield>s null)]
                              [else (let-values ([(scni scxe) (for/fold ([scni (car <supfield>s)] [scxe null])
@@ -85,18 +108,18 @@
                     [(attfield-ref ...) (make-identifiers #'dom-elem #'(attrib ...))]
                     [(selfield-ref ...) (make-identifiers #'dom-elem #'(field ...))]
                     [(bdyfield-ref ...) (make-identifiers #'dom-elem #'(bfield ...))]
-                    [(extfield-ref ...) (make-identifiers #'dom-elem #'(extfield ...))]
-                    [([kw-hdrargs ...] [kw-hdrreargs ...]) (make-keyword-arguments #'(incfield ...) #'(IncFieldType ...) #'([incdefval ...] ...))]
-                    [([kw-attargs ...] [kw-attreargs ...]) (make-keyword-optional-arguments #'(attrib ...) #'(Attrib ...))]
-                    [([kw-slfargs ...] [kw-slfreargs ...]) (make-keyword-arguments #'(field ...) #'(FieldType ...) #'([defval ...] ...))]
-                    [([kw-bdyargs ...] [kw-bdyreargs ...]) (make-keyword-arguments #'(bfield ...) #'(BFieldType ...) #'([bdefval ...] ...))]
-                    [([kw-extargs ...] [kw-extreargs ...]) (make-keyword-arguments #'(extfield ...) #'(ExtFieldType ...) #'([extdefval ...] ...))])
+                    [(extfield-ref ...) (make-identifiers #'dom-elem #'(efield ...))]
+                    [([kw-hdrargs ...] [kw-hdrreargs ...]) (make-keyword-arguments #'self #'(ifield ...) #'(IFieldType ...) #'([idefval  ...] ...) #'(ifield-ref ...))]
+                    [([kw-attargs ...] [kw-attreargs ...]) (make-keyword-optional-arguments #'self #'(attrib ...) #'(Attrib ...) #'(attfield-ref ...))]
+                    [([kw-bdyargs ...] [kw-bdyreargs ...]) (make-keyword-arguments #'self #'(bfield ...) #'(BFieldType ...) #'([bdefval ...] ...) #'(bdyfield-ref ...))]
+                    [([kw-extargs ...] [kw-extreargs ...]) (make-keyword-arguments #'self #'(efield ...) #'(EFieldType ...) #'([edefval ...] ...) #'(extfield-ref ...))]
+                    [([kw-slfargs ...] [kw-slfreargs ...]) (make-keyword-arguments #'self #'(field ...) #'(FieldType ...) #'([defval ...] ...) #'(selfield-ref ...))])
        (syntax/loc stx
          (begin (struct dom-elem super
                   ([attrib : (Option Attrib)] ...
                    [field : FieldType] ...
                    [bfield : BFieldType] ...
-                   [extfield : ExtFieldType] ...)
+                   [efield : EFieldType] ...)
                   #:type-name DOM-Elem
                   #:transparent
                   #:property prop:custom-write
@@ -109,15 +132,11 @@
 
                 (define (make-dom kw-hdrargs ... kw-attargs ... kw-slfargs ... kw-bdyargs ... kw-extargs ...) : DOM-Elem
                   (let ([excfield : ExcFieldType excdefval ...] ...)
-                    (dom-elem hfield ... attrib ... field ... bfield ... extfield ...)))
+                    (dom-elem hfield ... attrib ... field ... bfield ... efield ...)))
 
-                (define (remake-dom [src : DOM-Elem] kw-hdrreargs ... kw-attreargs ... kw-slfreargs ... kw-bdyreargs ... kw-extreargs ...) : DOM-Elem
-                  (let ([excfield : Void (void)] ...)
-                    (dom-elem (if (void? hfield) (hfield-ref src) hfield) ...
-                              (if (void? attrib) (attfield-ref src) attrib) ...
-                              (if (void? field) (selfield-ref src) field) ...
-                              (if (void? bfield) (bdyfield-ref src) bfield) ...
-                              (if (void? extfield) (extfield-ref src) extfield) ...)))
+                (define (remake-dom [self : DOM-Elem] kw-hdrreargs ... kw-attreargs ... kw-slfreargs ... kw-bdyreargs ... kw-extreargs ...) : DOM-Elem
+                  (let ([excfield (excfield-ref src)] ...)
+                    (dom-elem hfield ... attrib ... field ... bfield ... efield ...)))
 
                 (define (refine-element [xml.dom : XML-Element*] kw-extargs ...) : DOM-Elem
                   (let*-values ([(hfield ... rest) (header-values (cadr xml.dom) '(excfield ...) (car xml.dom))]
@@ -126,28 +145,37 @@
                     (define-values (self unknowns)
                       (extract-dom-datum dom-elem : DOM-Elem
                                          #:pre-args [hfield ... attrib ...]
-                                         #:post-args [bfield ... extfield ...]
+                                         #:post-args [bfield ... efield ...]
                                          #:with rest #:fields [[field xml->datum defval ...] ...]))
                     (when (pair? unknowns) (report-unknown (car xml.dom) unknowns))
-                    self)))))]))
+                    self))
+
+                (define (dom-flatten-attributes [self : DOM-Elem]) : (Listof (Pairof Symbol String))
+                  (append (dom-attribute-list (header->xexpr self) [(attfield-ref self) #:=> attrib->xexpr] ...)
+                          (dom-attribute-list [field (selfield-ref self) #:~> datum->xml] ...))))))]))
 
 (define-syntax (define-xml-subdom stx)
   (syntax-parse stx #:literals [:]
     [(_ subdom : SubDOM
-        #:subdom-refine [refine #:report-unknown report-unknown]
-        #:head [super ([hfield : HFieldType [hdefval ...] hfield-ref] ...) #:values header-values #:-> DOM-Element]
+        #:subdom-interface [refine flattern-attributes #:report-unknown report-unknown]
+        #:head [super ([hfield : HFieldType [hdefval ...] hfield-ref] ...) #:with header-values header->xexpr #:-> DOM-Element]
         #:body [([bfield : BFieldType [bdefval ...]] ...) #:values extract-body]
-        (~optional (~seq #:attribute-categories [[attrib : Attrib extract-attrib] ...])
-                   #:defaults ([(attrib 1) null] [(Attrib 1) null] [(extract-attrib 1) null]))
-        ([mfield : MFieldType #:-> xml->datum mdefval ...] ...)
+        (~optional (~seq #:attribute-categories [[attrib : Attrib extract-attrib attrib->xexpr] ...])
+                   #:defaults ([(attrib 1) null] [(Attrib 1) null] [(extract-attrib 1) null] [(attrib->xexpr 1) null]))
+        ([mfield : MFieldType
+                 (~optional (~seq #:= mdefval ...) #:defaults ([(mdefval 1) null]))
+                 (~seq #:<-> xml->mdatum (~optional mdatum->xml #:defaults ([mdatum->xml #'xml-attribute-datum->value])))] ...)
         (~optional (~seq #:subdom [(deftree subsubdom : SubsubDOM subsubrest ...) ...])
                    #:defaults ([(deftree 1) null] [(subsubdom 1) null] [(SubsubDOM 1) null] [(subsubrest 2) null]))
-        (defdom [dom-elem dom-tagname] : DOM-Elem dom-elem-rest ...) ...)
+        (defdom [dom-elem dom-tagname] : DOM-Elem #:with dom-flatten-attributes dom-elem-rest ...) ...)
      (with-syntax* ([subdom-refine (make-identifier #'subdom "~a-refine")]
                     [(afield-ref ...) (make-identifiers #'subdom #'(attrib ...))]
                     [(mfield-ref ...) (make-identifiers #'subdom #'(mfield ...))]
                     [(subdom-refine ...) (map-identifiers #'(subsubdom ...) "~a-refine")]
-                    [(refine-elem ...) (map-identifiers #'(dom-elem ...) "refine-~a")])
+                    [(subdom-flatten ...) (map-identifiers #'(subsubdom ...) "~a-flatten-attributes")]
+                    [(refine-elem ...) (map-identifiers #'(dom-elem ...) "refine-~a")]
+                    [(subdom? ...) (map-identifiers #'(subsubdom ...) "~a?")]
+                    [(dom-elem? ...) (map-identifiers #'(dom-elem ...) "~a?")])
        (syntax/loc stx
          (begin (struct subdom super ([attrib : (Option Attrib)] ... [mfield : MFieldType] ...) #:type-name SubDOM #:transparent)
 
@@ -159,43 +187,56 @@
                             [(dom-tagname) (and (or (null? valid-tagnames) (memq e-tagname valid-tagnames)) (refine-elem e))] ...
                             [else #false])))))
 
+                (define flattern-attributes : (-> DOM-Element (Listof (Pairof Symbol String)))
+                  (lambda [self]
+                    (cond [(subdom? self) (subdom-flatten self)] ...
+                          [(dom-elem? self) (dom-flatten-attributes self)] ...
+                          [else null])))
+
                 (define (extract-header [attrs : (Listof XML-Element-Attribute*)] [omits : (Listof Symbol) null] [elem : (Option XML:Name) #false])
                   : (Values HFieldType ... (Option Attrib) ... MFieldType ... (Listof XML-Element-Attribute*))
                   (let*-values ([(hfield ... tail) (header-values attrs omits elem)]
                                 [(attrib tail) (extract-attrib tail omits elem)] ...)
                     (extract-dom-values values #:pre-args [hfield ... attrib ...] #:post-args [] #:with tail omits elem report-unknown
-                                        #:fields [[mfield xml->datum mdefval ...] ...])))
+                                        #:fields [[mfield xml->mdatum mdefval ...] ...])))
+
+                (define (header->xml-attributes [self : SubDOM]) : (Listof (Pairof Symbol String))
+                  (append (dom-attribute-list (header->xexpr self) [(afield-ref self) #:=> attrib->xexpr] ...)
+                          (dom-attribute-list [mfield (mfield-ref self) #:~> mdatum->xml] ...)))
 
                 (deftree subsubdom : SubsubDOM
-                  #:subdom-refine [subdom-refine #:report-unknown report-unknown]
+                  #:subdom-interface [subdom-refine subdom-flatten #:report-unknown report-unknown]
                   #:head [subdom ([hfield : HFieldType [hdefval ...] hfield-ref] ...
                                   [attrib : (Option Attrib) [#false] afield-ref] ...
                                   [mfield : MFieldType [mdefval ...] mfield-ref] ...)
-                                 #:values extract-header #:-> DOM-Element]
+                                 #:with extract-header header->xml-attributes #:-> DOM-Element]
                   #:body [([bfield : BFieldType [bdefval ...]] ...) #:values extract-body]
                   subsubrest ...) ...
 
                 (defdom dom-elem : DOM-Elem
-                  #:refine-element [refine-elem #:report-unknown report-unknown]
+                  #:element-interface [refine-elem dom-flatten-attributes #:report-unknown report-unknown]
                   #:head [subdom ([hfield : HFieldType [hdefval ...] hfield-ref] ...
                                   [attrib : (Option Attrib) [#false] afield-ref] ...
                                   [mfield : MFieldType [mdefval ...] mfield-ref] ...)
-                                 #:values extract-header #:-> DOM-Element]
+                                 #:with extract-header header->xml-attributes #:-> DOM-Element]
                   #:body [([bfield : BFieldType [bdefval ...]] ...) #:values extract-body]
                   dom-elem-rest ...) ...)))]))
 
 (define-syntax (define-xml-dom stx)
   (syntax-parse stx #:literals [:]
     [(_ dom-element : DOM-Element
-        #:dom-refine [header-extract refine report-unknown body-extract]
+        #:dom-interface [[header-extract head->xexpr] refine flatten-attributes report-unknown body-extract]
         ([hfield : HFieldType hdefval ...] ...) ([bfield : BFieldType bdefval ...] ...)
         #:unknown [dom-unknown : DOM-Unknown #:refine refine-unknown]
         (~optional (~seq #:subdom [(deftree subdom : SubDOM subrest ...) ...])
                    #:defaults ([(deftree 1) null] [(subdom 1) null] [(SubDOM 1) null] [(subrest 2) null]))
-        (defelem [dom-elem dom-tagname] : DOM-Elem dom-rest-definition ...) ...)
+        (defelem [dom-elem dom-tagname] : DOM-Elem #:with dom-flatten-attributes dom-rest-definition ...) ...)
      (with-syntax* ([(hfield-ref ...) (make-identifiers #'dom-element #'(hfield ...))]
                     [(subdom-refine ...) (map-identifiers #'(subdom ...) "~a-refine")]
-                    [(refine-elem ...) (map-identifiers #'(dom-elem ...) "refine-~a")])
+                    [(subdom-flatten ...) (map-identifiers #'(subdom ...) "~a-flatten-attributes")]
+                    [(refine-elem ...) (map-identifiers #'(dom-elem ...) "refine-~a")]
+                    [(subdom? ...) (map-identifiers #'(subdom ...) "~a?")]
+                    [(dom-elem? ...) (map-identifiers #'(dom-elem ...) "~a?")])
        (syntax/loc stx
          (begin (struct dom-element ([hfield : HFieldType] ...) #:type-name DOM-Element #:transparent)
 
@@ -216,6 +257,12 @@
                         (and (report-unknown e)
                              (refine-unknown e)))))
 
+                (define flatten-attributes : (-> DOM-Element (Listof (Pairof Symbol String)))
+                  (lambda [self]
+                    (cond [(subdom? self) (subdom-flatten self)] ...
+                          [(dom-elem? self) (dom-flatten-attributes self)] ...
+                          [else null])))
+
                 (define refine-unknown : (-> XML-Element* DOM-Unknown)
                   (lambda [e]
                     (let-values ([(?src ?id ?core other-attrs) (extract-header (cadr e) null (car e))])
@@ -232,17 +279,21 @@
                                  [(?id ?core other-attrs) (header-extract attrs)])
                       (values ?src ?id ?core other-attrs))))
 
+                (define header->xml-attributes : (-> DOM-Element (Listof (Pairof Symbol String)))
+                  (lambda [self]
+                    (head->xexpr (hfield-ref self) ...)))
+
                 (deftree subdom : SubDOM
-                  #:subdom-refine [subdom-refine #:report-unknown report-unknown]
+                  #:subdom-interface [subdom-refine subdom-flatten #:report-unknown report-unknown]
                   #:head [dom-element ([hfield : HFieldType [hdefval ...] hfield-ref] ...)
-                                      #:values extract-header #:-> DOM-Element]
+                                      #:with extract-header header->xml-attributes #:-> DOM-Element]
                   #:body [([bfield : BFieldType [bdefval ...]] ...) #:values body-extract]
                   subrest ...) ...
                 
                 (defelem dom-elem : DOM-Elem
-                  #:refine-element [refine-elem #:report-unknown report-unknown]
+                  #:element-interface [refine-elem dom-flatten-attributes #:report-unknown report-unknown]
                   #:head [dom-element ([hfield : HFieldType [hdefval ...] hfield-ref] ...)
-                                      #:values extract-header #:-> DOM-Element]
+                                      #:with extract-header header->xml-attributes #:-> DOM-Element]
                   #:body [([bfield : BFieldType [bdefval ...]] ...) #:values body-extract]
                   dom-rest-definition ...) ...)))]))
 
@@ -294,15 +345,17 @@
 
 (define-syntax (define-xml-attribute stx)
   (syntax-parse stx #:literals [:]
-    [(_ attr : Attr #:-> super #:with extract-attr
-        ([field : FieldType #:-> attribute->datum defval ...] ...)
+    [(_ attr : Attr #:-> super #:with extract-attr attr->xexpr
+        ([field : FieldType
+                (~optional (~seq #:= defval ...) #:defaults ([(defval 1) null]))
+                (~seq #:<-> xml->datum (~optional datum->xml #:defaults ([datum->xml #'xml-attribute-datum->value])))] ...)
         #:report-unknown report-unknown options ...)
      (with-syntax* ([make-attr (format-id #'attr "make-~a" (syntax-e #'attr))]
                     [remake-attr (format-id #'attr "remake-~a" (syntax-e #'attr))]
                     [cascade-attr (format-id #'attr "cascade-~a" (syntax-e #'attr))]
                     [(field-total field-idx ...) (make-identifier-indices #'(field ...))]
                     [(field-ref ...) (make-identifiers #'attr #'(field ...))]
-                    [([kw-args ...] [kw-reargs ...]) (make-keyword-arguments #'(field ...) #'(FieldType ...) #'([defval ...] ...))]
+                    [([kw-args ...] [kw-reargs ...]) (make-keyword-arguments #'self #'(field ...) #'(FieldType ...) #'([defval ...] ...) #'(field-ref ...))]
                     [switch (let ([count (syntax-e #'field-total)])
                               ;;; TODO: find a better strategy
                               ; #:inline is definitely bad for large structs, whereas
@@ -321,11 +374,14 @@
                 (define (make-attr kw-args ...) : Attr
                   (attr field ...))
 
-                (define (remake-attr [src : Attr] kw-reargs ...) : Attr
-                  (attr (if (void? field) (field-ref src) field) ...))
+                (define (remake-attr [self : Attr] kw-reargs ...) : Attr
+                  (attr field ...))
 
                 (define-xml-attribute-extract extract-attr : Attr switch #:with report-unknown
-                  (attr [field : [FieldType field-idx #false] attribute->datum defval ...] ...))
+                  (attr [field : [FieldType field-idx #false] xml->datum defval ...] ...))
+
+                (define (attr->xexpr [self : Attr]) : (Listof (Pairof Symbol String))
+                  (dom-attribute-list [field (field-ref self) #:~> datum->xml] ...))
 
                 (define (cascade-attr [parent : Attr] [child : Attr]) : Attr
                   (attr (or (field-ref child) (field-ref parent)) ... )))))]))
@@ -361,6 +417,18 @@
           (cons (syn-token-line t)
                 (syn-token-column t)))))
 
+(define xml-source->id-value : (-> XML-Source String)
+  (lambda [src]
+    (cond [(pair? src) (string-append (xml-source->id-value (car src)) ":" (number->string (cadr src)) ":" (number->string (cddr src)))]
+          [(symbol? src) (xml-source->id-value (symbol->immutable-string src))]
+          [else (or (and (path-string? src)
+                         (let ([pathname (file-name-from-path src)])
+                           (and pathname
+                                (let ([name (path->string pathname)])
+                                  (cond [(xml-name? name) name]
+                                        [else (xml-name-fix name)])))))
+                    (symbol->immutable-string (gensym 'id)))])))
+
 (define xml-attribute->datum/safe : (All (a b) (->* ((Option XML-Element-Attribute*)
                                                      (-> XML-Element-Attribute-Value* a) b
                                                      (-> (Option XML:Name) (Listof XML-Element-Attribute*) Void))
@@ -371,6 +439,27 @@
           [(null? omits) (value->datum (cdr attr))]
           [(xml:name=<-? (car attr) omits) (report-unknown elem (list attr)) defvalue]
           [else (value->datum (cdr attr))])))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define xml-element->bytes : (All (s) (-> s Symbol (-> s (Listof (Pairof Symbol String))) Bytes))
+  (lambda [self mime flatten-attributes]
+    (define /dev/svgout (open-output-bytes '/dev/svgout))
+
+    (write-char #\< /dev/svgout)
+    (write (object-name self) /dev/svgout)
+
+    (for ([attr (in-list (flatten-attributes self))])
+      (write-char #\space /dev/svgout)
+      (write (car attr) /dev/svgout)
+      (write-char #\= /dev/svgout)
+      (write-char #\" /dev/svgout)
+      (write-string (cdr attr) /dev/svgout)
+      (write-char #\" /dev/svgout))
+
+    (write-char #\/ /dev/svgout)
+    (write-char #\> /dev/svgout)
+
+    (get-output-bytes /dev/svgout #true)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-element-write : (-> Symbol Output-Port (U Zero One Boolean) (Pairof Symbol (Listof Symbol)) (Pairof Any (Listof Any)) (Listof Any) Void)

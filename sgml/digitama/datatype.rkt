@@ -9,12 +9,19 @@
 (require "grammar.rkt")
 (require "digicore.rkt")
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; NOTE
 ; Normalizing the attributes' values require DTD or other schema,
 ; These APIs are designed to manually normalizing,
 ; Thus, the input tokens are usually XML:String instances.
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define xml-attribute-datum->value : (-> Any String)
+  (lambda [v]
+    (cond [(string? v) v]
+          [(symbol? v) (symbol->immutable-string v)]
+          [else (~a v)])))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-attribute-value->string : (-> XML-Element-Attribute-Value* String)
   (lambda [v]
     (cond [(xml:string? v) (xml:string-datum v)]

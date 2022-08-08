@@ -3,6 +3,8 @@
 (provide (all-defined-out))
 (provide (rename-out [XML-Source SVG-Source]))
 
+(require typed/file/convertible)
+
 (require digimon/syntax)
 
 (require sgml/digitama/dialect)
@@ -16,17 +18,16 @@
 
 (require "grammar/attribute.rkt")
 
-(require (for-syntax racket/list))
 (require (for-syntax syntax/parse))
 (require (for-syntax digimon/symbol))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-for-syntax (racket->svg-name <e>)
   (syntax-parse <e> #:literals [:]
-    [(id tag : ID) (list (make-identifier #'id "svg:~a") #'tag (make-identifier #'ID "SVG:~a"))]
-    [(id tag) (list (make-identifier #'id "svg:~a") #'tag (make-identifier #'id "SVG:~a" symbol-titlecase))]
-    [(tag : ID) (list (make-identifier #'tag "svg:~a") #'tag (make-identifier #'ID "SVG:~a"))]
-    [tag:id (list (make-identifier #'tag "svg:~a") #'tag (make-identifier #'tag "SVG:~a" symbol-titlecase))]
+    [(id tag : ID) (list (make-identifier #'id "svg:~a") #'tag (make-identifier #'ID "SVG:~a") (make-identifier #'id "svg:~a-flatten-attributes"))]
+    [(id tag) (list (make-identifier #'id "svg:~a") #'tag (make-identifier #'id "SVG:~a" symbol-titlecase) (make-identifier #'id "svg:~a-flatten-attributes"))]
+    [(tag : ID) (list (make-identifier #'tag "svg:~a") #'tag (make-identifier #'ID "SVG:~a") (make-identifier #'tag "svg:~a-flatten-attributes"))]
+    [tag:id (list (make-identifier #'tag "svg:~a") #'tag (make-identifier #'tag "SVG:~a" symbol-titlecase) (make-identifier #'tag "svg:~a-flatten-attributes"))]
     [_ (raise-syntax-error 'define-svg-element "invalid element name" <e>)]))
 
 (define-for-syntax (racket->attr-names <a>)
@@ -37,56 +38,64 @@
 (define-syntax (define-svg-element stx)
   (syntax-parse stx #:literals [:]
     [(_ svg-elem : SVG-Elem
-        #:refine-element refine-def #:head head-defs #:body body-defs
+        #:element-interface elem-defs #:head head-defs #:body body-defs
         (~optional (~seq #:attribute-categories [attrib ...]) #:defaults ([(attrib 1) null]))
         defs-rest ...)
-     (with-syntax* ([([svg:attr SVG:Attr extract-svg:attr] ...) (map racket->attr-names (syntax->list #'(attrib ...)))])
+     (with-syntax* ([([svg:attr SVG:Attr extract-svg:attr avg:attr->xexpr] ...) (map racket->attr-names (syntax->list #'(attrib ...)))])
        (syntax/loc stx
          (define-dom-element svg-elem : SVG-Elem
-           #:refine-element refine-def #:head head-defs #:body body-defs
-           #:attribute-categories ([svg:attr : SVG:Attr extract-svg:attr] ...)
-           defs-rest ...)))]))
+           #:element-interface elem-defs #:head head-defs #:body body-defs
+           #:attribute-categories ([svg:attr : SVG:Attr extract-svg:attr avg:attr->xexpr] ...)
+           defs-rest ...
+           #:property prop:convertible
+           (λ [[self : SVG-Elem] [mime : Symbol] [fallback : Any]] : Any
+             (case mime
+               [(svg-bytes) (xml-element->bytes self mime svg-element-flatten-attributes)]
+               [else fallback])))))]))
 
 (define-syntax (define-svg-subdom stx)
   (syntax-parse stx #:literals [:]
     [(_ subsvg : SubSVG
-        #:subdom-refine refine-def #:head head-defs #:body body-defs
+        #:subdom-interface subdom-defs #:head head-defs #:body body-defs
         (~optional (~seq #:attribute-categories [attrib ...]) #:defaults ([(attrib 1) null]))
         subfield-defs
         (defsvg svg-elem+name defs-rest ...) ...
         (~optional (~seq #:subdom [sub-defs ...]) #:defaults ([(sub-defs 1) null])))
-     (with-syntax* ([([svg:attr SVG:Attr extract-svg:attr] ...) (map racket->attr-names (syntax->list #'(attrib ...)))]
-                    [([svg-elem svg-tagname SVG-Elem] ...) (map racket->svg-name (syntax->list #'(svg-elem+name ...)))])
+     (with-syntax* ([([svg:attr SVG:Attr extract-svg:attr svg:attr->xexpr] ...) (map racket->attr-names (syntax->list #'(attrib ...)))]
+                    [([svg-elem svg-tagname SVG-Elem svg-flatten-attributes] ...) (map racket->svg-name (syntax->list #'(svg-elem+name ...)))])
        (syntax/loc stx
          (define-xml-subdom subsvg : SubSVG
-           #:subdom-refine refine-def #:head head-defs #:body body-defs
-           #:attribute-categories ([svg:attr : SVG:Attr extract-svg:attr] ...)
+           #:subdom-interface subdom-defs #:head head-defs #:body body-defs
+           #:attribute-categories ([svg:attr : SVG:Attr extract-svg:attr svg:attr->xexpr] ...)
            subfield-defs
            
            #:subdom [sub-defs ...]
-           (defsvg [svg-elem svg-tagname] : SVG-Elem defs-rest ...) ...)))]))
+           (defsvg [svg-elem svg-tagname] : SVG-Elem #:with svg-flatten-attributes defs-rest ...) ...)))]))
 
 (define-syntax (define-svg-dom stx)
   (syntax-parse stx #:literals [:]
-    [(_ svg : SVG #:dom-refine refine head-defs body-defs
+    [(_ svg : SVG #:dom-interface [refine flatten-attributes]
+        head-defs body-defs
         (~optional (~seq #:subdom [sub-defs ...]) #:defaults ([(sub-defs 1) null]))
         (defsvg svg-elem+name defs-rest ...) ...)
-     (with-syntax* ([([svg-elem svg-tagname SVG-Elem] ...) (map racket->svg-name (syntax->list #'(svg-elem+name ...)))]
+     (with-syntax* ([([svg-elem svg-tagname SVG-Elem svg-flatten-attributes] ...) (map racket->svg-name (syntax->list #'(svg-elem+name ...)))]
                     [(unknown Unknown refine-unknown)
                      (for/list ([id (in-list '(svg-unknown SVG-Unknown svg-refine-unknown))])
                        (datum->syntax #'svg id))])
        (syntax/loc stx
          (define-xml-dom svg : SVG
-           #:dom-refine [svg-attributes*-extract-core refine svg-report-unrecognized-element/attributes xml-contents*->svg-elements]
+           #:dom-interface [(svg-attributes*-extract-core svg-core->xml-attributes)
+                            refine flatten-attributes svg-report-unrecognized-element/attributes
+                            xml-contents*->svg-elements]
            head-defs body-defs
            #:unknown [unknown : Unknown #:refine refine-unknown]
 
            #:subdom [sub-defs ...]
-           (defsvg [svg-elem svg-tagname] : SVG-Elem defs-rest ...) ...)))]))
+           (defsvg [svg-elem svg-tagname] : SVG-Elem #:with svg-flatten-attributes defs-rest ...) ...)))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-svg-dom svg-element : SVG-Element
-  #:dom-refine xml-element*->svg-element
+  #:dom-interface [xml-element*->svg-element svg-element-flatten-attributes]
   ([source : (Option XML-Source) #false]
    [id : (Option Symbol) #false]
    [attr:core : (Option SVG:Attr:Core) #false])
@@ -103,93 +112,93 @@
 
      (define-svg-element filter
        #:attribute-categories [xlink external]
-       ([x : (Option String) #:-> xml-attribute-value->string #false]
-        [y : (Option String) #:-> xml-attribute-value->string #false]
-        [width : (Option String) #:-> xml-attribute-value->string #false]
-        [height : (Option String) #:-> xml-attribute-value->string #false]
-        [filterRes : (Option String) #:-> xml-attribute-value->string #false]
-        [filterUnits : (Option String) #:-> xml-attribute-value->string #false]
-        [primitiveUnits : (Option String) #:-> xml-attribute-value->string #false]))
+       ([x : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [y : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [width : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [height : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [filterRes : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [filterUnits : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [primitiveUnits : (Option String) #:= #false #:<-> xml-attribute-value->string]))
 
      (define-svg-element stop ; for gradient elements
-       ([offset : (Option String) #:-> xml-attribute-value->string #false]))
+       ([offset : (Option String) #:= #false #:<-> xml-attribute-value->string]))
 
      #:subdom
      [(define-svg-subdom svg-gradient-element : SVG-Gradient-Element
         #:attribute-categories [xlink external]
-        ([gradientTransform : (Option String) #:-> xml-attribute-value->string #false]
-         [gradientUnits : (Option String) #:-> xml-attribute-value->string #false]
-         [spreadMethod : (Option String) #:-> xml-attribute-value->string #false])
+        ([gradientTransform : (Option String) #:= #false #:<-> xml-attribute-value->string]
+         [gradientUnits : (Option String) #:= #false #:<-> xml-attribute-value->string]
+         [spreadMethod : (Option String) #:= #false #:<-> xml-attribute-value->string])
 
         (define-svg-element linearGradient
-          ([x1 : (Option String) #:-> xml-attribute-value->string #false]
-           [x2 : (Option String) #:-> xml-attribute-value->string #false]
-           [y1 : (Option String) #:-> xml-attribute-value->string #false]
-           [y2 : (Option String) #:-> xml-attribute-value->string #false]))
+          ([x1 : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [x2 : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [y1 : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [y2 : (Option String) #:= #false #:<-> xml-attribute-value->string]))
 
         (define-svg-element radialGradient
-          ([cx : (Option String) #:-> xml-attribute-value->string #false]
-           [cy : (Option String) #:-> xml-attribute-value->string #false]
-           [fx : (Option String) #:-> xml-attribute-value->string #false]
-           [fy : (Option String) #:-> xml-attribute-value->string #false]
-           [r : (Option String) #:-> xml-attribute-value->string #false])))
+          ([cx : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [cy : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [fx : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [fy : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [r : (Option String) #:= #false #:<-> xml-attribute-value->string])))
 
       (define-svg-subdom svg-container-element : SVG-Container-Element ()
         (define-svg-element pattern
           #:attribute-categories [condition xlink external]
-          ([x : (Option String) #:-> xml-attribute-value->string #false]
-           [y : (Option String) #:-> xml-attribute-value->string #false]
-           [width : (Option String) #:-> xml-attribute-value->string #false]
-           [height : (Option String) #:-> xml-attribute-value->string #false]
-           [viewBox : (Option String) #:-> xml-attribute-value->string #false]
-           [patternContentUnits : (Option String) #:-> xml-attribute-value->string #false]
-           [patternTransform : (Option String) #:-> xml-attribute-value->string #false]
-           [patternUnits : (Option String) #:-> xml-attribute-value->string #false]
-           [preserveAspectRatio : (Option String) #:-> xml-attribute-value->string #false]))
+          ([x : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [y : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [width : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [height : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [viewBox : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [patternContentUnits : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [patternTransform : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [patternUnits : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [preserveAspectRatio : (Option String) #:= #false #:<-> xml-attribute-value->string]))
         
         (define-svg-element marker
           #:attribute-categories [external]
-          ([markerHeight : (Option String) #:-> xml-attribute-value->string #false]
-           [markerUnits : (Option String) #:-> xml-attribute-value->string #false]
-           [markerWidth : (Option String) #:-> xml-attribute-value->string #false]
-           [orient : (Option String) #:-> xml-attribute-value->string #false]
-           [preserveAspectRatio : (Option String) #:-> xml-attribute-value->string #false]
-           [refX : (Option String) #:-> xml-attribute-value->string #false]
-           [refY : (Option String) #:-> xml-attribute-value->string #false]
-           [viewBox : (Option String) #:-> xml-attribute-value->string #false]))
+          ([markerHeight : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [markerUnits : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [markerWidth : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [orient : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [preserveAspectRatio : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [refX : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [refY : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [viewBox : (Option String) #:= #false #:<-> xml-attribute-value->string]))
         
         (define-svg-element mask
           #:attribute-categories [condition external]
-          ([x : (Option String) #:-> xml-attribute-value->string #false]
-           [y : (Option String) #:-> xml-attribute-value->string #false]
-           [width : (Option String) #:-> xml-attribute-value->string #false]
-           [height : (Option String) #:-> xml-attribute-value->string #false]
-           [maskContentUnits : (Option String) #:-> xml-attribute-value->string #false]
-           [maskUnits : (Option String) #:-> xml-attribute-value->string #false]))
+          ([x : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [y : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [width : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [height : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [maskContentUnits : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [maskUnits : (Option String) #:= #false #:<-> xml-attribute-value->string]))
 
         (define-svg-element clipPath
           #:attribute-categories [condition external]
-          ([clipPathUnits : (Option String) #:-> xml-attribute-value->string #false]
-           [transform : (Option String) #:-> xml-attribute-value->string #false]))
+          ([clipPathUnits : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [transform : (Option String) #:= #false #:<-> xml-attribute-value->string]))
         
         (define-svg-element glyph
-          ([d : (Option String) #:-> xml-attribute-value->string #false]
-           [arabic-form : (Option String) #:-> xml-attribute-value->string #false]
-           [glyph-name : (Option String) #:-> xml-attribute-value->string #false]
-           [horiz-adv-x : (Option String) #:-> xml-attribute-value->string #false]
-           [lang : (Option String) #:-> xml-attribute-value->string #false]
-           [orientation : (Option String) #:-> xml-attribute-value->string #false]
-           [unicode : (Option String) #:-> xml-attribute-value->string #false]
-           [vert-adv-y : (Option String) #:-> xml-attribute-value->string #false]
-           [vert-origin-x : (Option String) #:-> xml-attribute-value->string #false]
-           [vert-origin-y : (Option String) #:-> xml-attribute-value->string #false]))
+          ([d : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [arabic-form : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [glyph-name : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [horiz-adv-x : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [lang : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [orientation : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [unicode : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [vert-adv-y : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [vert-origin-x : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [vert-origin-y : (Option String) #:= #false #:<-> xml-attribute-value->string]))
         
         (define-svg-element missing-glyph
-          ([d : (Option String) #:-> xml-attribute-value->string #false]
-           [horiz-adv-x : (Option String) #:-> xml-attribute-value->string #false]
-           [vert-adv-y : (Option String) #:-> xml-attribute-value->string #false]
-           [vert-origin-x : (Option String) #:-> xml-attribute-value->string #false]
-           [vert-origin-y : (Option String) #:-> xml-attribute-value->string #false]))
+          ([d : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [horiz-adv-x : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [vert-adv-y : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [vert-origin-x : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [vert-origin-y : (Option String) #:= #false #:<-> xml-attribute-value->string]))
 
         #:subdom
         [(define-svg-subdom svg-structural-element : SVG-Structural-Element
@@ -197,26 +206,26 @@
 
            (define-svg-element [svg : SVG]
              #:attribute-categories [condition document-event]
-             ([x : (Option String) #:-> xml-attribute-value->string #false]
-              [y : (Option String) #:-> xml-attribute-value->string #false]
-              [width : (Option String) #:-> xml-attribute-value->string #false]
-              [height : (Option String) #:-> xml-attribute-value->string #false]
-              [viewBox : (Option String) #:-> xml-attribute-value->string #false]
-              [baseProfile : (Option String) #:-> xml-attribute-value->string #false]
-              [contentScriptType : (Option String) #:-> xml-attribute-value->string #false]
-              [contentStyleType : (Option String) #:-> xml-attribute-value->string #false]
-              [preserveAspectRatio : (Option String) #:-> xml-attribute-value->string #false]
-              [version : (Option String) #:-> xml-attribute-value->string #false]
-              [zoomAndPan : (Option String) #:-> xml-attribute-value->string #false]))
+             ([x : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [y : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [width : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [height : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [viewBox : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [baseProfile : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [contentScriptType : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [contentStyleType : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [preserveAspectRatio : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [version : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [zoomAndPan : (Option String) #:= #false #:<-> xml-attribute-value->string]))
 
            (define-svg-element symbol
-             ([preserveAspectRatio : (Option String) #:-> xml-attribute-value->string #false]
-              [viewBox : (Option String) #:-> xml-attribute-value->string #false]))
+             ([preserveAspectRatio : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [viewBox : (Option String) #:= #false #:<-> xml-attribute-value->string]))
 
            #:subdom
            [(define-svg-subdom svg-transformable-element : SVG-Transformable-Element
               #:attribute-categories [condition]
-              ([transform : (Option String) #:-> xml-attribute-value->string #false])
+              ([transform : (Option String) #:= #false #:<-> xml-attribute-value->string])
 
               (define-svg-element g ())
               (define-svg-element defs ())
@@ -224,7 +233,7 @@
 
               (define-svg-element a
                 #:attribute-categories [xlink]
-                ([target : (Option String) #:-> xml-attribute-value->string #false])))])])
+                ([target : (Option String) #:= #false #:<-> xml-attribute-value->string])))])])
       
       (define-svg-subdom svg-visual-element : SVG-Visual-Element
         #:attribute-categories [graphical-event external] ()
@@ -232,99 +241,99 @@
         #:subdom
         [(define-svg-subdom svg-graphics-element : SVG-Graphics-Element
            #:attribute-categories [condition]
-           ([transform : (Option String) #:-> xml-attribute-value->string #false])
+           ([transform : (Option String) #:= #false #:<-> xml-attribute-value->string])
 
            (define-svg-element foreignObject
-             ([x : (Option String) #:-> xml-attribute-value->string #false]
-              [y : (Option String) #:-> xml-attribute-value->string #false]
-              [width : (Option String) #:-> xml-attribute-value->string #false]
-              [height : (Option String) #:-> xml-attribute-value->string #false]))
+             ([x : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [y : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [width : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [height : (Option String) #:= #false #:<-> xml-attribute-value->string]))
 
            (define-svg-element text
-             ([x : (Option String) #:-> xml-attribute-value->string #false]
-              [y : (Option String) #:-> xml-attribute-value->string #false]
-              [dx : (Option String) #:-> xml-attribute-value->string #false]
-              [dy : (Option String) #:-> xml-attribute-value->string #false]
-              [lengthAdjust : (Option String) #:-> xml-attribute-value->string #false]
-              [rotate : (Option String) #:-> xml-attribute-value->string #false]
-              [textLength : (Option String) #:-> xml-attribute-value->string #false]))
+             ([x : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [y : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [dx : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [dy : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [lengthAdjust : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [rotate : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [textLength : (Option String) #:= #false #:<-> xml-attribute-value->string]))
            
            #:subdom
            [(define-svg-subdom svg-shape-element : SVG-Shape-Element ()
               (define-svg-element path
-                ([d : (Option String) #:-> xml-attribute-value->string #false]
-                 [pathLength : (Option String) #:-> xml-attribute-value->string #false]))
+                ([d : (Option String) #:= #false #:<-> xml-attribute-value->string]
+                 [pathLength : (Option String) #:= #false #:<-> xml-attribute-value->string]))
 
               (define-svg-element line
-                ([x1 : (Option String) #:-> xml-attribute-value->string #false]
-                 [x2 : (Option String) #:-> xml-attribute-value->string #false]
-                 [y1 : (Option String) #:-> xml-attribute-value->string #false]
-                 [y2 : (Option String) #:-> xml-attribute-value->string #false]))
+                ([x1 : (Option String) #:= #false #:<-> xml-attribute-value->string]
+                 [x2 : (Option String) #:= #false #:<-> xml-attribute-value->string]
+                 [y1 : (Option String) #:= #false #:<-> xml-attribute-value->string]
+                 [y2 : (Option String) #:= #false #:<-> xml-attribute-value->string]))
               
               (define-svg-element rect
-                ([x : (Option String) #:-> xml-attribute-value->string #false]
-                 [y : (Option String) #:-> xml-attribute-value->string #false]
-                 [width : (Option String) #:-> xml-attribute-value->string #false]
-                 [height : (Option String) #:-> xml-attribute-value->string #false]
-                 [rx : (Option String) #:-> xml-attribute-value->string #false]
-                 [ry : (Option String) #:-> xml-attribute-value->string #false]))
+                ([x : (Option String) #:= #false #:<-> xml-attribute-value->string]
+                 [y : (Option String) #:= #false #:<-> xml-attribute-value->string]
+                 [width : (Option String) #:= #false #:<-> xml-attribute-value->string]
+                 [height : (Option String) #:= #false #:<-> xml-attribute-value->string]
+                 [rx : (Option String) #:= #false #:<-> xml-attribute-value->string]
+                 [ry : (Option String) #:= #false #:<-> xml-attribute-value->string]))
               
               (define-svg-element circle
-                ([cx : (Option String) #:-> xml-attribute-value->string #false]
-                 [cy : (Option String) #:-> xml-attribute-value->string #false]
-                 [r : (Option String) #:-> xml-attribute-value->string #false]))
+                ([cx : (Option String) #:= #false #:<-> xml-attribute-value->string]
+                 [cy : (Option String) #:= #false #:<-> xml-attribute-value->string]
+                 [r : (Option String) #:= #false #:<-> xml-attribute-value->string]))
               
               (define-svg-element ellipse
-                ([cx : (Option String) #:-> xml-attribute-value->string #false]
-                 [cy : (Option String) #:-> xml-attribute-value->string #false]
-                 [rx : (Option String) #:-> xml-attribute-value->string #false]
-                 [ry : (Option String) #:-> xml-attribute-value->string #false]))
+                ([cx : (Option String) #:= #false #:<-> xml-attribute-value->string]
+                 [cy : (Option String) #:= #false #:<-> xml-attribute-value->string]
+                 [rx : (Option String) #:= #false #:<-> xml-attribute-value->string]
+                 [ry : (Option String) #:= #false #:<-> xml-attribute-value->string]))
 
               (define-svg-element polyline
-                ([points : (Option String) #:-> xml-attribute-value->string #false]))
+                ([points : (Option String) #:= #false #:<-> xml-attribute-value->string]))
               
               (define-svg-element polygon
-                ([points : (Option String) #:-> xml-attribute-value->string #false])))
+                ([points : (Option String) #:= #false #:<-> xml-attribute-value->string])))
 
             (define-svg-subdom svg-graphics-referencing-element : SVG-Graphics-Referencing-Element
               #:attribute-categories [xlink]
-              ([x : (Option String) #:-> xml-attribute-value->string #false]
-               [y : (Option String) #:-> xml-attribute-value->string #false]
-               [width : (Option String) #:-> xml-attribute-value->string #false]
-               [height : (Option String) #:-> xml-attribute-value->string #false])
+              ([x : (Option String) #:= #false #:<-> xml-attribute-value->string]
+               [y : (Option String) #:= #false #:<-> xml-attribute-value->string]
+               [width : (Option String) #:= #false #:<-> xml-attribute-value->string]
+               [height : (Option String) #:= #false #:<-> xml-attribute-value->string])
 
               (define-svg-element use ())
               
               (define-svg-element image
-                ([preserveAspectRatio : (Option String) #:-> xml-attribute-value->string #false])))])
+                ([preserveAspectRatio : (Option String) #:= #false #:<-> xml-attribute-value->string])))])
 
          (define-svg-subdom svg-text-child-element : SVG-Text-Child-Element ()
            (define-svg-element tspan
-             ([x : (Option String) #:-> xml-attribute-value->string #false]
-              [y : (Option String) #:-> xml-attribute-value->string #false]
-              [dx : (Option String) #:-> xml-attribute-value->string #false]
-              [dy : (Option String) #:-> xml-attribute-value->string #false]
-              [rotate : (Option String) #:-> xml-attribute-value->string #false]
-              [textLength : (Option String) #:-> xml-attribute-value->string #false]
-              [lengthAdjust : (Option String) #:-> xml-attribute-value->string #false]))
+             ([x : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [y : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [dx : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [dy : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [rotate : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [textLength : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [lengthAdjust : (Option String) #:= #false #:<-> xml-attribute-value->string]))
            
            (define-svg-element tref #:attribute-categories [xlink] ())
 
            (define-svg-element textPath
              #:attribute-categories [xlink]
-             ([method : (Option String) #:-> xml-attribute-value->string #false]
-              [spacing : (Option String) #:-> xml-attribute-value->string #false]
-              [startOffset : (Option String) #:-> xml-attribute-value->string #false]))
+             ([method : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [spacing : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [startOffset : (Option String) #:= #false #:<-> xml-attribute-value->string]))
 
            (define-svg-element altGlyph
              #:attribute-categories [xlink]
-             ([x : (Option String) #:-> xml-attribute-value->string #false]
-              [y : (Option String) #:-> xml-attribute-value->string #false]
-              [dx : (Option String) #:-> xml-attribute-value->string #false]
-              [dy : (Option String) #:-> xml-attribute-value->string #false]
-              [glyphRef : (Option String) #:-> xml-attribute-value->string #false]
-              [format : (Option String) #:-> xml-attribute-value->string #false]
-              [rotate : (Option String) #:-> xml-attribute-value->string #false])))])
+             ([x : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [y : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [dx : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [dy : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [glyphRef : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [format : (Option String) #:= #false #:<-> xml-attribute-value->string]
+              [rotate : (Option String) #:= #false #:<-> xml-attribute-value->string])))])
 
       (define-svg-subdom svg-filter-primitive-element : SVG-Filter-Primitive-Element
         #:attribute-categories [filter-primitive] ()
@@ -334,105 +343,105 @@
 
         (define-svg-element feImage
           #:attribute-categories [xlink external]
-          ([preserveAspectRatio : (Option String) #:-> xml-attribute-value->string #false]))
+          ([preserveAspectRatio : (Option String) #:= #false #:<-> xml-attribute-value->string]))
 
         (define-svg-element feBlend
-          ([in : (Option String) #:-> xml-attribute-value->string #false]
-           [in2 : (Option String) #:-> xml-attribute-value->string #false]
-           [mode : (Option String) #:-> xml-attribute-value->string #false]))
+          ([in : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [in2 : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [mode : (Option String) #:= #false #:<-> xml-attribute-value->string]))
 
         (define-svg-element feColorMatrix
-          ([in : (Option String) #:-> xml-attribute-value->string #false]
-           [type : (Option String) #:-> xml-attribute-value->string #false]
-           [values : (Option String) #:-> xml-attribute-value->string #false]))
+          ([in : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [type : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [values : (Option String) #:= #false #:<-> xml-attribute-value->string]))
 
         (define-svg-element feComponentTransfer
-          ([in : (Option String) #:-> xml-attribute-value->string #false]))
+          ([in : (Option String) #:= #false #:<-> xml-attribute-value->string]))
 
         (define-svg-element feComposite
-          ([in : (Option String) #:-> xml-attribute-value->string #false]
-           [in2 : (Option String) #:-> xml-attribute-value->string #false]
-           [k1 : (Option String) #:-> xml-attribute-value->string #false]
-           [k2 : (Option String) #:-> xml-attribute-value->string #false]
-           [k3 : (Option String) #:-> xml-attribute-value->string #false]
-           [k4 : (Option String) #:-> xml-attribute-value->string #false]
-           [operator : (Option String) #:-> xml-attribute-value->string #false]))
+          ([in : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [in2 : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [k1 : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [k2 : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [k3 : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [k4 : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [operator : (Option String) #:= #false #:<-> xml-attribute-value->string]))
         
         (define-svg-element feConvolveMatrix
-          ([in : (Option String) #:-> xml-attribute-value->string #false]
-           [bias : (Option String) #:-> xml-attribute-value->string #false]
-           [divisor : (Option String) #:-> xml-attribute-value->string #false]
-           [edgeMode : (Option String) #:-> xml-attribute-value->string #false]
-           [kernelMatrix : (Option String) #:-> xml-attribute-value->string #false]
-           [kernelUnitLength : (Option String) #:-> xml-attribute-value->string #false]
-           [order : (Option String) #:-> xml-attribute-value->string #false]
-           [preserveAlpha : (Option String) #:-> xml-attribute-value->string #false]
-           [targetX : (Option String) #:-> xml-attribute-value->string #false]
-           [targetY : (Option String) #:-> xml-attribute-value->string #false]))
+          ([in : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [bias : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [divisor : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [edgeMode : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [kernelMatrix : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [kernelUnitLength : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [order : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [preserveAlpha : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [targetX : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [targetY : (Option String) #:= #false #:<-> xml-attribute-value->string]))
 
         (define-svg-element feDiffuseLighting
-          ([in : (Option String) #:-> xml-attribute-value->string #false]
-           [diffuseConstant : (Option String) #:-> xml-attribute-value->string #false]
-           [kernelUnitLength : (Option String) #:-> xml-attribute-value->string #false]
-           [surfaceScale : (Option String) #:-> xml-attribute-value->string #false]))
+          ([in : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [diffuseConstant : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [kernelUnitLength : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [surfaceScale : (Option String) #:= #false #:<-> xml-attribute-value->string]))
 
         (define-svg-element feSpecularLighting
-          ([in : (Option String) #:-> xml-attribute-value->string #false]
-           [kernelUnitLength : (Option String) #:-> xml-attribute-value->string #false]
-           [specularConstant : (Option String) #:-> xml-attribute-value->string #false]
-           [specularExponent : (Option String) #:-> xml-attribute-value->string #false]
-           [surfaceScale : (Option String) #:-> xml-attribute-value->string #false]))
+          ([in : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [kernelUnitLength : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [specularConstant : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [specularExponent : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [surfaceScale : (Option String) #:= #false #:<-> xml-attribute-value->string]))
 
         (define-svg-element feDisplacementMap
-          ([in : (Option String) #:-> xml-attribute-value->string #false]
-           [in2 : (Option String) #:-> xml-attribute-value->string #false]
-           [scale : (Option String) #:-> xml-attribute-value->string #false]
-           [xChannelSelector : (Option String) #:-> xml-attribute-value->string #false]
-           [yChannelSelector : (Option String) #:-> xml-attribute-value->string #false]))
+          ([in : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [in2 : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [scale : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [xChannelSelector : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [yChannelSelector : (Option String) #:= #false #:<-> xml-attribute-value->string]))
 
         (define-svg-element feGaussianBlur
-          ([in : (Option String) #:-> xml-attribute-value->string #false]
-           [stdDeviation : (Option String) #:-> xml-attribute-value->string #false]))
+          ([in : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [stdDeviation : (Option String) #:= #false #:<-> xml-attribute-value->string]))
 
         (define-svg-element feMorphology
-          ([in : (Option String) #:-> xml-attribute-value->string #false]
-           [operator : (Option String) #:-> xml-attribute-value->string #false]
-           [radius : (Option String) #:-> xml-attribute-value->string #false]))
+          ([in : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [operator : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [radius : (Option String) #:= #false #:<-> xml-attribute-value->string]))
         
         (define-svg-element feOffset
-          ([in : (Option String) #:-> xml-attribute-value->string #false]
-           [dx : (Option String) #:-> xml-attribute-value->string #false]
-           [dy : (Option String) #:-> xml-attribute-value->string #false]))
+          ([in : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [dx : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [dy : (Option String) #:= #false #:<-> xml-attribute-value->string]))
 
         (define-svg-element feTile
-          ([in : (Option String) #:-> xml-attribute-value->string #false]))
+          ([in : (Option String) #:= #false #:<-> xml-attribute-value->string]))
 
         (define-svg-element feTurbulence
-          ([baseFrequency : (Option String) #:-> xml-attribute-value->string #false]
-           [numOctaves : (Option String) #:-> xml-attribute-value->string #false]
-           [seed : (Option String) #:-> xml-attribute-value->string #false]
-           [stitchTiles : (Option String) #:-> xml-attribute-value->string #false]
-           [type : (Option String) #:-> xml-attribute-value->string #false])))])
+          ([baseFrequency : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [numOctaves : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [seed : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [stitchTiles : (Option String) #:= #false #:<-> xml-attribute-value->string]
+           [type : (Option String) #:= #false #:<-> xml-attribute-value->string])))])
 
    (define-svg-subdom svg-light-source-element : SVG-Light-Source-Element ()
      (define-svg-element feDistantLight
-       ([azimuth : (Option String)   #:-> xml-attribute-value->string #false]
-        [elevation : (Option String) #:-> xml-attribute-value->string #false]))
+       ([azimuth : (Option String)   #:= #false #:<-> xml-attribute-value->string]
+        [elevation : (Option String) #:= #false #:<-> xml-attribute-value->string]))
 
      (define-svg-element fePointLight
-       ([x : (Option String) #:-> xml-attribute-value->string #false]
-        [y : (Option String) #:-> xml-attribute-value->string #false]
-        [z : (Option String) #:-> xml-attribute-value->string #false]))
+       ([x : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [y : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [z : (Option String) #:= #false #:<-> xml-attribute-value->string]))
      
      (define-svg-element feSpotLight
-       ([x : (Option String) #:-> xml-attribute-value->string #false]
-        [y : (Option String) #:-> xml-attribute-value->string #false]
-        [z : (Option String) #:-> xml-attribute-value->string #false]
-        [pointsAtX : (Option String) #:-> xml-attribute-value->string #false]
-        [pointsAtY : (Option String) #:-> xml-attribute-value->string #false]
-        [pointsAtZ : (Option String) #:-> xml-attribute-value->string #false]
-        [specularExponent : (Option String) #:-> xml-attribute-value->string #false]
-        [limitingConeAngle : (Option String) #:-> xml-attribute-value->string #false])))
+       ([x : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [y : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [z : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [pointsAtX : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [pointsAtY : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [pointsAtZ : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [specularExponent : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [limitingConeAngle : (Option String) #:= #false #:<-> xml-attribute-value->string])))
 
    (define-svg-subdom svg-animation-element : SVG-Animation-Element
      #:attribute-categories [condition external xlink animation-event animation-timing] ()
@@ -442,39 +451,39 @@
 
      (define-svg-element set
        #:attribute-categories [animation-target]
-       ([to : (Option String) #:-> xml-attribute-value->string #false]))
+       ([to : (Option String) #:= #false #:<-> xml-attribute-value->string]))
      
      (define-svg-element animateColor
        #:attribute-categories [animation-target animation-value animation-addition presentation] ())
 
      (define-svg-element animateMotion
        #:attribute-categories [animation-value animation-addition]
-       ([path : (Option String) #:-> xml-attribute-value->string #false]
-        [keyPoints : (Option String) #:-> xml-attribute-value->string #false]
-        [rotate : (Option String) #:-> xml-attribute-value->string #false]
-        [origin : (Option String) #:-> xml-attribute-value->string #false]))
+       ([path : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [keyPoints : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [rotate : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [origin : (Option String) #:= #false #:<-> xml-attribute-value->string]))
      
      (define-svg-element animateTransform
        #:attribute-categories [animation-target animation-value animation-addition presentation]
-       ([type : (Option String) #:-> xml-attribute-value->string #false])))
+       ([type : (Option String) #:= #false #:<-> xml-attribute-value->string])))
 
    (define-svg-subdom svg-foreign-language-element : SVG-Foreign-Language-Element
-     ([type : (Option String) #:-> xml-attribute-value->string #false])
+     ([type : (Option String) #:= #false #:<-> xml-attribute-value->string])
 
      (define-svg-element script #:attribute-categories [xlink external] ())
 
      (define-svg-element style
-       ([media : (Option String) #:-> xml-attribute-value->string #false]
-        [title : (Option String) #:-> xml-attribute-value->string #false])))
+       ([media : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [title : (Option String) #:= #false #:<-> xml-attribute-value->string])))
 
    (define-svg-subdom svg-transfer-function-element : SVG-Transfer-Function-Element
-     ([amplitude : (Option String) #:-> xml-attribute-value->string #false]
-      [exponent : (Option String) #:-> xml-attribute-value->string #false]
-      [intercept : (Option String) #:-> xml-attribute-value->string #false]
-      [offset : (Option String) #:-> xml-attribute-value->string #false]
-      [slope : (Option String) #:-> xml-attribute-value->string #false]
-      [tableValues : (Option String) #:-> xml-attribute-value->string #false]
-      [type : (Option String) #:-> xml-attribute-value->string #false])
+     ([amplitude : (Option String) #:= #false #:<-> xml-attribute-value->string]
+      [exponent : (Option String) #:= #false #:<-> xml-attribute-value->string]
+      [intercept : (Option String) #:= #false #:<-> xml-attribute-value->string]
+      [offset : (Option String) #:= #false #:<-> xml-attribute-value->string]
+      [slope : (Option String) #:= #false #:<-> xml-attribute-value->string]
+      [tableValues : (Option String) #:= #false #:<-> xml-attribute-value->string]
+      [type : (Option String) #:= #false #:<-> xml-attribute-value->string])
 
      (define-svg-element feFuncR ())
      (define-svg-element feFuncG ())
@@ -484,56 +493,56 @@
    (define-svg-subdom svg-font-description-element : SVG-Font-Description-Element ()
      (define-svg-element font
        #:attribute-categories [presentation style external]
-       ([horiz-adv-x : (Option String) #:-> xml-attribute-value->string #false]
-        [horiz-origin-x : (Option String) #:-> xml-attribute-value->string #false]
-        [horiz-origin-y : (Option String) #:-> xml-attribute-value->string #false]
-        [vert-adv-y : (Option String) #:-> xml-attribute-value->string #false]
-        [vert-origin-x : (Option String) #:-> xml-attribute-value->string #false]
-        [vert-origin-y : (Option String) #:-> xml-attribute-value->string #false]))
+       ([horiz-adv-x : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [horiz-origin-x : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [horiz-origin-y : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [vert-adv-y : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [vert-origin-x : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [vert-origin-y : (Option String) #:= #false #:<-> xml-attribute-value->string]))
      
      (define-svg-element font-face-src ())
      (define-svg-element font-face-uri #:attribute-categories [xlink] ())
 
      (define-svg-element font-face-name
-       ([name : (Option String) #:-> xml-attribute-value->string #false]))
+       ([name : (Option String) #:= #false #:<-> xml-attribute-value->string]))
      
      (define-svg-element font-face-format
-       ([string : (Option String) #:-> xml-attribute-value->string #false]))
+       ([string : (Option String) #:= #false #:<-> xml-attribute-value->string]))
 
      (define-svg-element font-face
-       ([accent-height : (Option String) #:-> xml-attribute-value->string #false]
-        [alphabetic : (Option String) #:-> xml-attribute-value->string #false]
-        [ascent : (Option String) #:-> xml-attribute-value->string #false]
-        [bbox : (Option String) #:-> xml-attribute-value->string #false]
-        [cap-height : (Option String) #:-> xml-attribute-value->string #false]
-        [descent : (Option String) #:-> xml-attribute-value->string #false]
-        [font-family : (Option String) #:-> xml-attribute-value->string #false]
-        [font-size : (Option String) #:-> xml-attribute-value->string #false]
-        [font-stretch : (Option String) #:-> xml-attribute-value->string #false]
-        [font-style : (Option String) #:-> xml-attribute-value->string #false]
-        [font-variant : (Option String) #:-> xml-attribute-value->string #false]
-        [font-weight : (Option String) #:-> xml-attribute-value->string #false]
-        [hanging : (Option String) #:-> xml-attribute-value->string #false]
-        [ideographic : (Option String) #:-> xml-attribute-value->string #false]
-        [mathematical : (Option String) #:-> xml-attribute-value->string #false]
-        [overline-position : (Option String) #:-> xml-attribute-value->string #false]
-        [overline-thickness : (Option String) #:-> xml-attribute-value->string #false]
-        [panose-1 : (Option String) #:-> xml-attribute-value->string #false]
-        [slope : (Option String) #:-> xml-attribute-value->string #false]
-        [stemh : (Option String) #:-> xml-attribute-value->string #false]
-        [stemv : (Option String) #:-> xml-attribute-value->string #false]
-        [strikethrough-position : (Option String) #:-> xml-attribute-value->string #false]
-        [strikethrough-thickness : (Option String) #:-> xml-attribute-value->string #false]
-        [underline-position : (Option String) #:-> xml-attribute-value->string #false]
-        [underline-thickness : (Option String) #:-> xml-attribute-value->string #false]
-        [unicode-range : (Option String) #:-> xml-attribute-value->string #false]
-        [units-per-em : (Option String) #:-> xml-attribute-value->string #false]
-        [v-alphabetic : (Option String) #:-> xml-attribute-value->string #false]
-        [v-hanging : (Option String) #:-> xml-attribute-value->string #false]
-        [v-ideographic : (Option String) #:-> xml-attribute-value->string #false]
-        [v-mathematical : (Option String) #:-> xml-attribute-value->string #false]
-        [widths : (Option String) #:-> xml-attribute-value->string #false]
-        [x-height : (Option String) #:-> xml-attribute-value->string #false])))
+       ([accent-height : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [alphabetic : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [ascent : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [bbox : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [cap-height : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [descent : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [font-family : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [font-size : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [font-stretch : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [font-style : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [font-variant : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [font-weight : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [hanging : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [ideographic : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [mathematical : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [overline-position : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [overline-thickness : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [panose-1 : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [slope : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [stemh : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [stemv : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [strikethrough-position : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [strikethrough-thickness : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [underline-position : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [underline-thickness : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [unicode-range : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [units-per-em : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [v-alphabetic : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [v-hanging : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [v-ideographic : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [v-mathematical : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [widths : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [x-height : (Option String) #:= #false #:<-> xml-attribute-value->string])))
    
    (define-svg-subdom svg-glyph-element : SVG-Glyph-Element ()
      (define-svg-element altGlyphDef ())
@@ -541,21 +550,21 @@
 
      (define-svg-element glyphRef
        #:attribute-categories [presentation style xlink]
-       ([x : (Option String) #:-> xml-attribute-value->string #false]
-        [y : (Option String) #:-> xml-attribute-value->string #false]
-        [dx : (Option String) #:-> xml-attribute-value->string #false]
-        [dy : (Option String) #:-> xml-attribute-value->string #false]
-        [glyphRef : (Option String) #:-> xml-attribute-value->string #false]
-        [format : (Option String) #:-> xml-attribute-value->string #false]
-        [rotate : (Option String) #:-> xml-attribute-value->string #false]))
+       ([x : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [y : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [dx : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [dy : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [glyphRef : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [format : (Option String) #:= #false #:<-> xml-attribute-value->string]
+        [rotate : (Option String) #:= #false #:<-> xml-attribute-value->string]))
 
      #:subdom
      [(define-svg-subdom svg-kerning-pair-element : SVG-Kerning-Pair-Element
-        ([u1 : (Option String) #:-> xml-attribute-value->string #false]
-         [g1 : (Option String) #:-> xml-attribute-value->string #false]
-         [u2 : (Option String) #:-> xml-attribute-value->string #false]
-         [g2 : (Option String) #:-> xml-attribute-value->string #false]
-         [k : (Option String) #:-> xml-attribute-value->string #false])
+        ([u1 : (Option String) #:= #false #:<-> xml-attribute-value->string]
+         [g1 : (Option String) #:= #false #:<-> xml-attribute-value->string]
+         [u2 : (Option String) #:= #false #:<-> xml-attribute-value->string]
+         [g2 : (Option String) #:= #false #:<-> xml-attribute-value->string]
+         [k : (Option String) #:= #false #:<-> xml-attribute-value->string])
 
         (define-svg-element vkern ())
         (define-svg-element hkern ()))])]
@@ -564,24 +573,24 @@
 
   (define-svg-element color-profile
     #:attribute-categories [xlink]
-    ([local : (Option String) #:-> xml-attribute-value->string #false]
-     [name : (Option String) #:-> xml-attribute-value->string #false]
-     [rendering-intent : (Option String) #:-> xml-attribute-value->string #false]))
+    ([local : (Option String) #:= #false #:<-> xml-attribute-value->string]
+     [name : (Option String) #:= #false #:<-> xml-attribute-value->string]
+     [rendering-intent : (Option String) #:= #false #:<-> xml-attribute-value->string]))
   
   (define-svg-element feMergeNode
-    ([in : (Option String) #:-> xml-attribute-value->string #false]))
+    ([in : (Option String) #:= #false #:<-> xml-attribute-value->string]))
 
   (define-svg-element cursor
     #:attribute-categories [condition xlink external]
-    ([x : (Option String) #:-> xml-attribute-value->string #false]
-     [y : (Option String) #:-> xml-attribute-value->string #false]))
+    ([x : (Option String) #:= #false #:<-> xml-attribute-value->string]
+     [y : (Option String) #:= #false #:<-> xml-attribute-value->string]))
   
   (define-svg-element view
     #:attribute-categories [external]
-    ([preserveAspectRatio : (Option String) #:-> xml-attribute-value->string #false]
-     [viewBox : (Option String) #:-> xml-attribute-value->string #false]
-     [viewTarget : (Option String) #:-> xml-attribute-value->string #false]
-     [zoomAndPan : (Option String) #:-> xml-attribute-value->string #false])))
+    ([preserveAspectRatio : (Option String) #:= #false #:<-> xml-attribute-value->string]
+     [viewBox : (Option String) #:= #false #:<-> xml-attribute-value->string]
+     [viewTarget : (Option String) #:= #false #:<-> xml-attribute-value->string]
+     [zoomAndPan : (Option String) #:= #false #:<-> xml-attribute-value->string])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define svg-resolve-root : (-> (Listof XML-Content) (U String Symbol) (Option Symbol) SVG:SVG)
