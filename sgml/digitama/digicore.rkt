@@ -198,7 +198,8 @@
   ; for SVG
   [exn:svg:vc            #:-> exn:xml:vc]
   [exn:svg:unrecognized  #:-> exn:svg:vc]
-  [exn:svg:range         #:-> exn:svg:unrecognized])
+  [exn:svg:range         #:-> exn:svg:unrecognized]
+  [exn:svg:unit          #:-> exn:svg:range])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-token->syntax : (-> XML-Token Syntax)

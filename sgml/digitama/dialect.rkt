@@ -6,6 +6,7 @@
 (require racket/path)
 
 (require digimon/syntax)
+(require digimon/function)
 (require digimon/digitama/stdio)
 
 (require "digicore.rkt")
@@ -26,7 +27,7 @@
   (syntax-case stx [:]
     [(_ func #:pre-args [pre-argl ...] #:post-args [post-argl ...] #:with attrs omits elem report-unknown #:fields [])
      (syntax/loc stx (func pre-argl ... attrs post-argl ...))]
-    [(_ func #:pre-args [pre-argl ...] #:post-args [post-argl ...] #:with attrs omits elem report-unknown #:fields [[field xml-value->datum defval ...] ...])
+    [(_ func #:pre-args [pre-argl ...] #:post-args [post-argl ...] #:with attrs omits elem report-unknown #:fields [[field xml-value->datum check defval ...] ...])
      (syntax/loc stx
        (let extract ([_attrs : (Listof XML-Element-Attribute*) attrs]
                      [_srtta : (Listof XML-Element-Attribute*) null]
@@ -37,14 +38,14 @@
                  [(field) (with-a-field-replaced (extract tail _srtta #:fields (field ...)) #:for field #:set self)] ...
                  [else (extract tail (cons self _srtta) field ...)]))
              (func pre-argl ...
-                   (xml-attribute->datum/safe field xml-value->datum (or defval ...) report-unknown omits elem) ... _srtta
+                   (xml-attribute->datum/safe field xml-value->datum (or defval ...) report-unknown check omits elem) ... _srtta
                    post-argl ...))))]))
 
 (define-syntax (extract-dom-datum stx)
   (syntax-case stx [:]
     [(_ func : DOM-Elem #:pre-args [pre-argl ...] #:post-args [post-argl ...] #:with attrs #:fields [])
      (syntax/loc stx (values (func pre-argl ... post-argl ...) attrs))]
-    [(_ func : DOM-Elem #:pre-args [pre-argl ...] #:post-args [post-argl ...] #:with attrs #:fields [[field xml->datum defval ...] ...])
+    [(_ func : DOM-Elem #:pre-args [pre-argl ...] #:post-args [post-argl ...] #:with attrs #:fields [[field xml->datum check defval ...] ...])
      (syntax/loc stx
        (let extract : (Values DOM-Elem (Listof XML-Element-Attribute*)) ([_attrs : (Listof XML-Element-Attribute*) attrs]
                                                                          [_srtta : (Listof XML-Element-Attribute*) null]
@@ -55,7 +56,8 @@
                  [(field) (with-a-field-replaced (extract tail _srtta #:fields (field ...)) #:for field #:set self)] ...
                  [else (extract tail (cons self _srtta) field ...)]))
              (values (func pre-argl ...
-                           (if field (xml->datum (cdr field)) (or defval ...)) ...
+                           (cond [(not field) (or defval ...)]
+                                 [else (xml-attribute-check-datum (cdr field) xml->datum check (or defval ...))]) ...
                            post-argl ...)
                      _srtta))))]))
 
@@ -88,7 +90,8 @@
                    #:defaults ([(excfield-name 1) null]))
         ([field : FieldType
                 (~optional (~seq #:= defval ...) #:defaults ([(defval 1) null]))
-                (~seq #:<-> xml->datum (~optional datum->xml #:defaults ([datum->xml #'xml-attribute-datum->value])))] ...)
+                (~seq #:<-> xml->datum (~optional datum->xml #:defaults ([datum->xml #'xml-attribute-datum->value])))
+                (~optional (~seq #:check check) #:defaults ([check #'#false]))] ...)
         (~optional (~seq #:extra ([efield : EFieldType edefval ...] ...))
                    #:defaults ([(efield 1) null] [(EFieldType 1) null] [(edefval 2) null]))
         options ...)
@@ -124,10 +127,10 @@
                   #:transparent
                   #:property prop:custom-write
                   (λ [[self : DOM-Elem] [/dev/stdout : Output-Port] [mode : (U Zero One Boolean)]]
-                    (xml-element-write 'dom-elem /dev/stdout mode
-                                       (list 'hfield ... 'attrib ... 'field ...)
-                                       (list (hfield-ref self) ... (attfield-ref self) ... (selfield-ref self) ...)
-                                       (list (bdyfield-ref self) ... (extfield-ref self) ...)))
+                    (xml-element-custom-write 'dom-elem /dev/stdout mode
+                                              (list 'hfield ... 'attrib ... 'field ...)
+                                              (list (hfield-ref self) ... (attfield-ref self) ... (selfield-ref self) ...)
+                                              (list (bdyfield-ref self) ... (extfield-ref self) ...)))
                   options ...)
 
                 (define (make-dom kw-hdrargs ... kw-attargs ... kw-slfargs ... kw-bdyargs ... kw-extargs ...) : DOM-Elem
@@ -146,7 +149,7 @@
                       (extract-dom-datum dom-elem : DOM-Elem
                                          #:pre-args [hfield ... attrib ...]
                                          #:post-args [bfield ... efield ...]
-                                         #:with rest #:fields [[field xml->datum defval ...] ...]))
+                                         #:with rest #:fields [[field xml->datum check defval ...] ...]))
                     (when (pair? unknowns) (report-unknown (car xml.dom) unknowns))
                     self))
 
@@ -164,7 +167,8 @@
                    #:defaults ([(attrib 1) null] [(Attrib 1) null] [(extract-attrib 1) null] [(attrib->xexpr 1) null]))
         ([mfield : MFieldType
                  (~optional (~seq #:= mdefval ...) #:defaults ([(mdefval 1) null]))
-                 (~seq #:<-> xml->mdatum (~optional mdatum->xml #:defaults ([mdatum->xml #'xml-attribute-datum->value])))] ...)
+                 (~seq #:<-> xml->mdatum (~optional mdatum->xml #:defaults ([mdatum->xml #'xml-attribute-datum->value])))
+                 (~optional (~seq #:check check) #:defaults ([check #'#false]))] ...)
         (~optional (~seq #:subdom [(deftree subsubdom : SubsubDOM subsubrest ...) ...])
                    #:defaults ([(deftree 1) null] [(subsubdom 1) null] [(SubsubDOM 1) null] [(subsubrest 2) null]))
         (defdom [dom-elem dom-tagname] : DOM-Elem #:with dom-flatten-attributes dom-elem-rest ...) ...)
@@ -198,7 +202,7 @@
                   (let*-values ([(hfield ... tail) (header-values attrs omits elem)]
                                 [(attrib tail) (extract-attrib tail omits elem)] ...)
                     (extract-dom-values values #:pre-args [hfield ... attrib ...] #:post-args [] #:with tail omits elem report-unknown
-                                        #:fields [[mfield xml->mdatum mdefval ...] ...])))
+                                        #:fields [[mfield xml->mdatum check mdefval ...] ...])))
 
                 (define (header->xml-attributes [self : SubDOM]) : (Listof (Pairof Symbol String))
                   (append (dom-attribute-list (header->xexpr self) [(afield-ref self) #:=> attrib->xexpr] ...)
@@ -300,7 +304,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-syntax (define-xml-attribute-extract stx)
   (syntax-parse stx #:literals [:]
-    [(_ extract-attr : SVG-Attr #:inline #:with report-unknown (svg-attr [field : [XML-Type field-idx false] xml-attribute-value->datum defval ...] ...))
+    [(_ extract-attr : SVG-Attr #:inline #:with report-unknown (svg-attr [field : [XML-Type field-idx false] xml-attribute-value->datum check defval ...] ...))
      (syntax/loc stx
        (define extract-attr : (->* ((Listof XML-Element-Attribute*)) ((Listof Symbol) (Option XML:Name)) (Values (Option SVG-Attr) (Listof XML-Element-Attribute*)))
          (lambda [attrs [omits null] [elem #false]]
@@ -311,11 +315,11 @@
                     (let*-values ([(self rest) (values (car _attrs) (cdr _attrs))])
                       (case (xml:name-datum (car self))
                         [(field) (with-a-field-replaced (extract rest _srtta #:fields (field ...))
-                                   #:for field #:set (xml-attribute->datum/safe self xml-attribute-value->datum #false report-unknown omits elem))] ...
+                                   #:for field #:set (xml-attribute->datum/safe self xml-attribute-value->datum #false report-unknown check omits elem))] ...
                         [else (extract rest (cons self _srtta) field ...)]))]
                    [(or field ...) (values (svg-attr (or field defval ...) ...) _srtta)]
                    [else (values #false attrs)])))))]
-    [(_ extract-attr : SVG-Attr #:vector #:with report-unknown (svg-attr [field : [XML-Type field-idx false] xml-attribute-value->datum defval ...] ...))
+    [(_ extract-attr : SVG-Attr #:vector #:with report-unknown (svg-attr [field : [XML-Type field-idx false] xml-attribute-value->datum check defval ...] ...))
      (syntax/loc stx
        (define extract-attr : (->* ((Listof XML-Element-Attribute*)) ((Listof Symbol) (Option XML:Name)) (Values (Option SVG-Attr) (Listof XML-Element-Attribute*)))
          (lambda [attrs [omits null] [elem #false]]
@@ -326,29 +330,29 @@
                (cond [(pair? _attrs)
                       (let*-values ([(self rest) (values (car _attrs) (cdr _attrs))])
                         (case (xml:name-datum (car self))
-                          [(field) (vector-set! avec field-idx (xml-attribute->datum/safe self xml-attribute-value->datum #false report-unknown omits elem))
+                          [(field) (vector-set! avec field-idx (xml-attribute->datum/safe self xml-attribute-value->datum #false report-unknown check omits elem))
                                    (extract rest _srtta (or collected? (vector-ref avec field-idx)))] ...
                           [else (extract rest (cons self _srtta) collected?)]))]
                      [(not collected?) (values #false attrs)]
                      [else (values (svg-attr (or (vector-ref avec field-idx) defval ...) ...) _srtta)]))))))]
-    [(_ extract-attr : SVG-Attr #:hash #:with report-unknown (svg-attr [field : [XML-Type field-idx false] xml-attribute-value->datum defval ...] ...))
+    [(_ extract-attr : SVG-Attr #:hash #:with report-unknown (svg-attr [field : [XML-Type field-idx false] xml-attribute-value->datum check defval ...] ...))
      (syntax/loc stx
        (define extract-attr : (->* ((Listof XML-Element-Attribute*)) ((Listof Symbol) (Option XML:Name))
                                    (Values (Option SVG-Attr) (Listof XML-Element-Attribute*)))
          (lambda [attrs [omits null] [elem #false]]
            (let-values ([(adict _srtta) (xml-attributes*-extract attrs '(field ...) report-unknown omits elem)])
              (cond [(hash-empty? adict) (values #false attrs)]
-                   [else (let ([->f (λ [] #false)])
-                           (values (svg-attr (xml-attribute->datum/safe (hash-ref adict 'field ->f) xml-attribute-value->datum (or defval ...) report-unknown)
-                                             ...)
-                                   _srtta))])))))]))
+                   [else (values (svg-attr (xml-attribute->datum/safe (hash-ref adict 'field λfalse) xml-attribute-value->datum (or defval ...) report-unknown check)
+                                           ...)
+                                 _srtta)])))))]))
 
 (define-syntax (define-xml-attribute stx)
   (syntax-parse stx #:literals [:]
     [(_ attr : Attr #:-> super #:with extract-attr attr->xexpr
         ([field : FieldType
                 (~optional (~seq #:= defval ...) #:defaults ([(defval 1) null]))
-                (~seq #:<-> xml->datum (~optional datum->xml #:defaults ([datum->xml #'xml-attribute-datum->value])))] ...)
+                (~seq #:<-> xml->datum (~optional datum->xml #:defaults ([datum->xml #'xml-attribute-datum->value])))
+                (~optional (~seq #:check check) #:defaults ([check #'#false]))] ...)
         #:report-unknown report-unknown options ...)
      (with-syntax* ([make-attr (format-id #'attr "make-~a" (syntax-e #'attr))]
                     [remake-attr (format-id #'attr "remake-~a" (syntax-e #'attr))]
@@ -368,7 +372,7 @@
                   #:type-name Attr #:transparent
                   #:property prop:custom-write
                   (λ [[self : Attr] [/dev/stdout : Output-Port] [mode : (U Zero One Boolean)]]
-                    (xml-attributes-write 'attr /dev/stdout mode (list 'field ...) (list (field-ref self) ...)))
+                    (xml-attributes-custom-write 'attr /dev/stdout mode (list 'field ...) (list (field-ref self) ...)))
                   options ...)
 
                 (define (make-attr kw-args ...) : Attr
@@ -378,7 +382,7 @@
                   (attr field ...))
 
                 (define-xml-attribute-extract extract-attr : Attr switch #:with report-unknown
-                  (attr [field : [FieldType field-idx #false] xml->datum defval ...] ...))
+                  (attr [field : [FieldType field-idx #false] xml->datum check defval ...] ...))
 
                 (define (attr->xexpr [self : Attr]) : (Listof (Pairof Symbol String))
                   (dom-attribute-list [field (field-ref self) #:~> datum->xml] ...))
@@ -431,38 +435,27 @@
 
 (define xml-attribute->datum/safe : (All (a b) (->* ((Option XML-Element-Attribute*)
                                                      (-> XML-Element-Attribute-Value* a) b
-                                                     (-> (Option XML:Name) (Listof XML-Element-Attribute*) Void))
+                                                     (-> (Option XML:Name) (Listof XML-Element-Attribute*) Void)
+                                                     (Option (-> XML-Element-Attribute-Value* a Boolean)))
                                                     ((Listof Symbol) (Option XML:Name))
                                                     (U a b)))
-  (lambda [attr value->datum defvalue report-unknown [omits null] [elem #false]]
-    (cond [(not attr) defvalue]
-          [(null? omits) (value->datum (cdr attr))]
-          [(xml:name=<-? (car attr) omits) (report-unknown elem (list attr)) defvalue]
-          [else (value->datum (cdr attr))])))
+  (lambda [attr value->datum fallback report-unknown [check #false] [omits null] [elem #false]]
+    (cond [(not attr) fallback]
+          [(null? omits) (xml-attribute-check-datum (cdr attr) value->datum check fallback)]
+          [(xml:name=<-? (car attr) omits) (report-unknown elem (list attr)) fallback]
+          [else (xml-attribute-check-datum (cdr attr) value->datum check fallback)])))
+
+(define xml-attribute-check-datum : (All (a b) (-> XML-Element-Attribute-Value* (-> XML-Element-Attribute-Value* a)
+                                                   (Option (-> XML-Element-Attribute-Value* a Boolean)) b
+                                                   (U a b)))
+  (lambda [value value->datum check fallback]
+    (let ([datum (value->datum value)])
+      (cond [(not check) datum]
+            [(check value datum) datum]
+            [else fallback]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-element->bytes : (All (s) (-> s Symbol (-> s (Listof (Pairof Symbol String))) Bytes))
-  (lambda [self mime flatten-attributes]
-    (define /dev/svgout (open-output-bytes '/dev/svgout))
-
-    (write-char #\< /dev/svgout)
-    (write (object-name self) /dev/svgout)
-
-    (for ([attr (in-list (flatten-attributes self))])
-      (write-char #\space /dev/svgout)
-      (write (car attr) /dev/svgout)
-      (write-char #\= /dev/svgout)
-      (write-char #\" /dev/svgout)
-      (write-string (cdr attr) /dev/svgout)
-      (write-char #\" /dev/svgout))
-
-    (write-char #\/ /dev/svgout)
-    (write-char #\> /dev/svgout)
-
-    (get-output-bytes /dev/svgout #true)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-element-write : (-> Symbol Output-Port (U Zero One Boolean) (Pairof Symbol (Listof Symbol)) (Pairof Any (Listof Any)) (Listof Any) Void)
+(define xml-element-custom-write : (-> Symbol Output-Port (U Zero One Boolean) (Pairof Symbol (Listof Symbol)) (Pairof Any (Listof Any)) (Listof Any) Void)
   (lambda [id /dev/stdout mode fields all-data body-data]
     (define write-datum : (-> Any Output-Port Void) (stdio-select-writer mode))
     (define-values (line column pos) (port-next-location /dev/stdout))
@@ -496,7 +489,7 @@
     (write-string indent /dev/stdout 0 (or column 1))
     (flush-output /dev/stdout)))
 
-(define xml-attributes-write : (-> Symbol Output-Port (U Zero One Boolean) (Listof Symbol) (Listof Any) Void)
+(define xml-attributes-custom-write : (-> Symbol Output-Port (U Zero One Boolean) (Listof Symbol) (Listof Any) Void)
   (lambda [id /dev/stdout mode fields all-data]
     (define write-datum : (-> Any Output-Port Void) (stdio-select-writer mode))
     (define data : (Listof (Pairof Symbol Any))

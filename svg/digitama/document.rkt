@@ -2,13 +2,12 @@
 
 (provide (all-defined-out))
 
-(require typed/file/convertible)
-
 (require sgml/digitama/stdin)
 (require sgml/digitama/doctype)
 (require sgml/digitama/document)
 (require sgml/digitama/digicore)
 (require sgml/digitama/dialect)
+(require sgml/digitama/convert)
 
 (require "grammar.rkt")
 
@@ -22,7 +21,7 @@
   #:property prop:convertible
   (λ [[self : SVG] [mime : Symbol] [fallback : Any]] : Any
     (case mime
-      [(svg-bytes) (xml-element->bytes (svg-root self) mime svg:svg-flatten-attributes)]
+      [(svg-bytes) (xml-element->bytes (svg-root self) svg:svg-flatten-attributes)]
       [else fallback])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
