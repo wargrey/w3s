@@ -24,11 +24,11 @@
   #:where
   [(define (css-hex-color->rgba [color-value : CSS:Hash]) : (CSS-Option Hexa)
      (define-values (rgb a)
-       (cond [(or no-alpha?) (values (css-#hex-color->rgb (css:hash-datum color-value)) 1.0)]
+       (cond [(or no-alpha?) (values (css-#hex-color->rgb (css:hash-datum color-value)) #xFF)]
              [else (css-#hex-color->rgba (css:hash-datum color-value))]))
      (cond [(not rgb) #false]
            [(symbol? rgb) (make-exn:css:digit color-value)]
-           [else (hexa rgb a)]))])
+           [else (hexa rgb (/ (exact->inexact a) 255.0))]))])
 
 (define-css-function-filter <css-color-notation> #:-> FlColor
   ;;; https://drafts.csswg.org/css-color/#rgb-functions

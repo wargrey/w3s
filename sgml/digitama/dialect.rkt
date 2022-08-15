@@ -90,7 +90,7 @@
                    #:defaults ([(excfield-name 1) null]))
         ([field : FieldType
                 (~optional (~seq #:= defval ...) #:defaults ([(defval 1) null]))
-                (~seq #:<-> xml->datum (~optional datum->xml #:defaults ([datum->xml #'xml-attribute-datum->value])))
+                (~seq #:<-> xml->datum (~optional datum->xml #:defaults ([datum->xml #'xml:attr-datum->value])))
                 (~optional (~seq #:check check) #:defaults ([check #'#false]))] ...)
         (~optional (~seq #:extra ([efield : EFieldType edefval ...] ...))
                    #:defaults ([(efield 1) null] [(EFieldType 1) null] [(edefval 2) null]))
@@ -167,7 +167,7 @@
                    #:defaults ([(attrib 1) null] [(Attrib 1) null] [(extract-attrib 1) null] [(attrib->xexpr 1) null]))
         ([mfield : MFieldType
                  (~optional (~seq #:= mdefval ...) #:defaults ([(mdefval 1) null]))
-                 (~seq #:<-> xml->mdatum (~optional mdatum->xml #:defaults ([mdatum->xml #'xml-attribute-datum->value])))
+                 (~seq #:<-> xml->mdatum (~optional mdatum->xml #:defaults ([mdatum->xml #'xml:attr-datum->value])))
                  (~optional (~seq #:check check) #:defaults ([check #'#false]))] ...)
         (~optional (~seq #:subdom [(deftree subsubdom : SubsubDOM subsubrest ...) ...])
                    #:defaults ([(deftree 1) null] [(subsubdom 1) null] [(SubsubDOM 1) null] [(subsubrest 2) null]))
@@ -304,7 +304,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-syntax (define-xml-attribute-extract stx)
   (syntax-parse stx #:literals [:]
-    [(_ extract-attr : SVG-Attr #:inline #:with report-unknown (svg-attr [field : [XML-Type field-idx false] xml-attribute-value->datum check defval ...] ...))
+    [(_ extract-attr : SVG-Attr #:inline #:with report-unknown (svg-attr [field : [XML-Type field-idx false] xml-attr-value->datum check defval ...] ...))
      (syntax/loc stx
        (define extract-attr : (->* ((Listof XML-Element-Attribute*)) ((Listof Symbol) (Option XML:Name)) (Values (Option SVG-Attr) (Listof XML-Element-Attribute*)))
          (lambda [attrs [omits null] [elem #false]]
@@ -315,11 +315,11 @@
                     (let*-values ([(self rest) (values (car _attrs) (cdr _attrs))])
                       (case (xml:name-datum (car self))
                         [(field) (with-a-field-replaced (extract rest _srtta #:fields (field ...))
-                                   #:for field #:set (xml-attribute->datum/safe self xml-attribute-value->datum #false report-unknown check omits elem))] ...
+                                   #:for field #:set (xml-attribute->datum/safe self xml-attr-value->datum #false report-unknown check omits elem))] ...
                         [else (extract rest (cons self _srtta) field ...)]))]
                    [(or field ...) (values (svg-attr (or field defval ...) ...) _srtta)]
                    [else (values #false attrs)])))))]
-    [(_ extract-attr : SVG-Attr #:vector #:with report-unknown (svg-attr [field : [XML-Type field-idx false] xml-attribute-value->datum check defval ...] ...))
+    [(_ extract-attr : SVG-Attr #:vector #:with report-unknown (svg-attr [field : [XML-Type field-idx false] xml-attr-value->datum check defval ...] ...))
      (syntax/loc stx
        (define extract-attr : (->* ((Listof XML-Element-Attribute*)) ((Listof Symbol) (Option XML:Name)) (Values (Option SVG-Attr) (Listof XML-Element-Attribute*)))
          (lambda [attrs [omits null] [elem #false]]
@@ -330,19 +330,19 @@
                (cond [(pair? _attrs)
                       (let*-values ([(self rest) (values (car _attrs) (cdr _attrs))])
                         (case (xml:name-datum (car self))
-                          [(field) (vector-set! avec field-idx (xml-attribute->datum/safe self xml-attribute-value->datum #false report-unknown check omits elem))
+                          [(field) (vector-set! avec field-idx (xml-attribute->datum/safe self xml-attr-value->datum #false report-unknown check omits elem))
                                    (extract rest _srtta (or collected? (vector-ref avec field-idx)))] ...
                           [else (extract rest (cons self _srtta) collected?)]))]
                      [(not collected?) (values #false attrs)]
                      [else (values (svg-attr (or (vector-ref avec field-idx) defval ...) ...) _srtta)]))))))]
-    [(_ extract-attr : SVG-Attr #:hash #:with report-unknown (svg-attr [field : [XML-Type field-idx false] xml-attribute-value->datum check defval ...] ...))
+    [(_ extract-attr : SVG-Attr #:hash #:with report-unknown (svg-attr [field : [XML-Type field-idx false] xml-attr-value->datum check defval ...] ...))
      (syntax/loc stx
        (define extract-attr : (->* ((Listof XML-Element-Attribute*)) ((Listof Symbol) (Option XML:Name))
                                    (Values (Option SVG-Attr) (Listof XML-Element-Attribute*)))
          (lambda [attrs [omits null] [elem #false]]
            (let-values ([(adict _srtta) (xml-attributes*-extract attrs '(field ...) report-unknown omits elem)])
              (cond [(hash-empty? adict) (values #false attrs)]
-                   [else (values (svg-attr (xml-attribute->datum/safe (hash-ref adict 'field λfalse) xml-attribute-value->datum (or defval ...) report-unknown check)
+                   [else (values (svg-attr (xml-attribute->datum/safe (hash-ref adict 'field λfalse) xml-attr-value->datum (or defval ...) report-unknown check)
                                            ...)
                                  _srtta)])))))]))
 
@@ -351,7 +351,7 @@
     [(_ attr : Attr #:-> super #:with extract-attr attr->xexpr
         ([field : FieldType
                 (~optional (~seq #:= defval ...) #:defaults ([(defval 1) null]))
-                (~seq #:<-> xml->datum (~optional datum->xml #:defaults ([datum->xml #'xml-attribute-datum->value])))
+                (~seq #:<-> xml->datum (~optional datum->xml #:defaults ([datum->xml #'xml:attr-datum->value])))
                 (~optional (~seq #:check check) #:defaults ([check #'#false]))] ...)
         #:report-unknown report-unknown options ...)
      (with-syntax* ([make-attr (format-id #'attr "make-~a" (syntax-e #'attr))]

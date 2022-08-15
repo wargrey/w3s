@@ -2,7 +2,12 @@
 
 (provide (all-defined-out))
 
+(require bitmap/color)
+(require bitmap/digitama/color)
+
 (require racket/math)
+(require racket/symbol)
+(require racket/string)
 
 (require digimon/syntax)
 (require digimon/dimension)
@@ -38,29 +43,32 @@
                 ; SVG's units are subsets of CSS's, but client-code shouldn't be bothered by that,
                 ; so here we only report errors, leaving errors to the renderer, which might deal
                 ; with them in a more intelligent way.    
-                (define svg:dim-check : (All (a) (-> XML-Element-Attribute-Value* (Pairof (∩ a Flonum) Symbol) Boolean))
+                (define svg:dim-check : (All (a) (-> XML-Element-Attribute-Value* (Option (Pairof a Symbol)) Boolean))
                   (lambda [value datum]
-                    (let-values ([(n u) (values (car datum) (cdr datum))])
-                      (when (nan? n) (make+exn:svg:range value))
-                      (case u [(suffix) (void)] ... [else (unless (memq u dim-units) (make+exn:svg:unit value))]))
+                    (cond [(not datum) (make+exn:svg:range value)]
+                          [else (let ([u (cdr datum)])
+                                  (case (cdr datum)
+                                    [(suffix) (void)] ...
+                                    [else (unless (memq u dim-units)
+                                            (make+exn:svg:unit value))]))])
                     #true))
 
-                (define svg:attr-value*+>dim : (-> XML-Element-Attribute-Value* (Pairof Nonnegative-Flonum Symbol))
+                (define svg:attr-value*+>dim : (-> XML-Element-Attribute-Value* (Option (Pairof Nonnegative-Flonum Symbol)))
                   (lambda [value]
-                    (define dim (xml-attribute-value*+>dimension value 'canonical-unit))
+                    (define dim (xml:attr-value*+>dimension value 'canonical-unit))
                     (svg:dim-check value dim)
                     dim))
 
-                (define svg:attr-value*->dim : (-> XML-Element-Attribute-Value* (Pairof Flonum Symbol))
+                (define svg:attr-value*->dim : (-> XML-Element-Attribute-Value* (Option (Pairof Flonum Symbol)))
                   (lambda [value]
-                    (define dim (xml-attribute-value*->dimension value 'canonical-unit))
+                    (define dim (xml:attr-value*->dimension value 'canonical-unit))
                     (svg:dim-check value dim)
                     dim))
 
                 (define svg:attr-dim->value : (-> (Pairof Real Symbol) String)
                   (lambda [datum]
                     (define-values (n u) (values (real->double-flonum (car datum)) (cdr datum)))
-                    (xml-attribute-dimension->value
+                    (xml:attr-dimension->value
                      (cond [(eq? u 'suffix) (cons (car datum) u)] ...
                            [(memq u dim-units) (cons n u)]
                            [else (cons (dim n u env ...) 'canonical-unit)])))))))]))
@@ -72,7 +80,7 @@
        (syntax/loc stx
          (begin (define nmame->value : (-> XML-Element-Attribute-Value* (Listof Type))
                   (lambda [v]
-                    (xml-attribute-value*->type-list attr->datum #px"\\s*,\\s*")))
+                    (xml:attr-value*->type-list attr->datum #px"\\s*,\\s*")))
                 ...)))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -81,41 +89,94 @@
 (define-svg-dimension dim:length    [px em ex in cm mm pt pc] [%] #:with [css-dimenv] #:alias [coordinate])
 (define-svg-dimension dim:time      [s ms])
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; NOTE
+; Normalizing the attributes' values require DTD or other schema,
+; These APIs are designed to manually normalizing,
+; Thus, the input tokens are usually XML:String instances.
+
+(define svg:attr-value*->color : (-> XML-Element-Attribute-Value* (Option FlColor))
+  (lambda [v]
+    (cond [(xml:string? v) (svg-parse-color v (string-trim (xml:string-datum v)))]
+          [(xml:name? v) (svg-parse-color v (symbol->immutable-string (xml:name-datum v)))]
+          [(list? v) (svg-parse-color v (string-join (for/list : (Listof String) ([deadcode (in-list v)])
+                                                       (symbol->immutable-string (xml:name-datum deadcode)))))]
+          [else #false])))
+
 (define svg:attr-value*->integer : (-> XML-Element-Attribute-Value* (Option Integer))
   (lambda [v]
-    (define i (xml-attribute-value*->integer v))
+    (define i (xml:attr-value*->integer v))
 
     (when (not i) (make+exn:svg:range v))
     i))
 
 (define svg:attr-value*->number : (-> XML-Element-Attribute-Value* (Option Real))
   (lambda [v]
-    (define i (xml-attribute-value*->number v))
+    (define i (xml:attr-value*->number v))
 
     (when (not i) (make+exn:svg:range v))
     i))
 
 (define svg:attr-value*->name : (-> XML-Element-Attribute-Value* (Option Symbol))
   (lambda [v]
-    (define s (xml-attribute-value*->string v))
+    (define s (xml:attr-value*->string v))
 
     (cond [(regexp-match? #px"[,()]|\\s" s) (make+exn:svg:range v) #false]
           [else (string->symbol s)])))
 
 (define svg:attr-value*->number-pair : (-> XML-Element-Attribute-Value* (U (Pairof Real Real) Real False))
   (lambda [v]
-    (define ns (xml-attribute-value*->type-list v svg:attr-value*->number))
+    (define ns (xml:attr-value*->type-list v svg:attr-value*->number))
 
-    (cond [(null? ns) (make+exn:svg:range v) #false]
+    (cond [(null? ns) (make+exn:svg:malformed v) #false]
           [(null? (cdr ns)) (car ns)]
-          [(pair? (cddr ns)) (make+exn:svg:range v) (cons (car ns) (cadr ns))]
+          [(pair? (cddr ns)) (make+exn:svg:malformed v) (cons (car ns) (cadr ns))]
           [else (cons (car ns) (cadr ns))])))
 
 (define svg:attr-value*->integer-pair : (-> XML-Element-Attribute-Value* (U (Pairof Integer Integer) Integer False))
   (lambda [v]
-    (define ns (xml-attribute-value*->type-list v svg:attr-value*->integer))
+    (define ns (xml:attr-value*->type-list v svg:attr-value*->integer))
 
-    (cond [(null? ns) (make+exn:svg:range v) #false]
+    (cond [(null? ns) (make+exn:svg:malformed v) #false]
           [(null? (cdr ns)) (car ns)]
-          [(pair? (cddr ns)) (make+exn:svg:range v) (cons (car ns) (cadr ns))]
+          [(pair? (cddr ns)) (make+exn:svg:malformed v) (cons (car ns) (cadr ns))]
           [else (cons (car ns) (cadr ns))])))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define svg-function-take-off : (-> XML-Element-Attribute-Value* String String (Option String))
+  (lambda [token v func-head]
+    (define fh-size (string-length func-head))
+    (define maxsize (- (string-length v) 1))
+    (define minsize (+ fh-size 1))
+
+    (cond [(< (string-length v) minsize) #false]
+          [(and (string-prefix? v func-head) (eq? (string-ref v maxsize) #\))) (substring v fh-size maxsize)]
+          [(regexp-match? #px"\\w+[(][^)]*[)]" v) (make+exn:svg:function token) #false]
+          [else #false])))
+
+(define svg-parse-color : (-> XML-Element-Attribute-Value* String (Option FlColor))
+  (lambda [token v]
+    (cond [(string=? v "") (make+exn:xml:missing-value token) #false]
+          [(eq? (string-ref v 0) #\#)
+           (let ([maybe-rgb (css-#hex-color->rgb (substring v 1))])
+             (cond [(symbol? maybe-rgb) (make+exn:svg:digit token) #false]
+                   [else (and maybe-rgb (hexa maybe-rgb 1.0))]))]
+          [else (let ([func-body (svg-function-take-off token v "rgb(")])
+                  (if (string? func-body)
+                      (let ([cs (string-split (string-trim func-body) #px"\\s*,\\s*")])
+                        (cond [(and (pair? cs) (pair? (cdr cs)) (pair? (cddr cs)) (null? (cdddr cs)))
+                               (let*-values ([(_r _g _b) (values (car cs) (cadr cs) (caddr cs))]
+                                             [(r u) (string->integer-dimension _r)])
+                                 (cond [(and r (or (eq? u '||) (eq? u '%)))
+                                        (let-values ([(g gu) (string->integer-dimension _g)]
+                                                     [(b bu) (string->integer-dimension _b)])
+                                          (cond [(not (and g b)) (make+exn:svg:range token) #false]
+                                                [(not (and (eq? u gu) (eq? u bu))) (make+exn:svg:malformed token) #false]
+                                                [else (let ([denominator (if (eq? u '%) 100.0 255.0)])
+                                                        (rgb (/ (inexact->exact r) denominator)
+                                                             (/ (inexact->exact g) denominator)
+                                                             (/ (inexact->exact b) denominator)))]))]
+                                       [else (make+exn:svg:range token) #false]))]
+                              [else (make+exn:svg:malformed token) #false]))
+                      (or (named-rgba (string->symbol v) 1.0 rgb*)
+                          (named-rgba (string->symbol (string-downcase v)) 1.0 rgb*))))])))
