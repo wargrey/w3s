@@ -31,7 +31,7 @@
        (syntax/loc stx
          (define-xml-attribute svg:attr : SVG:Attr #:-> svg-attribute #:with extract-attr attr->xexpr
            field-defs
-           #:report-unknown svg-report-unrecognized-attributes
+           #:report svg-report-unrecognized-attributes make+exn:svg:range
            options ...)))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

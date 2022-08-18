@@ -25,9 +25,11 @@
 
 (define-syntax (extract-dom-values stx)
   (syntax-case stx [:]
-    [(_ func #:pre-args [pre-argl ...] #:post-args [post-argl ...] #:with attrs omits elem report-unknown #:fields [])
+    [(_ func #:pre-args [pre-argl ...] #:post-args [post-argl ...] #:with attrs omits elem report-unknown report-range-exn #:fields [])
      (syntax/loc stx (func pre-argl ... attrs post-argl ...))]
-    [(_ func #:pre-args [pre-argl ...] #:post-args [post-argl ...] #:with attrs omits elem report-unknown #:fields [[field xml-value->datum check defval ...] ...])
+    [(_ func #:pre-args [pre-argl ...] #:post-args [post-argl ...]
+        #:with attrs omits elem report-unknown report-range-exn
+        #:fields [[field xml-value->datum defval ...] ...])
      (syntax/loc stx
        (let extract ([_attrs : (Listof XML-Element-Attribute*) attrs]
                      [_srtta : (Listof XML-Element-Attribute*) null]
@@ -38,14 +40,15 @@
                  [(field) (with-a-field-replaced (extract tail _srtta #:fields (field ...)) #:for field #:set self)] ...
                  [else (extract tail (cons self _srtta) field ...)]))
              (func pre-argl ...
-                   (xml-attribute->datum/safe field xml-value->datum (or defval ...) report-unknown check omits elem) ... _srtta
+                   (xml-attribute->datum/safe field xml-value->datum (or defval ...) report-range-exn report-unknown omits elem) ...
+                   _srtta
                    post-argl ...))))]))
 
 (define-syntax (extract-dom-datum stx)
   (syntax-case stx [:]
-    [(_ func : DOM-Elem #:pre-args [pre-argl ...] #:post-args [post-argl ...] #:with attrs #:fields [])
+    [(_ func : DOM-Elem #:pre-args [pre-argl ...] #:post-args [post-argl ...] #:with attrs report-range-exn #:fields [])
      (syntax/loc stx (values (func pre-argl ... post-argl ...) attrs))]
-    [(_ func : DOM-Elem #:pre-args [pre-argl ...] #:post-args [post-argl ...] #:with attrs #:fields [[field xml->datum check defval ...] ...])
+    [(_ func : DOM-Elem #:pre-args [pre-argl ...] #:post-args [post-argl ...] #:with attrs report-range-exn #:fields [[field xml->datum defval ...] ...])
      (syntax/loc stx
        (let extract : (Values DOM-Elem (Listof XML-Element-Attribute*)) ([_attrs : (Listof XML-Element-Attribute*) attrs]
                                                                          [_srtta : (Listof XML-Element-Attribute*) null]
@@ -56,8 +59,7 @@
                  [(field) (with-a-field-replaced (extract tail _srtta #:fields (field ...)) #:for field #:set self)] ...
                  [else (extract tail (cons self _srtta) field ...)]))
              (values (func pre-argl ...
-                           (cond [(not field) (or defval ...)]
-                                 [else (xml-attribute-check-datum (cdr field) xml->datum check (or defval ...))]) ...
+                           (xml-attribute->datum/safe field xml->datum (or defval ...) report-range-exn) ...
                            post-argl ...)
                      _srtta))))]))
 
@@ -80,7 +82,7 @@
 (define-syntax (define-dom-element stx)
   (syntax-parse stx #:literals [:]
     [(_ dom-elem : DOM-Elem
-        #:element-interface [refine-element dom-flatten-attributes #:report-unknown report-unknown]
+        #:element-interface [refine-element dom-flatten-attributes #:report report-unknown report-range-exn]
         #:head [super ([hfield : HFieldType [hdefval ...] hfield-ref] ...)
                       #:with header-values header->xexpr #:-> DOM-Element]
         #:body [([bfield : BFieldType [bdefval ...]] ...) #:values body-values]
@@ -90,8 +92,7 @@
                    #:defaults ([(excfield-name 1) null]))
         ([field : FieldType
                 (~optional (~seq #:= defval ...) #:defaults ([(defval 1) null]))
-                (~seq #:<-> xml->datum (~optional datum->xml #:defaults ([datum->xml #'xml:attr-datum->value])))
-                (~optional (~seq #:check check) #:defaults ([check #'#false]))] ...)
+                (~seq #:<-> xml->datum (~optional datum->xml #:defaults ([datum->xml #'xml:attr-datum->value])))] ...)
         (~optional (~seq #:extra ([efield : EFieldType edefval ...] ...))
                    #:defaults ([(efield 1) null] [(EFieldType 1) null] [(edefval 2) null]))
         options ...)
@@ -149,7 +150,8 @@
                       (extract-dom-datum dom-elem : DOM-Elem
                                          #:pre-args [hfield ... attrib ...]
                                          #:post-args [bfield ... efield ...]
-                                         #:with rest #:fields [[field xml->datum check defval ...] ...]))
+                                         #:with rest report-range-exn
+                                         #:fields [[field xml->datum defval ...] ...]))
                     (when (pair? unknowns) (report-unknown (car xml.dom) unknowns))
                     self))
 
@@ -160,15 +162,14 @@
 (define-syntax (define-xml-subdom stx)
   (syntax-parse stx #:literals [:]
     [(_ subdom : SubDOM
-        #:subdom-interface [refine flattern-attributes #:report-unknown report-unknown]
+        #:subdom-interface [refine flattern-attributes #:report report-unknown report-range-exn]
         #:head [super ([hfield : HFieldType [hdefval ...] hfield-ref] ...) #:with header-values header->xexpr #:-> DOM-Element]
         #:body [([bfield : BFieldType [bdefval ...]] ...) #:values extract-body]
         (~optional (~seq #:attribute-categories [[attrib : Attrib extract-attrib attrib->xexpr] ...])
                    #:defaults ([(attrib 1) null] [(Attrib 1) null] [(extract-attrib 1) null] [(attrib->xexpr 1) null]))
         ([mfield : MFieldType
                  (~optional (~seq #:= mdefval ...) #:defaults ([(mdefval 1) null]))
-                 (~seq #:<-> xml->mdatum (~optional mdatum->xml #:defaults ([mdatum->xml #'xml:attr-datum->value])))
-                 (~optional (~seq #:check check) #:defaults ([check #'#false]))] ...)
+                 (~seq #:<-> xml->mdatum (~optional mdatum->xml #:defaults ([mdatum->xml #'xml:attr-datum->value])))] ...)
         (~optional (~seq #:subdom [(deftree subsubdom : SubsubDOM subsubrest ...) ...])
                    #:defaults ([(deftree 1) null] [(subsubdom 1) null] [(SubsubDOM 1) null] [(subsubrest 2) null]))
         (defdom [dom-elem dom-tagname] : DOM-Elem #:with dom-flatten-attributes dom-elem-rest ...) ...)
@@ -201,15 +202,15 @@
                   : (Values HFieldType ... (Option Attrib) ... MFieldType ... (Listof XML-Element-Attribute*))
                   (let*-values ([(hfield ... tail) (header-values attrs omits elem)]
                                 [(attrib tail) (extract-attrib tail omits elem)] ...)
-                    (extract-dom-values values #:pre-args [hfield ... attrib ...] #:post-args [] #:with tail omits elem report-unknown
-                                        #:fields [[mfield xml->mdatum check mdefval ...] ...])))
+                    (extract-dom-values values #:pre-args [hfield ... attrib ...] #:post-args [] #:with tail omits elem report-unknown report-range-exn
+                                        #:fields [[mfield xml->mdatum mdefval ...] ...])))
 
                 (define (header->xml-attributes [self : SubDOM]) : (Listof (Pairof Symbol String))
                   (append (dom-attribute-list (header->xexpr self) [(afield-ref self) #:=> attrib->xexpr] ...)
                           (dom-attribute-list [mfield (mfield-ref self) #:~> mdatum->xml] ...)))
 
                 (deftree subsubdom : SubsubDOM
-                  #:subdom-interface [subdom-refine subdom-flatten #:report-unknown report-unknown]
+                  #:subdom-interface [subdom-refine subdom-flatten #:report report-unknown report-range-exn]
                   #:head [subdom ([hfield : HFieldType [hdefval ...] hfield-ref] ...
                                   [attrib : (Option Attrib) [#false] afield-ref] ...
                                   [mfield : MFieldType [mdefval ...] mfield-ref] ...)
@@ -218,7 +219,7 @@
                   subsubrest ...) ...
 
                 (defdom dom-elem : DOM-Elem
-                  #:element-interface [refine-elem dom-flatten-attributes #:report-unknown report-unknown]
+                  #:element-interface [refine-elem dom-flatten-attributes #:report report-unknown report-range-exn]
                   #:head [subdom ([hfield : HFieldType [hdefval ...] hfield-ref] ...
                                   [attrib : (Option Attrib) [#false] afield-ref] ...
                                   [mfield : MFieldType [mdefval ...] mfield-ref] ...)
@@ -229,7 +230,7 @@
 (define-syntax (define-xml-dom stx)
   (syntax-parse stx #:literals [:]
     [(_ dom-element : DOM-Element
-        #:dom-interface [[header-extract head->xexpr] refine flatten-attributes report-unknown body-extract]
+        #:dom-interface [[header-extract head->xexpr] refine flatten-attributes report-unknown report-range-exn body-extract]
         ([hfield : HFieldType hdefval ...] ...) ([bfield : BFieldType bdefval ...] ...)
         #:unknown [dom-unknown : DOM-Unknown #:refine refine-unknown]
         (~optional (~seq #:subdom [(deftree subdom : SubDOM subrest ...) ...])
@@ -288,14 +289,14 @@
                     (head->xexpr (hfield-ref self) ...)))
 
                 (deftree subdom : SubDOM
-                  #:subdom-interface [subdom-refine subdom-flatten #:report-unknown report-unknown]
+                  #:subdom-interface [subdom-refine subdom-flatten #:report report-unknown report-range-exn]
                   #:head [dom-element ([hfield : HFieldType [hdefval ...] hfield-ref] ...)
                                       #:with extract-header header->xml-attributes #:-> DOM-Element]
                   #:body [([bfield : BFieldType [bdefval ...]] ...) #:values body-extract]
                   subrest ...) ...
                 
                 (defelem dom-elem : DOM-Elem
-                  #:element-interface [refine-elem dom-flatten-attributes #:report-unknown report-unknown]
+                  #:element-interface [refine-elem dom-flatten-attributes #:report report-unknown report-range-exn]
                   #:head [dom-element ([hfield : HFieldType [hdefval ...] hfield-ref] ...)
                                       #:with extract-header header->xml-attributes #:-> DOM-Element]
                   #:body [([bfield : BFieldType [bdefval ...]] ...) #:values body-extract]
@@ -304,7 +305,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-syntax (define-xml-attribute-extract stx)
   (syntax-parse stx #:literals [:]
-    [(_ extract-attr : SVG-Attr #:inline #:with report-unknown (svg-attr [field : [XML-Type field-idx false] xml-attr-value->datum check defval ...] ...))
+    [(_ extract-attr : SVG-Attr #:inline #:with report-unknown report-range-exn
+        (svg-attr [field : [XML-Type field-idx false] xml-attr-value->datum defval ...] ...))
      (syntax/loc stx
        (define extract-attr : (->* ((Listof XML-Element-Attribute*)) ((Listof Symbol) (Option XML:Name)) (Values (Option SVG-Attr) (Listof XML-Element-Attribute*)))
          (lambda [attrs [omits null] [elem #false]]
@@ -314,12 +316,15 @@
              (cond [(pair? _attrs)
                     (let*-values ([(self rest) (values (car _attrs) (cdr _attrs))])
                       (case (xml:name-datum (car self))
-                        [(field) (with-a-field-replaced (extract rest _srtta #:fields (field ...))
-                                   #:for field #:set (xml-attribute->datum/safe self xml-attr-value->datum #false report-unknown check omits elem))] ...
+                        [(field)
+                         (with-a-field-replaced (extract rest _srtta #:fields (field ...))
+                           #:for field #:set (xml-attribute->datum/safe self xml-attr-value->datum #false
+                                                                        report-range-exn report-unknown omits elem))] ...
                         [else (extract rest (cons self _srtta) field ...)]))]
                    [(or field ...) (values (svg-attr (or field defval ...) ...) _srtta)]
                    [else (values #false attrs)])))))]
-    [(_ extract-attr : SVG-Attr #:vector #:with report-unknown (svg-attr [field : [XML-Type field-idx false] xml-attr-value->datum check defval ...] ...))
+    [(_ extract-attr : SVG-Attr #:vector #:with report-unknown report-range-exn
+        (svg-attr [field : [XML-Type field-idx false] xml-attr-value->datum defval ...] ...))
      (syntax/loc stx
        (define extract-attr : (->* ((Listof XML-Element-Attribute*)) ((Listof Symbol) (Option XML:Name)) (Values (Option SVG-Attr) (Listof XML-Element-Attribute*)))
          (lambda [attrs [omits null] [elem #false]]
@@ -330,19 +335,23 @@
                (cond [(pair? _attrs)
                       (let*-values ([(self rest) (values (car _attrs) (cdr _attrs))])
                         (case (xml:name-datum (car self))
-                          [(field) (vector-set! avec field-idx (xml-attribute->datum/safe self xml-attr-value->datum #false report-unknown check omits elem))
+                          [(field) (vector-set! avec field-idx
+                                                (xml-attribute->datum/safe self xml-attr-value->datum #false
+                                                                           report-range-exn report-unknown omits elem))
                                    (extract rest _srtta (or collected? (vector-ref avec field-idx)))] ...
                           [else (extract rest (cons self _srtta) collected?)]))]
                      [(not collected?) (values #false attrs)]
                      [else (values (svg-attr (or (vector-ref avec field-idx) defval ...) ...) _srtta)]))))))]
-    [(_ extract-attr : SVG-Attr #:hash #:with report-unknown (svg-attr [field : [XML-Type field-idx false] xml-attr-value->datum check defval ...] ...))
+    [(_ extract-attr : SVG-Attr #:hash #:with report-unknown report-range-exn
+        (svg-attr [field : [XML-Type field-idx false] xml-attr-value->datum defval ...] ...))
      (syntax/loc stx
        (define extract-attr : (->* ((Listof XML-Element-Attribute*)) ((Listof Symbol) (Option XML:Name))
                                    (Values (Option SVG-Attr) (Listof XML-Element-Attribute*)))
          (lambda [attrs [omits null] [elem #false]]
            (let-values ([(adict _srtta) (xml-attributes*-extract attrs '(field ...) report-unknown omits elem)])
              (cond [(hash-empty? adict) (values #false attrs)]
-                   [else (values (svg-attr (xml-attribute->datum/safe (hash-ref adict 'field λfalse) xml-attr-value->datum (or defval ...) report-unknown check)
+                   [else (values (svg-attr (xml-attribute->datum/safe (hash-ref adict 'field λfalse) xml-attr-value->datum (or defval ...)
+                                                                      report-range-exn report-unknown omits elem)
                                            ...)
                                  _srtta)])))))]))
 
@@ -351,9 +360,9 @@
     [(_ attr : Attr #:-> super #:with extract-attr attr->xexpr
         ([field : FieldType
                 (~optional (~seq #:= defval ...) #:defaults ([(defval 1) null]))
-                (~seq #:<-> xml->datum (~optional datum->xml #:defaults ([datum->xml #'xml:attr-datum->value])))
-                (~optional (~seq #:check check) #:defaults ([check #'#false]))] ...)
-        #:report-unknown report-unknown options ...)
+                (~seq #:<-> xml->datum (~optional datum->xml #:defaults ([datum->xml #'xml:attr-datum->value])))] ...)
+        #:report report-unknown report-range-exn
+        options ...)
      (with-syntax* ([make-attr (format-id #'attr "make-~a" (syntax-e #'attr))]
                     [remake-attr (format-id #'attr "remake-~a" (syntax-e #'attr))]
                     [cascade-attr (format-id #'attr "cascade-~a" (syntax-e #'attr))]
@@ -381,8 +390,8 @@
                 (define (remake-attr [self : Attr] kw-reargs ...) : Attr
                   (attr field ...))
 
-                (define-xml-attribute-extract extract-attr : Attr switch #:with report-unknown
-                  (attr [field : [FieldType field-idx #false] xml->datum check defval ...] ...))
+                (define-xml-attribute-extract extract-attr : Attr switch #:with report-unknown report-range-exn
+                  (attr [field : [FieldType field-idx #false] xml->datum defval ...] ...))
 
                 (define (attr->xexpr [self : Attr]) : (Listof (Pairof Symbol String))
                   (dom-attribute-list [field (field-ref self) #:~> datum->xml] ...))
@@ -434,25 +443,18 @@
                     (symbol->immutable-string (gensym 'id)))])))
 
 (define xml-attribute->datum/safe : (All (a b) (->* ((Option XML-Element-Attribute*)
-                                                     (-> XML-Element-Attribute-Value* a) b
-                                                     (-> (Option XML:Name) (Listof XML-Element-Attribute*) Void)
-                                                     (Option (-> XML-Element-Attribute-Value* a Boolean)))
-                                                    ((Listof Symbol) (Option XML:Name))
+                                                     (-> XML-Element-Attribute-Value* (XML-Option a)) b
+                                                     (Option (->* (XML-Element-Attribute-Value*) ((Option XML-Token) (Option Log-Level)) exn)))
+                                                    ((Option (-> (Option XML:Name) (Listof XML-Element-Attribute*) Void))
+                                                     (Listof Symbol) (Option XML:Name))
                                                     (U a b)))
-  (lambda [attr value->datum fallback report-unknown [check #false] [omits null] [elem #false]]
+  (lambda [attr value->datum fallback report-range-error [report-unknown #false] [omits null] [elem #false]]
     (cond [(not attr) fallback]
-          [(null? omits) (xml-attribute-check-datum (cdr attr) value->datum check fallback)]
-          [(xml:name=<-? (car attr) omits) (report-unknown elem (list attr)) fallback]
-          [else (xml-attribute-check-datum (cdr attr) value->datum check fallback)])))
-
-(define xml-attribute-check-datum : (All (a b) (-> XML-Element-Attribute-Value* (-> XML-Element-Attribute-Value* a)
-                                                   (Option (-> XML-Element-Attribute-Value* a Boolean)) b
-                                                   (U a b)))
-  (lambda [value value->datum check fallback]
-    (let ([datum (value->datum value)])
-      (cond [(not check) datum]
-            [(check value datum) datum]
-            [else fallback]))))
+          [(and report-unknown (pair? omits) (xml:name=<-? (car attr) omits)) (report-unknown elem (list attr)) fallback]
+          [else (let ([datum (value->datum (cdr attr))])
+                  (cond [(not datum) (and report-range-error (report-range-error (cdr attr) elem)) fallback]
+                        [(exn? datum) fallback]
+                        [else datum]))])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-element-custom-write : (-> Symbol Output-Port (U Zero One Boolean) (Pairof Symbol (Listof Symbol)) (Pairof Any (Listof Any)) (Listof Any) Void)

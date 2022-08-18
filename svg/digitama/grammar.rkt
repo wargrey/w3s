@@ -84,7 +84,8 @@
        (syntax/loc stx
          (define-xml-dom svg : SVG
            #:dom-interface [(svg-attributes*-extract-core svg-core->xml-attributes)
-                            refine flatten-attributes svg-report-unrecognized-element/attributes
+                            refine flatten-attributes
+                            svg-report-unrecognized-element/attributes make+exn:svg:range
                             xml-contents*->svg-elements]
            head-defs body-defs
            #:unknown [unknown : Unknown #:refine refine-unknown]

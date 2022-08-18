@@ -24,13 +24,14 @@
     (port-count-lines! /dev/svgin)
     /dev/svgin))
 
-(define tamer-tokens : (All (a) (-> String (-> XML-Element-Attribute-Value* a) (U a Void)))
+(define tamer-tokens : (All (a) (-> String (-> XML-Element-Attribute-Value* (XML-Option a)) (U (XML-Option a) Void)))
   (lambda [src svg:attr-value*->datum]
     (define /dev/svgin (open-tamer-input src))
     (define-values (token evn) (xml-consume-token* /dev/svgin '/dev/svgin #false))
 
     (when (xml:string? token)
-      (svg:attr-value*->datum token))))
+      (or (svg:attr-value*->datum token)
+          (make+exn:svg:range token)))))
 
 (define tamer-datum : (-> Any Any)
   (lambda [c]
@@ -45,7 +46,7 @@
      (syntax/loc stx
        (let ([datum datum-expr])
          (cond [(procedure? expected-datum) (expect-satisfy (cast expected-datum (-> Any Boolean)) datum)]
-               [else (expect-equal datum expected-datum)])))]))
+               [(not expected-datum) (expect-satisfy exn:xml? datum)])))]))
 
 (define-behavior (it-check-parser/error src.svg svg-attr->datum expected-datum logsrc expected-message)
   #:it
@@ -85,8 +86,14 @@
                 (it-check-parser/error "rgb(30%, 100%, 100%, 100%)" svg:attr-value*->color #false logsrc exn:svg:malformed?)
                 (it-check-parser/error "rgb(120, 100%, 100%)" svg:attr-value*->color #false logsrc exn:svg:malformed?))
 
-              (describe "Number Pair" #:do
+              (describe "Number and Optional Number Pair" #:do
                 (it-check-parser "12, 34" svg:attr-value*->integer-pair (cons 12 34))
                 (it-check-parser "56" svg:attr-value*->integer-pair 56)
                 (it-check-parser/error "7, 8, 9" svg:attr-value*->integer-pair (cons 7 8) logsrc exn:svg:malformed?)
-                (it-check-parser/error "1 0" svg:attr-value*->integer-pair #false logsrc exn:svg:malformed?))))
+                (it-check-parser/error "1 0" svg:attr-value*->integer-pair #false logsrc exn:svg:malformed?))
+
+              (describe "Dimension and Coordinate" #:do
+                (it-check-parser "12.56%" svg:attr-value*->dim:length (cons 12.56 '%))
+                (it-check-parser "5em" svg:attr-value*->coordinate (cons 5.0 'em))
+                (it-check-parser/error "1MHz" svg:attr-value*->dim:frequency #false logsrc exn:svg:unit?)
+                (it-check-parser/error "1hz" svg:attr-value*->dim:frequency (cons 1.0 'hz) logsrc exn:svg:unit?))))

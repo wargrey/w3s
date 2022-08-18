@@ -159,9 +159,9 @@
 
     (and n (>= n 0.0) (cons n unit))))
 
-(define xml:attr-value*->type-list : (All (T) (->* (XML-Element-Attribute-Value* (-> XML-Element-Attribute-Value* (Option T)))
-                                                        ((U String Regexp))
-                                                        (Listof T)))
+(define xml:attr-value*->type-list : (All (T) (->* (XML-Element-Attribute-Value* (-> XML-Element-Attribute-Value* (XML-Option T)))
+                                                   ((U String Regexp))
+                                                   (Listof T)))
   (lambda [v ->type-datum [sep #px"\\s*,\\s*"]]
     (cond [(xml:string? v)
            (let parse ([vs : (Listof String) (string-split (xml:string-datum v) sep)]
@@ -170,6 +170,7 @@
                    [else (let*-values ([(self rest) (values (car vs) (cdr vs))]
                                        [(datum) (->type-datum (syn-remake-token v xml:string self))])
                            (cond [(not datum) (parse rest ts)]
+                                 [(exn? datum) (parse rest ts)]
                                  [else (parse rest (cons datum ts))]))]))]
           [(list? v)
            (let parse ([vs : (Listof XML:Name) v]
@@ -178,8 +179,11 @@
                    [else (let*-values ([(self rest) (values (car vs) (cdr vs))]
                                        [(datum) (->type-datum (syn-remake-token self xml:string (symbol->immutable-string (xml:name-datum self))))])
                            (cond [(not datum) (parse rest ts)]
+                                 [(exn? datum) (parse rest ts)]
                                  [else (parse rest (cons datum ts))]))]))]
           [(xml:name? v)
            (let ([datum (->type-datum (syn-remake-token v xml:string (symbol->immutable-string (xml:name-datum v))))])
-             (if (not datum) null (list datum)))]
+             (cond [(not datum) null]
+                   [(exn? datum) null]
+                   [else (list datum)]))]
           [else null])))
