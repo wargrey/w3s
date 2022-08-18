@@ -86,14 +86,28 @@
                 (it-check-parser/error "rgb(30%, 100%, 100%, 100%)" svg:attr-value*->color #false logsrc exn:svg:malformed?)
                 (it-check-parser/error "rgb(120, 100%, 100%)" svg:attr-value*->color #false logsrc exn:svg:malformed?))
 
-              (describe "Number and Optional Number Pair" #:do
+              (describe "ICC Color" #:do
+                (it-check-parser "icc-color(name, 1.0, 1.0, 1.0)" svg:attr-value*->icc-color (svg-icccolor 'name (list 1.0 1.0 1.0)))
+                (it-check-parser/error "icc-color(n(ame), 2, 4, 6)" svg:attr-value*->icc-color #false logsrc exn:svg:malformed?)
+                (it-check-parser/error "icc-color(name, 2 4 6)" svg:attr-value*->icc-color #false logsrc exn:svg:missing-comma?)
+                (it-check-parser/error "icc-color(name)" svg:attr-value*->icc-color #false logsrc exn:svg:malformed?)
+                (it-check-parser/error "icccolor(name, 2)" svg:attr-value*->icc-color #false logsrc exn:svg:function?))
+
+              (describe "List" #:do
                 (it-check-parser "12, 34" svg:attr-value*->integer-pair (cons 12 34))
                 (it-check-parser "56" svg:attr-value*->integer-pair 56)
-                (it-check-parser/error "7, 8, 9" svg:attr-value*->integer-pair (cons 7 8) logsrc exn:svg:malformed?)
-                (it-check-parser/error "1 0" svg:attr-value*->integer-pair #false logsrc exn:svg:malformed?))
+                (it-check-parser/error "7, 8, 9" svg:attr-value*->number-pair (cons 7.0 8.0) logsrc exn:svg:malformed?)
+                (it-check-parser/error "1 0" svg:attr-value*->number-pair #false logsrc exn:svg:missing-comma?)
+                (it-check-parser/error "1em, 2ch, 3.0pt, 4.0in" svg:attr-value*->length-list '((1.0 . em) (2.0 . ch) (3.0 . pt)) logsrc exn:svg:unit?))
 
               (describe "Dimension and Coordinate" #:do
                 (it-check-parser "12.56%" svg:attr-value*->dim:length (cons 12.56 '%))
                 (it-check-parser "5em" svg:attr-value*->coordinate (cons 5.0 'em))
                 (it-check-parser/error "1MHz" svg:attr-value*->dim:frequency #false logsrc exn:svg:unit?)
-                (it-check-parser/error "1hz" svg:attr-value*->dim:frequency (cons 1.0 'hz) logsrc exn:svg:unit?))))
+                (it-check-parser/error "1hz" svg:attr-value*->dim:frequency (cons 1.0 'hz) logsrc exn:svg:unit?))
+
+              (describe "IRI" #:do
+                (it-check-parser "https://gyoudmon.org#svg" svg:attr-value*->IRI "https://gyoudmon.org#svg")
+                (it-check-parser "url(https://gyoudmon.org#svg)" svg:attr-value*->IRI "https://gyoudmon.org#svg")
+                (it-check-parser "#relative" svg:attr-value*->IRI "#relative")
+                (it-check-parser/error "uri(https://gyoudmon.org)" svg:attr-value*->IRI #false logsrc exn:svg:function?))))

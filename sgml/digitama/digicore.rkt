@@ -202,7 +202,8 @@
   [exn:svg:range         #:-> exn:svg:unrecognized]
   [exn:svg:unit          #:-> exn:svg:range]
   [exn:svg:function      #:-> exn:svg:range]
-  [exn:svg:digit         #:-> exn:svg:range])
+  [exn:svg:digit         #:-> exn:svg:range]
+  [exn:svg:missing-comma #:-> exn:svg:malformed])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-token->syntax : (-> XML-Token Syntax)

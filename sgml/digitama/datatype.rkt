@@ -48,12 +48,12 @@
           [(xml:name? v) (symbol->immutable-string (xml:name-datum v))]
           [else (symbol-join (map xml:name-datum v))])))
 
-(define xml:attr-value*->string-list : (->* (XML-Element-Attribute-Value*) ((U String Regexp)) (Listof String))
+(define xml:attr-value*->string-list : (->* (XML-Element-Attribute-Value*) ((U String Regexp)) (Option (Listof String)))
   (lambda [v [sep #px"\\s+"]]
     (cond [(xml:string? v) (string-split (string-trim (xml:string-datum v)) sep)]
           [(list? v) (for/list : (Listof String) ([n (in-list v)]) (symbol->immutable-string (xml:name-datum n)))]
           [(xml:name? v) (list (symbol->immutable-string (xml:name-datum v)))]
-          [else null])))
+          [else #false])))
 
 (define xml:attr-value*->integer : (-> XML-Element-Attribute-Value* (Option Integer))
   (lambda [v]
@@ -103,19 +103,19 @@
           [(xml:name? v) (symbol->unreadable-symbol (xml:name-datum v))]
           [else (string->unreadable-symbol (symbol-join (map xml:name-datum v)))])))
 
-(define xml:attr-value*->symbol-list : (->* (XML-Element-Attribute-Value*) ((U String Regexp)) (Listof Symbol))
+(define xml:attr-value*->symbol-list : (->* (XML-Element-Attribute-Value*) ((U String Regexp)) (Option (Listof Symbol)))
   (lambda [v [sep #px"\\s+"]]
     (cond [(xml:string? v) (map string->symbol (string-split (string-trim (xml:string-datum v)) sep))]
           [(list? v) (map xml:name-datum v)]
           [(xml:name? v) (list (xml:name-datum v))]
-          [else null])))
+          [else #false])))
 
-(define xml:attr-value*->unreadable-symbol-list : (->* (XML-Element-Attribute-Value*) ((U String Regexp)) (Listof Symbol))
+(define xml:attr-value*->unreadable-symbol-list : (->* (XML-Element-Attribute-Value*) ((U String Regexp)) (Option (Listof Symbol)))
   (lambda [v [sep #px"\\s+"]]
     (cond [(xml:string? v) (map string->unreadable-symbol (string-split (xml:string-datum v) sep))]
           [(list? v) (map symbol->unreadable-symbol (map xml:name-datum v))]
           [(xml:name? v) (list (symbol->unreadable-symbol (xml:name-datum v)))]
-          [else null])))
+          [else #false])))
 
 (define xml:attr-value*->keyword : (-> XML-Element-Attribute-Value* Keyword)
   (lambda [v]
@@ -159,31 +159,36 @@
 
     (and n (>= n 0.0) (cons n unit))))
 
-(define xml:attr-value*->type-list : (All (T) (->* (XML-Element-Attribute-Value* (-> XML-Element-Attribute-Value* (XML-Option T)))
+(define xml:attr-value*->type-list : (All (T) (->* (XML-Element-Attribute-Value*
+                                                    (-> XML-Element-Attribute-Value* (XML-Option T))
+                                                    (->* (XML-Element-Attribute-Value*) ((Option XML-Token) (Option Log-Level)) exn))
                                                    ((U String Regexp))
-                                                   (Listof T)))
-  (lambda [v ->type-datum [sep #px"\\s*,\\s*"]]
+                                                   (XML-Option (Listof T))))
+  (lambda [v ->type-datum make-exn:range [sep #px"\\s*,\\s*"]]
     (cond [(xml:string? v)
-           (let parse ([vs : (Listof String) (string-split (xml:string-datum v) sep)]
-                       [ts : (Listof T) null])
-             (cond [(null? vs) (reverse ts)]
-                   [else (let*-values ([(self rest) (values (car vs) (cdr vs))]
-                                       [(datum) (->type-datum (syn-remake-token v xml:string self))])
-                           (cond [(not datum) (parse rest ts)]
-                                 [(exn? datum) (parse rest ts)]
-                                 [else (parse rest (cons datum ts))]))]))]
+           (let ([vs (string-split (xml:string-datum v) sep)])
+             (cond [(and (= (length vs) 1) (regexp-match? sep ",") (not (regexp-match? sep (xml:string-datum v)))) (make+exn:svg:missing-comma v)]
+                   [else (let parse ([vs : (Listof String) vs]
+                                     [ts : (Listof T) null])
+                           (cond [(null? vs) (reverse ts)]
+                                 [else (let*-values ([(self rest) (values (syn-remake-token v xml:string (car vs)) (cdr vs))]
+                                                     [(datum) (->type-datum self)])
+                                         (cond [(not datum) (make-exn:range self) (parse rest ts)]
+                                               [(exn? datum) (parse rest ts)]
+                                               [else (parse rest (cons datum ts))]))]))]))]
           [(list? v)
            (let parse ([vs : (Listof XML:Name) v]
                        [ts : (Listof T) null])
              (cond [(null? vs) (reverse ts)]
                    [else (let*-values ([(self rest) (values (car vs) (cdr vs))]
-                                       [(datum) (->type-datum (syn-remake-token self xml:string (symbol->immutable-string (xml:name-datum self))))])
-                           (cond [(not datum) (parse rest ts)]
+                                       [(self) (syn-remake-token self xml:string (symbol->immutable-string (xml:name-datum self)))]
+                                       [(datum) (->type-datum self)])
+                           (cond [(not datum) (make-exn:range self) (parse rest ts)]
                                  [(exn? datum) (parse rest ts)]
                                  [else (parse rest (cons datum ts))]))]))]
           [(xml:name? v)
            (let ([datum (->type-datum (syn-remake-token v xml:string (symbol->immutable-string (xml:name-datum v))))])
-             (cond [(not datum) null]
-                   [(exn? datum) null]
+             (cond [(not datum) (make-exn:range v) null]
+                   [(exn:xml? datum) null]
                    [else (list datum)]))]
-          [else null])))
+          [else #false])))
