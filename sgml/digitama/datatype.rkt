@@ -35,6 +35,10 @@
     (string-append (number->string (car v))
                    (symbol->immutable-string (cdr v)))))
 
+(define xml:attr-listof-type->value : (All (T) (->* ((Listof T) (-> T String)) (String) String))
+  (lambda [vs ->type-value [sep ", "]]
+    (string-join (map ->type-value vs) sep)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml:attr-value*->string : (-> XML-Element-Attribute-Value* String)
   (lambda [v]
@@ -159,15 +163,17 @@
 
     (and n (>= n 0.0) (cons n unit))))
 
-(define xml:attr-value*->type-list : (All (T) (->* (XML-Element-Attribute-Value*
-                                                    (-> XML-Element-Attribute-Value* (XML-Option T))
-                                                    (->* (XML-Element-Attribute-Value*) ((Option XML-Token) (Option Log-Level)) exn))
-                                                   ((U String Regexp))
-                                                   (XML-Option (Listof T))))
+(define xml:attr-value*->listof-type : (All (T) (->* (XML-Element-Attribute-Value*
+                                                      (-> XML-Element-Attribute-Value* (XML-Option T))
+                                                      (->* (XML-Element-Attribute-Value*) ((Option XML-Token) (Option Log-Level)) exn))
+                                                     ((U String Regexp))
+                                                     (XML-Option (Listof T))))
   (lambda [v ->type-datum make-exn:range [sep #px"\\s*,\\s*"]]
     (cond [(xml:string? v)
            (let ([vs (string-split (xml:string-datum v) sep)])
-             (cond [(and (= (length vs) 1) (regexp-match? sep ",") (not (regexp-match? sep (xml:string-datum v)))) (make+exn:svg:missing-comma v)]
+             (cond [(and (= (length vs) 1) (regexp-match? #px"\\s+" (xml:string-datum v)))
+                    (cond [(regexp-match? sep ",") (make+exn:svg:missing-comma v)]
+                          [else (make+exn:svg:malformed v)])]
                    [else (let parse ([vs : (Listof String) vs]
                                      [ts : (Listof T) null])
                            (cond [(null? vs) (reverse ts)]

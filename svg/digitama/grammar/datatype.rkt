@@ -20,7 +20,11 @@
 (require (for-syntax syntax/parse))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define-type SVG-Paint-Server-Fallback (U SVG:KW:Paint FlColor (Pairof FlColor SVG-ICCColor)))
+(define-type SVG-Paint (U 'inherit SVG-Paint-Server-Fallback SVG-Paint-Server))
+
 (struct svg-icccolor ([name : Symbol] [components : (Pairof Flonum (Listof Flonum))]) #:type-name SVG-ICCColor #:transparent)
+(struct svg-paint-server ([url : String] [fallback : (Option SVG-Paint-Server-Fallback)]) #:type-name SVG-Paint-Server #:transparent)
 
 (define svg-list-separator : Regexp #px"\\s*,\\s*")
 
@@ -76,11 +80,40 @@
 (define-syntax (define-svg-lists stx)
   (syntax-case stx [:]
     [(_ [name : Type attr->datum] ...)
-     (with-syntax* ([(name->value ...) (map-identifiers #'(name ...) "svg:attr-value*->~a-list")])
+     (with-syntax* ([(name->datum-list ...) (map-identifiers #'(name ...) "svg:attr-value*->~a-list")])
        (syntax/loc stx
-         (begin (define nmame->value : (-> XML-Element-Attribute-Value* (XML-Option (Listof Type)))
+         (begin (define name->datum-list : (-> XML-Element-Attribute-Value* (XML-Option (Listof Type)))
                   (lambda [v]
-                    (xml:attr-value*->type-list attr->datum make+exn:svg:range svg-list-separator)))
+                    (define ls : (XML-Option (Listof Type)) (xml:attr-value*->listof-type v attr->datum make+exn:svg:range svg-list-separator))
+
+                    (cond [(not (list? ls)) ls]
+                          [(null? ls) (make+exn:svg:malformed v)]
+                          [else ls])))
+                ...)))]))
+
+(define-syntax (define-svg-keywords stx)
+  (syntax-case stx [:]
+    [(_ [name : ID [default keywords ...]] ...)
+     (with-syntax* ([(ids ...) (map-identifiers #'(name ...) "svg:kw:~as")]
+                    [(id? ...) (map-identifiers #'(name ...) "svg:kw:~a?")]
+                    [(Type ...) (map-identifiers #'(ID ...) "SVG:KW:~a")]
+                    [(name->value ...) (map-identifiers #'(name ...) "svg:attr-value*->kw:~a")])
+       (syntax/loc stx
+         (begin (define-type Type (U 'default 'keywords ...)) ...
+
+                (define ids : (Pairof Type (Listof Type)) (list 'default 'keywords ...)) ...
+
+                (define id? : (-> Any Boolean : #:+ Type)
+                  (lambda [v]
+                    (or (eq? v 'default)
+                        (eq? v 'keywords) ...)))
+                ...
+                
+                (define name->value : (-> XML-Element-Attribute-Value* (XML-Option Type))
+                  (lambda [v]
+                    (define kw : Symbol (xml:attr-value*->symbol v))
+
+                    (and (id? kw) kw)))
                 ...)))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -88,6 +121,12 @@
 (define-svg-dimension dim:frequency [Hz kHz])
 (define-svg-dimension dim:length    [px em ex in cm mm pt pc] [%] #:with [css-dimenv] #:alias [coordinate])
 (define-svg-dimension dim:time      [s ms])
+
+(define-svg-lists
+  [length : XML-Dimension svg:attr-value*->dim:length])
+
+(define-svg-keywords
+  [paint : Paint [none currentColor]])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; NOTE
@@ -122,7 +161,7 @@
 
 (define svg:attr-value*->number-pair : (-> XML-Element-Attribute-Value* (XML-Option (U (Pairof Real Real) Real)))
   (lambda [v]
-    (define ns (xml:attr-value*->type-list v xml:attr-value*->number make+exn:svg:range))
+    (define ns (xml:attr-value*->listof-type v xml:attr-value*->number make+exn:svg:range))
 
     (cond [(not (list? ns)) ns]
           [(null? ns) (make+exn:svg:malformed v)]
@@ -132,7 +171,7 @@
 
 (define svg:attr-value*->integer-pair : (-> XML-Element-Attribute-Value* (XML-Option (U (Pairof Integer Integer) Integer)))
   (lambda [v]
-    (define ns (xml:attr-value*->type-list v xml:attr-value*->integer make+exn:svg:range))
+    (define ns (xml:attr-value*->listof-type v xml:attr-value*->integer make+exn:svg:range))
 
     (cond [(not (list? ns)) ns]
           [(null? ns) (make+exn:svg:malformed v)]
@@ -140,29 +179,36 @@
           [(pair? (cddr ns)) (make+exn:svg:malformed v) (cons (car ns) (cadr ns))]
           [else (cons (car ns) (cadr ns))])))
 
-(define svg:attr-value*->length-list : (-> XML-Element-Attribute-Value* (XML-Option (Listof (Pairof Flonum Symbol))))
+(define svg:attr-value*->paint : (-> XML-Element-Attribute-Value* (XML-Option SVG-Paint))
   (lambda [v]
-    (define ls (xml:attr-value*->type-list v svg:attr-value*->dim:length make+exn:svg:range))
-
-    (cond [(not (list? ls)) ls]
-          [(null? ls) (make+exn:svg:malformed v)]
-          [else ls])))
+    (cond [(xml:string? v) (svg-paint-filter v (string-split (xml:string-datum v)) #true)]
+          [(xml:name? v) (svg-paint-filter v (list (symbol->immutable-string (xml:name-datum v))) #true)]
+          [(pair? v) (svg-paint-filter (car v) (for/list : (Listof String) ([t (in-list v)]) (symbol->immutable-string (xml:name-datum t))) #true)]
+          [else #false])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define svg:attr-iri->value : (-> String String)
   (lambda [url]
     (string-append "url(" url ")")))
 
+(define svg:attr-icc-color->value : (-> SVG-ICCColor String)
+  (lambda [iccc]
+    (string-append "icc-color("
+                   (symbol->immutable-string (svg-icccolor-name iccc))
+                   (string-join (map number->string (svg-icccolor-components iccc)) ", " #:before-first ", ")
+                   ")")))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define svg-function-take-off : (-> XML-Token String String (XML-Option String))
-  (lambda [token v func-head]
+(define svg-function-filter : (case-> [XML-Token String String True -> (XML-Option String)]
+                                      [XML-Token String String False -> (Option String)])
+  (lambda [token v func-head report-function-error?]
     (define fh-size (string-length func-head))
     (define maxsize (- (string-length v) 1))
     (define minsize (+ fh-size 1))
 
     (cond [(< (string-length v) minsize) #false]
           [(and (string-prefix? v func-head) (eq? (string-ref v maxsize) #\))) (substring v fh-size maxsize)]
-          [(regexp-match? #px"\\w+[(][^)]*[)]" v) (make+exn:svg:function token)]
+          [(regexp-match? #px"\\w+[(][^)]*[)]" v) (and report-function-error? (make+exn:svg:function token))]
           [else #false])))
 
 (define svg-color-filter : (-> XML-Token String (XML-Option FlColor))
@@ -171,8 +217,9 @@
           [(eq? (string-ref v 0) #\#)
            (let ([maybe-rgb (css-#hex-color->rgb (substring v 1))])
              (cond [(symbol? maybe-rgb) (make+exn:svg:digit token)]
-                   [else (and maybe-rgb (hexa maybe-rgb 1.0))]))]
-          [else (let ([func-body (svg-function-take-off token v "rgb(")])
+                   [(and maybe-rgb) (hexa maybe-rgb 1.0)]
+                   [else (make+exn:svg:malformed token)]))]
+          [else (let ([func-body (svg-function-filter token v "rgb(" #true)])
                   (cond [(string? func-body)
                          (let ([cs (string-split (string-trim func-body) svg-list-separator)])
                            (cond [(and (pair? cs) (pair? (cdr cs)) (pair? (cddr cs)) (null? (cdddr cs)))
@@ -181,22 +228,22 @@
                                     (cond [(and r (or (eq? u '||) (eq? u '%)))
                                            (let-values ([(g gu) (string->integer-dimension _g)]
                                                         [(b bu) (string->integer-dimension _b)])
-                                             (cond [(not (and g b)) #false]
+                                             (cond [(not (and g b)) (make+exn:svg:range token)]
                                                    [(not (and (eq? u gu) (eq? u bu))) (make+exn:svg:malformed token)]
                                                    [else (let ([denominator (if (eq? u '%) 100.0 255.0)])
                                                            (rgb (/ (inexact->exact r) denominator)
                                                                 (/ (inexact->exact g) denominator)
                                                                 (/ (inexact->exact b) denominator)))]))]
-                                          [else #false]))]
+                                          [else (make+exn:svg:range token)]))]
                                  [(regexp-match? svg-list-separator func-body) (make+exn:svg:malformed token)]
                                  [else (make+exn:svg:missing-comma token)]))]
                         [(exn? func-body) func-body]
-                        [else (or (named-rgba (string->symbol v) 1.0 rgb*)
-                                  (named-rgba (string->symbol (string-downcase v)) 1.0 rgb*))]))])))
+                        [else (or (named-rgba (string->symbol v) 1.0 rgb* #true)
+                                  (named-rgba (string->symbol (string-downcase v)) 1.0 rgb* #true))]))])))
 
 (define svg-icc-color-filter : (-> XML-Token String (XML-Option SVG-ICCColor))
   (lambda [token v]
-    (define icc-body (svg-function-take-off token v "icc-color("))
+    (define icc-body (svg-function-filter token v "icc-color(" #true))
 
     (cond [(string? icc-body)
            (let ([icccs (string-split (string-trim icc-body) svg-list-separator)])
@@ -223,9 +270,54 @@
                    [else (make+exn:svg:missing-comma token)]))]
           [else icc-body])))
 
+(define svg-paint-filter : (-> XML-Token (Listof String) Boolean (XML-Option SVG-Paint))
+  (lambda [token vs allow-inherit?]
+    (cond [(null? vs) (make+exn:svg:malformed token)]
+          [(null? (cdr vs))
+           (let ([maybe-url (svg-function-filter token (car vs) "url(" #false)])
+             (cond [(string? maybe-url) (svg-paint-server maybe-url #false)]
+                   [else (svg-paint-color-filter token (car vs) #true)]))]
+          [(null? (cddr vs))
+           (let ([maybe-url (svg-function-filter token (car vs) "url(" #false)])
+             (cond [(not maybe-url) (svg-paint-profiled-color-filter token (car vs) (cadr vs))]
+                   [else (let ([maybe-fallback (svg-paint-color-filter token (cadr vs) #false)])
+                           (cond [(not maybe-fallback) maybe-fallback]
+                                 [(exn:xml? maybe-fallback) maybe-fallback]
+                                 [else (svg-paint-server maybe-url maybe-fallback)]))]))]
+          [(null? (cdddr vs))
+           (let ([maybe-url (svg-function-filter token (car vs) "url(" #true)]
+                 [maybe-color (svg-paint-profiled-color-filter token (cadr vs) (caddr vs))])
+             (cond [(and (string? maybe-url) (pair? maybe-color)) (svg-paint-server maybe-url maybe-color)]
+                   [(exn:xml? maybe-url) maybe-url]
+                   [(exn:xml? maybe-color) maybe-color]
+                   [else (make+exn:svg:malformed token)]))]
+          [else (make+exn:svg:malformed token)])))
+
+(define svg-paint-color-filter : (case-> [XML-Token String True -> (XML-Option (U SVG-Paint-Server-Fallback 'inherit))]
+                                         [XML-Token String False -> (XML-Option SVG-Paint-Server-Fallback)])
+  (lambda [token v allow-inherit?]
+    (define maybe-color (svg-color-filter token v))
+
+    (cond [(flcolor? maybe-color) maybe-color]
+          [(exn:xml? maybe-color) maybe-color]
+          [else (let ([kw (string->symbol v)])
+                  (cond [(svg:kw:paint? kw) kw]
+                        [(and allow-inherit? (eq? kw 'inherit)) 'inherit]
+                        [else #false]))])))
+
+(define svg-paint-profiled-color-filter : (-> XML-Token String String (XML-Option (Pairof FlColor SVG-ICCColor)))
+  (lambda [token cv pv]
+    (define maybe-color (svg-color-filter token cv))
+    (define maybe-profile (svg-color-filter token pv))
+
+    (cond [(and (flcolor? maybe-color) (svg-icccolor? maybe-profile)) (cons maybe-color maybe-profile)]
+          [(exn:xml? maybe-color) maybe-color]
+          [(exn:xml? maybe-profile) maybe-profile]
+          [else (make+exn:svg:unrecognized token)])))
+
 (define svg-IRI-filter : (-> XML-Token String (XML-Option String))
   (lambda [token v]
-    (define url (svg-function-take-off token v "url("))
+    (define url (svg-function-filter token v "url(" #true))
     (cond [(string? url) url]
           [(not url) v]
           [else url])))

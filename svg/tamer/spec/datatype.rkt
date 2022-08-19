@@ -50,7 +50,7 @@
 
 (define-behavior (it-check-parser/error src.svg svg-attr->datum expected-datum logsrc expected-message)
   #:it
-  ["should be parsed into ~a, with logging message matching ~a, when fed with `~a`" (tamer-datum expected-datum) (tamer-datum expected-message) src.svg]
+  ["should be parsed into `~a`, with logging message matching ~a, when fed with `~a`" (tamer-datum expected-datum) (tamer-datum expected-message) src.svg]
   #:when expected-datum
   ["should be parsed into an error matching ~a, when fed with `~a`" (tamer-datum expected-message) src.svg]
   #:do
@@ -60,7 +60,7 @@
 
 (define-behavior (it-check-parser src.svg svg-attr->datum expected-values)
   #:it
-  ["should be parsed into ~a, when fed with `~a`" (tamer-datum expected-values) src.svg]
+  ["should be parsed into `~a`, when fed with `~a`" (tamer-datum expected-values) src.svg]
   #:do
   (do-check-parser (tamer-tokens src.svg svg-attr->datum) expected-values))
 
@@ -92,6 +92,19 @@
                 (it-check-parser/error "icc-color(name, 2 4 6)" svg:attr-value*->icc-color #false logsrc exn:svg:missing-comma?)
                 (it-check-parser/error "icc-color(name)" svg:attr-value*->icc-color #false logsrc exn:svg:malformed?)
                 (it-check-parser/error "icccolor(name, 2)" svg:attr-value*->icc-color #false logsrc exn:svg:function?))
+
+              (describe "Paint" #:do
+                (it-check-parser "inherit" svg:attr-value*->paint 'inherit)
+                (it-check-parser "none" svg:attr-value*->paint 'none)
+                (it-check-parser "currentColor" svg:attr-value*->paint 'currentColor)
+                (it-check-parser "currentcolor" svg:attr-value*->paint (rgb* 'currentcolor))
+                (it-check-parser "Snow" svg:attr-value*->paint (rgb* 'snow))
+                (it-check-parser "url(https://gyoudmon.org#svg)" svg:attr-value*->paint (svg-paint-server "https://gyoudmon.org#svg" #false))
+                (it-check-parser "#def icc-color(rgb, 0.25, 0.5, 0.75)" svg:attr-value*->paint (cons (rgb* #xDDEEFF) (svg-icccolor 'rgb (list 0.25 0.50 0.75))))
+                (it-check-parser "url(#svg) royalblue icc-color(rgb, 0.618)" svg:attr-value*->paint
+                                 (svg-paint-server "#svg" (cons (rgb* 'royalblue) (svg-icccolor 'rgb (list 0.618)))))
+                (it-check-parser/error "#svg" svg:attr-value*->icc-color #false logsrc exn:svg:unrecognized?)
+                (it-check-parser/error "#svg none icc-color(rgb, 0.382)" svg:attr-value*->icc-color #false logsrc exn:svg:function?))
 
               (describe "List" #:do
                 (it-check-parser "12, 34" svg:attr-value*->integer-pair (cons 12 34))
