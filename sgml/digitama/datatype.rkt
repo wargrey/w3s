@@ -132,7 +132,7 @@
     (define-values (n unit)
       (cond [(xml:string? v) (string->dimension (xml:string-datum v) canonical-unit #:ci? #false)]
             [(xml:name? v) (string->dimension (xml:name-datum v) canonical-unit #:ci? #false)]
-            [else (string->dimension "" canonical-unit)]))
+            [else (values #false canonical-unit)]))
 
     (and n (cons n unit))))
 
@@ -141,7 +141,7 @@
     (define-values (n unit)
       (cond [(xml:string? v) (string->dimension (xml:string-datum v) canonical-unit #:ci? #false)]
             [(xml:name? v) (string->dimension (xml:name-datum v) canonical-unit #:ci? #false)]
-            [else (string->dimension "" canonical-unit)]))
+            [else (values #false canonical-unit)]))
 
     (and n (>= n 0.0) (cons n unit))))
 
@@ -150,7 +150,7 @@
     (define-values (n unit)
       (cond [(xml:string? v) (string->dimension (xml:string-datum v) canonical-unit #:ci? #true)]
             [(xml:name? v) (string->dimension (xml:name-datum v) canonical-unit #:ci? #true)]
-            [else (string->dimension "" canonical-unit)]))
+            [else (values #false canonical-unit)]))
 
     (and n (cons n unit))))
 
@@ -159,21 +159,19 @@
     (define-values (n unit)
       (cond [(xml:string? v) (string->dimension (xml:string-datum v) canonical-unit #:ci? #true)]
             [(xml:name? v) (string->dimension (xml:name-datum v) canonical-unit #:ci? #true)]
-            [else (string->dimension "" canonical-unit)]))
+            [else (values #false canonical-unit)]))
 
     (and n (>= n 0.0) (cons n unit))))
 
 (define xml:attr-value*->listof-type : (All (T) (->* (XML-Element-Attribute-Value*
                                                       (-> XML-Element-Attribute-Value* (XML-Option T))
                                                       (->* (XML-Element-Attribute-Value*) ((Option XML-Token) (Option Log-Level)) exn))
-                                                     ((U String Regexp))
+                                                     ((U String Regexp (-> String (U exn:xml (Listof String)))))
                                                      (XML-Option (Listof T))))
-  (lambda [v ->type-datum make-exn:range [sep #px"\\s*,\\s*"]]
+  (lambda [v ->type-datum make-exn:range [sep #px"\\s+"]]
     (cond [(xml:string? v)
-           (let ([vs (string-split (xml:string-datum v) sep)])
-             (cond [(and (= (length vs) 1) (regexp-match? #px"\\s+" (xml:string-datum v)))
-                    (cond [(regexp-match? sep ",") (make+exn:svg:missing-comma v)]
-                          [else (make+exn:svg:malformed v)])]
+           (let ([vs (let ([raw (xml:string-datum v)]) (if (procedure? sep) (sep raw) (string-split raw sep)))])
+             (cond [(exn:xml? vs) vs]
                    [else (let parse ([vs : (Listof String) vs]
                                      [ts : (Listof T) null])
                            (cond [(null? vs) (reverse ts)]

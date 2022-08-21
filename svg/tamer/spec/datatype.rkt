@@ -46,7 +46,8 @@
      (syntax/loc stx
        (let ([datum datum-expr])
          (cond [(procedure? expected-datum) (expect-satisfy (cast expected-datum (-> Any Boolean)) datum)]
-               [(not expected-datum) (expect-satisfy exn:xml? datum)])))]))
+               [(not expected-datum) (expect-satisfy exn:xml? datum)]
+               [else (expect-equal datum expected-datum)])))]))
 
 (define-behavior (it-check-parser/error src.svg svg-attr->datum expected-datum logsrc expected-message)
   #:it
@@ -75,7 +76,7 @@
 
   (spec-begin SVG-Data-Type #:do
               (describe "Color" #:do
-                (it-check-parser "#ABC" svg:attr-value*->color (hexa #xAABBCC 1.0))
+                (it-check-parser "#def" svg:attr-value*->color (hexa #xDDEEFF 1.0))
                 (it-check-parser "#123456" svg:attr-value*->color (hexa #x123456 1.0))
                 (it-check-parser "GhostWhite" svg:attr-value*->color (rgb* 'ghostwhite))
                 (it-check-parser "rgb(255, -10, 0)" svg:attr-value*->color (rgb* #xFF0000))
@@ -99,19 +100,22 @@
                 (it-check-parser "currentColor" svg:attr-value*->paint 'currentColor)
                 (it-check-parser "currentcolor" svg:attr-value*->paint (rgb* 'currentcolor))
                 (it-check-parser "Snow" svg:attr-value*->paint (rgb* 'snow))
-                (it-check-parser "url(https://gyoudmon.org#svg)" svg:attr-value*->paint (svg-paint-server "https://gyoudmon.org#svg" #false))
-                (it-check-parser "#def icc-color(rgb, 0.25, 0.5, 0.75)" svg:attr-value*->paint (cons (rgb* #xDDEEFF) (svg-icccolor 'rgb (list 0.25 0.50 0.75))))
+                (it-check-parser "#def icc-color(rgb, 0.25, 0.5, 0.75)" svg:attr-value*->paint (cons (hexa #xDDEEFF 1.0) (svg-icccolor 'rgb (list 0.25 0.50 0.75))))
                 (it-check-parser "url(#svg) royalblue icc-color(rgb, 0.618)" svg:attr-value*->paint
                                  (svg-paint-server "#svg" (cons (rgb* 'royalblue) (svg-icccolor 'rgb (list 0.618)))))
-                (it-check-parser/error "#svg" svg:attr-value*->icc-color #false logsrc exn:svg:unrecognized?)
-                (it-check-parser/error "#svg none icc-color(rgb, 0.382)" svg:attr-value*->icc-color #false logsrc exn:svg:function?))
+                (it-check-parser/error "#svg" svg:attr-value*->paint #false logsrc exn:svg:unrecognized?)
+                (it-check-parser/error "#svg none icc-color(rgb, 0.382)" svg:attr-value*->paint #false logsrc exn:svg:range?))
+
+              (describe "Transform" #:do
+                (it-check-parser "translate(-10,-20) scale(2) rotate(45) translate(5,10)" svg:attr-value*->transform-list
+                                 (list (svg:translate -10.0 -20.0) (svg:scale 2.0 #false) (svg:rotate 45.0 #false #false) (svg:translate 5.0 10.0))))
 
               (describe "List" #:do
                 (it-check-parser "12, 34" svg:attr-value*->integer-pair (cons 12 34))
                 (it-check-parser "56" svg:attr-value*->integer-pair 56)
-                (it-check-parser/error "7, 8, 9" svg:attr-value*->number-pair (cons 7.0 8.0) logsrc exn:svg:malformed?)
+                (it-check-parser/error "7, 8, 9" svg:attr-value*->number-pair (cons 7 8) logsrc exn:svg:malformed?)
                 (it-check-parser/error "1 0" svg:attr-value*->number-pair #false logsrc exn:svg:missing-comma?)
-                (it-check-parser/error "1em, 2ch, 3.0pt, 4.0in" svg:attr-value*->length-list '((1.0 . em) (2.0 . ch) (3.0 . pt)) logsrc exn:svg:unit?))
+                (it-check-parser/error "1em, 2ch, 3.0pt, 4.0in" svg:attr-value*->length-list '((1.0 . em) (2.0 . ch) (3.0 . pt) (4.0 . in)) logsrc exn:svg:unit?))
 
               (describe "Dimension and Coordinate" #:do
                 (it-check-parser "12.56%" svg:attr-value*->dim:length (cons 12.56 '%))
