@@ -69,11 +69,11 @@
 (module+ main
   (require digimon/dtrace)
   
-  (define logsrc : Log-Receiver (make-log-receiver /dev/dtrace 'warning 'exn:svg:syntax))
-
   (current-logger /dev/dtrace)
   (default-xml-error-topic 'exn:svg:syntax)
 
+  (define logsrc : Log-Receiver (make-log-receiver /dev/dtrace 'warning (default-xml-error-topic)))
+  
   (spec-begin SVG-Data-Type #:do
               (describe "Color" #:do
                 (it-check-parser "#def" svg:attr-value*->color (hexa #xDDEEFF 1.0))
@@ -90,7 +90,7 @@
               (describe "ICC Color" #:do
                 (it-check-parser "icc-color(name, 1.0, 1.0, 1.0)" svg:attr-value*->icc-color (svg-icccolor 'name (list 1.0 1.0 1.0)))
                 (it-check-parser/error "icc-color(n(ame), 2, 4, 6)" svg:attr-value*->icc-color #false logsrc exn:svg:malformed?)
-                (it-check-parser/error "icc-color(name, 2 4 6)" svg:attr-value*->icc-color #false logsrc exn:svg:missing-comma?)
+                (it-check-parser/error "icc-color(name, 2 4 6)" svg:attr-value*->icc-color (svg-icccolor 'name (list 2.0 4.0 6.0)) logsrc exn:svg:missing-comma?)
                 (it-check-parser/error "icc-color(name)" svg:attr-value*->icc-color #false logsrc exn:svg:malformed?)
                 (it-check-parser/error "icccolor(name, 2)" svg:attr-value*->icc-color #false logsrc exn:svg:function?))
 
@@ -107,14 +107,18 @@
                 (it-check-parser/error "#svg none icc-color(rgb, 0.382)" svg:attr-value*->paint #false logsrc exn:svg:range?))
 
               (describe "Transform" #:do
-                (it-check-parser "translate(-10,-20) scale(2) rotate(45) translate(5,10)" svg:attr-value*->transform-list
-                                 (list (svg:translate -10.0 -20.0) (svg:scale 2.0 #false) (svg:rotate 45.0 #false #false) (svg:translate 5.0 10.0))))
+                (it-check-parser "matrix(1, 2, 3 , 4 5 6)" svg:attr-value*->transform-list (list (svg:matrix 1.0 2.0 3.0 4.0 5.0 6.0)))
+                (it-check-parser "skewX(30), skewY(-30)" svg:attr-value*->transform-list (list (svg:skewX 30.0) (svg:skewY -30.0)))
+                (it-check-parser "translate(-10,-20) scale(2) rotate(4.5E1) translate(5)" svg:attr-value*->transform-list
+                                 (list (svg:translate -10.0 -20.0) (svg:scale 2.0 #false) (svg:rotate 45.0 #false #false) (svg:translate 5.0 #false)))
+                (it-check-parser/error "rotate(1.2e2, 2)" svg:attr-value*->transform-list null logsrc exn:svg:malformed?)
+                (it-check-parser/error "skew(45)" svg:attr-value*->transform-list null logsrc exn:svg:function?))
 
               (describe "List" #:do
                 (it-check-parser "12, 34" svg:attr-value*->integer-pair (cons 12 34))
                 (it-check-parser "56" svg:attr-value*->integer-pair 56)
                 (it-check-parser/error "7, 8, 9" svg:attr-value*->number-pair (cons 7 8) logsrc exn:svg:malformed?)
-                (it-check-parser/error "1 0" svg:attr-value*->number-pair #false logsrc exn:svg:missing-comma?)
+                (it-check-parser/error "1 0" svg:attr-value*->number-pair (cons 1 0) logsrc exn:svg:missing-comma?)
                 (it-check-parser/error "1em, 2ch, 3.0pt, 4.0in" svg:attr-value*->length-list '((1.0 . em) (2.0 . ch) (3.0 . pt) (4.0 . in)) logsrc exn:svg:unit?))
 
               (describe "Dimension and Coordinate" #:do
@@ -125,6 +129,7 @@
 
               (describe "IRI" #:do
                 (it-check-parser "https://gyoudmon.org#svg" svg:attr-value*->IRI "https://gyoudmon.org#svg")
-                (it-check-parser "url(https://gyoudmon.org#svg)" svg:attr-value*->IRI "https://gyoudmon.org#svg")
+                (it-check-parser "url (https://gyoudmon.org#svg)" svg:attr-value*->IRI "https://gyoudmon.org#svg")
+                (it-check-parser "url()" svg:attr-value*->IRI "")
                 (it-check-parser "#relative" svg:attr-value*->IRI "#relative")
                 (it-check-parser/error "uri(https://gyoudmon.org)" svg:attr-value*->IRI #false logsrc exn:svg:function?))))

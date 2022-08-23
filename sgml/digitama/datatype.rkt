@@ -166,33 +166,31 @@
 (define xml:attr-value*->listof-type : (All (T) (->* (XML-Element-Attribute-Value*
                                                       (-> XML-Element-Attribute-Value* (XML-Option T))
                                                       (->* (XML-Element-Attribute-Value*) ((Option XML-Token) (Option Log-Level)) exn))
-                                                     ((U String Regexp (-> String (U exn:xml (Listof String)))))
-                                                     (XML-Option (Listof T))))
-  (lambda [v ->type-datum make-exn:range [sep #px"\\s+"]]
+                                                     ((U String Regexp (-> XML-Token String (Listof String))))
+                                                     (Listof T)))
+  (lambda [v string->datum make-exn:range [sep #px"\\s+"]]
     (cond [(xml:string? v)
-           (let ([vs (let ([raw (xml:string-datum v)]) (if (procedure? sep) (sep raw) (string-split raw sep)))])
-             (cond [(exn:xml? vs) vs]
-                   [else (let parse ([vs : (Listof String) vs]
-                                     [ts : (Listof T) null])
-                           (cond [(null? vs) (reverse ts)]
-                                 [else (let*-values ([(self rest) (values (syn-remake-token v xml:string (car vs)) (cdr vs))]
-                                                     [(datum) (->type-datum self)])
-                                         (cond [(not datum) (make-exn:range self) (parse rest ts)]
-                                               [(exn? datum) (parse rest ts)]
-                                               [else (parse rest (cons datum ts))]))]))]))]
+           (let parse ([vs : (Listof String) (if (procedure? sep) (sep v (xml:string-datum v)) (string-split (xml:string-datum v) sep))]
+                       [ts : (Listof T) null])
+             (cond [(null? vs) (reverse ts)]
+                   [else (let*-values ([(self rest) (values (syn-remake-token v xml:string (car vs)) (cdr vs))]
+                                       [(datum) (string->datum self)])
+                           (cond [(not datum) (make-exn:range self) (parse rest ts)]
+                                 [(exn? datum) (parse rest ts)]
+                                 [else (parse rest (cons datum ts))]))]))]
           [(list? v)
            (let parse ([vs : (Listof XML:Name) v]
                        [ts : (Listof T) null])
              (cond [(null? vs) (reverse ts)]
                    [else (let*-values ([(self rest) (values (car vs) (cdr vs))]
                                        [(self) (syn-remake-token self xml:string (symbol->immutable-string (xml:name-datum self)))]
-                                       [(datum) (->type-datum self)])
+                                       [(datum) (string->datum self)])
                            (cond [(not datum) (make-exn:range self) (parse rest ts)]
                                  [(exn? datum) (parse rest ts)]
                                  [else (parse rest (cons datum ts))]))]))]
           [(xml:name? v)
-           (let ([datum (->type-datum (syn-remake-token v xml:string (symbol->immutable-string (xml:name-datum v))))])
+           (let ([datum (string->datum (syn-remake-token v xml:string (symbol->immutable-string (xml:name-datum v))))])
              (cond [(not datum) (make-exn:range v) null]
                    [(exn:xml? datum) null]
                    [else (list datum)]))]
-          [else #false])))
+          [else null])))

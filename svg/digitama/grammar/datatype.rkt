@@ -31,11 +31,10 @@
 (struct svg:translate svg-transform ([tx : Flonum] [ty : (Option Flonum)]) #:type-name SVG:Translate #:transparent)
 (struct svg:scale svg-transform ([sx : Flonum] [sy : (Option Flonum)]) #:type-name SVG:Scale #:transparent)
 (struct svg:rotate svg-transform ([angle : Flonum] [cx : (Option Flonum)] [cy : (Option Flonum)]) #:type-name SVG:Rotate #:transparent)
-(struct svg:skew svg-transform ([axis : Char] [angle : Flonum]) #:type-name SVG:Skew #:transparent)
+(struct svg:skewX svg-transform ([angle : Flonum]) #:type-name SVG:SkewX #:transparent)
+(struct svg:skewY svg-transform ([angle : Flonum]) #:type-name SVG:SkewY #:transparent)
 
-(define svg-list-separator : Regexp #px"(\\s*,\\s*)|(\\s+)")
 (define svg-list-separator/comma : Regexp #px"\\s*,\\s*")
-(define svg-list-separator/space : Regexp #px"(?<!,)\\s+(?!,)")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-syntax (define-svg-dimension stx)
@@ -93,10 +92,9 @@
        (syntax/loc stx
          (begin (define name->datum-list : (-> XML-Element-Attribute-Value* (XML-Option (Listof Type)))
                   (lambda [v]
-                    (define ls : (XML-Option (Listof Type)) (xml:attr-value*->listof-type v attr->datum make+exn:svg:range svg-list-separator/comma))
+                    (define ls (xml:attr-value*->listof-type v attr->datum make+exn:svg:range svg-list-separator/comma))
 
-                    (cond [(not (list? ls)) ls]
-                          [(null? ls) (make+exn:svg:malformed v)]
+                    (cond [(null? ls) (make+exn:svg:malformed v)]
                           [else ls])))
                 ...)))]))
 
@@ -170,27 +168,25 @@
 
 (define svg:attr-value*->number-pair : (-> XML-Element-Attribute-Value* (XML-Option (U (Pairof Real Real) Real)))
   (lambda [v]
-    (define ns (xml:attr-value*->listof-type v xml:attr-value*->number make+exn:svg:range))
+    (define ns (xml:attr-value*->listof-type v xml:attr-value*->number make+exn:svg:range svg-comma-wsp-list-split))
 
-    (cond [(not (list? ns)) ns]
-          [(null? ns) (make+exn:svg:malformed v)]
+    (cond [(null? ns) (make+exn:svg:malformed v)]
           [(null? (cdr ns)) (car ns)]
           [(pair? (cddr ns)) (make+exn:svg:malformed v) (cons (car ns) (cadr ns))]
           [else (cons (car ns) (cadr ns))])))
 
 (define svg:attr-value*->integer-pair : (-> XML-Element-Attribute-Value* (XML-Option (U (Pairof Integer Integer) Integer)))
   (lambda [v]
-    (define ns (xml:attr-value*->listof-type v xml:attr-value*->integer make+exn:svg:range))
+    (define ns (xml:attr-value*->listof-type v xml:attr-value*->integer make+exn:svg:range svg-comma-wsp-list-split))
 
-    (cond [(not (list? ns)) ns]
-          [(null? ns) (make+exn:svg:malformed v)]
+    (cond [(null? ns) (make+exn:svg:malformed v)]
           [(null? (cdr ns)) (car ns)]
           [(pair? (cddr ns)) (make+exn:svg:malformed v) (cons (car ns) (cadr ns))]
           [else (cons (car ns) (cadr ns))])))
 
 (define svg:attr-value*->paint : (-> XML-Element-Attribute-Value* (XML-Option SVG-Paint))
   (lambda [v]
-    (cond [(xml:string? v) (svg-paint-filter v (string-split (xml:string-datum v) svg-list-separator/space) #true)]
+    (cond [(xml:string? v) (svg-paint-filter v (svg-wsp-list-split v (xml:string-datum v)) #true)]
           [(xml:name? v) (svg-paint-filter v (list (symbol->immutable-string (xml:name-datum v))) #true)]
           [(pair? v) (svg-paint-filter (car v) (for/list : (Listof String) ([t (in-list v)]) (symbol->immutable-string (xml:name-datum t))) #true)]
           [else #false])))
@@ -219,7 +215,7 @@
            (let ([rgb (flcolor->byte-list c)])
              (format "rgb(~a, ~a, ~a)"
                (car rgb) (cadr rgb) (caddr rgb)))]
-          [else
+          [else ; (flcolor? c)
            (let ([hex (flcolor->hex c)])
              (string-append "#" (~r hex #:min-width 6 #:pad-string "0" #:base 16)))])))
 
@@ -231,17 +227,38 @@
           [(svg-paint-server? p) (string-append (svg:attr-paint->value (svg-paint-server-url p)) " " (svg:attr-paint->value (svg-paint-server-fallback p)))]
           [else (svg:attr-url->value p)])))
 
+(define svg:attr-transform-list->value : (-> (Listof SVG-Transform) String)
+  (lambda [ts]
+    (string-join (map svg:attr-transform->value ts) " ")))
+
+(define svg:attr-transform->value : (-> SVG-Transform String)
+  (lambda [t]
+    (define name : String (substring (symbol->immutable-string (assert (object-name t) symbol?)) 4))
+    (define argv : (Listof String)
+      (for/list : (Listof String) ([arg (in-vector (struct->vector t))] #:when (flonum? arg))
+        (cond [(integer? arg) (number->string (inexact->exact arg))]
+              [else (number->string arg)])))
+    
+    (string-join #:before-first (string-append name "(")
+                 #:after-last ")"
+                 argv ", ")))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define svg-function-filter : (case-> [XML-Token String String True -> (XML-Option String)]
                                       [XML-Token String String False -> (Option String)])
-  (lambda [token v func-head report-function-error?]
-    (define fh-size (string-length func-head))
-    (define maxsize (- (string-length v) 1))
-    (define minsize (+ fh-size 1))
-
-    (cond [(< (string-length v) minsize) #false]
-          [(and (string-prefix? v func-head) (eq? (string-ref v maxsize) #\))) (substring v fh-size maxsize)]
-          [(regexp-match? #px"\\w+[(][^)]*[)]" v) (and report-function-error? (make+exn:svg:function token))]
+  (lambda [token v func-name report-function-error?]
+    (define open-idx (string-length func-name))
+    (define clse-idx (- (string-length v) 1))
+    
+    (cond [(>= open-idx clse-idx) #false]
+          [(and (string-prefix? v func-name) (eq? (string-ref v clse-idx) #\)))
+           (let skip-wsp ([idx : Nonnegative-Fixnum open-idx])
+             (define idx++ (+ idx 1))
+             (cond [(eq? (string-ref v idx) #\() (substring v idx++ clse-idx)]
+                   [(< idx++ clse-idx) (skip-wsp idx++)]
+                   [else #false]))]
+          [(regexp-match? #px"^\\w+\\s*[(][^)]*[)]" v)
+           (and report-function-error? (make+exn:svg:function token))]
           [else #false])))
 
 (define svg-color-filter : (case-> [XML-Token String -> (XML-Option FlColor)]
@@ -254,9 +271,9 @@
              (cond [(symbol? maybe-rgb) (make+exn:svg:digit token)]
                    [(and maybe-rgb) (hexa maybe-rgb 1.0)]
                    [else (make+exn:svg:unrecognized token)]))]
-          [else (let ([func-body (svg-function-filter token v "rgb(" #true)])
+          [else (let ([func-body (svg-function-filter token v "rgb" #true)])
                   (cond [(string? func-body)
-                         (let ([cs (string-split (string-trim func-body) svg-list-separator/comma)])
+                         (let ([cs (svg-comma-wsp-list-split token func-body)])
                            (cond [(and (pair? cs) (pair? (cdr cs)) (pair? (cddr cs)) (null? (cdddr cs)))
                                   (let*-values ([(_r _g _b) (values (car cs) (cadr cs) (caddr cs))]
                                                 [(r u) (string->integer-dimension _r)])
@@ -280,10 +297,10 @@
 
 (define svg-icc-color-filter : (-> XML-Token String (XML-Option SVG-ICCColor))
   (lambda [token v]
-    (define icc-body (svg-function-filter token v "icc-color(" #true))
+    (define icc-body (svg-function-filter token v "icc-color" #true))
 
     (cond [(string? icc-body)
-           (let ([icccs (string-split (string-trim icc-body) svg-list-separator/comma)])
+           (let ([icccs (svg-comma-wsp-list-split token icc-body)])
              (cond [(and (pair? icccs) (pair? (cdr icccs)))
                     (let ([name (svg:attr-value*->name (syn-remake-token token xml:string (car icccs)))])
                       (cond [(symbol? name)
@@ -311,17 +328,17 @@
   (lambda [token vs allow-inherit?]
     (cond [(null? vs) (make+exn:svg:malformed token)]
           [(null? (cdr vs))
-           (let ([maybe-url (svg-function-filter token (car vs) "url(" #false)])
+           (let ([maybe-url (svg-function-filter token (car vs) "url" #false)])
              (cond [(string? maybe-url) maybe-url]
                    [else (svg-paint-keyword-color-filter token (car vs) #true)]))]
           [(null? (cddr vs))
-           (let ([maybe-url (svg-function-filter token (car vs) "url(" #false)])
+           (let ([maybe-url (svg-function-filter token (car vs) "url" #false)])
              (cond [(not maybe-url) (svg-paint-profiled-color-filter token (car vs) (cadr vs))]
                    [else (let ([maybe-fallback (svg-paint-keyword-color-filter token (cadr vs) #false)])
                            (cond [(pair? maybe-fallback) (svg-paint-server maybe-url maybe-fallback)]
                                  [else maybe-fallback]))]))]
           [(null? (cdddr vs))
-           (let ([maybe-url (svg-function-filter token (car vs) "url(" #true)]
+           (let ([maybe-url (svg-function-filter token (car vs) "url" #true)]
                  [maybe-color (svg-paint-profiled-color-filter token (cadr vs) (caddr vs))])
              (cond [(and (string? maybe-url) (pair? maybe-color)) (svg-paint-server maybe-url maybe-color)]
                    [(exn:xml? maybe-url) maybe-url]
@@ -350,18 +367,44 @@
 
 (define svg-transform-list-filter : (-> XML-Token String (XML-Option (Listof SVG-Transform)))
   (lambda [token v]
-    (writeln (regexp-match* #px"(\\w+)\\s*[(]([^)]+)[)]" v))
-    null))
+    (reverse
+     (for/fold ([sfrt : (Listof SVG-Transform) null])
+               ([self (in-list (svg-list-split token v))])
+       (define ts : (Option (Pairof String (Listof (Option String)))) (regexp-match #px"(\\w+)\\s*[(]([^)]*)[)]" self))
+       (cond [(and ts (pair? (cdr ts)) (string? (cadr ts)) (pair? (cddr ts)) (string? (caddr ts)))
+              (let* ([transform (cadr ts)]
+                     [args (syn-remake-token token xml:string (caddr ts))]
+                     [nums (xml:attr-value*->listof-type args xml:attr-value*->flonum make+exn:svg:range svg-comma-wsp-list-split)])
+                (or (and (pair? nums)
+                         (cond [(string=? transform "matrix")
+                                (and (pair? (cdr nums)) (pair? (cddr nums)) (pair? (cdddr nums)) (pair? (cddddr nums))
+                                     (let ([tail (cddddr nums)])
+                                       (and (pair? tail) (pair? (cdr tail)) (null? (cddr tail))
+                                            (cons (svg:matrix (car nums) (cadr nums) (caddr nums) (cadddr nums) (car tail) (cadr tail)) sfrt))))]
+                               [(string=? transform "translate")
+                                (or (and (null? (cdr nums))  (cons (svg:translate (car nums) #false) sfrt))
+                                    (and (null? (cddr nums)) (cons (svg:translate (car nums) (cadr nums)) sfrt)))]
+                               [(string=? transform "scale")
+                                (or (and (null? (cdr nums))  (cons (svg:scale (car nums) #false) sfrt))
+                                    (and (null? (cddr nums)) (cons (svg:scale (car nums) (cadr nums)) sfrt)))]
+                               [(string=? transform "rotate")
+                                (or (and (null? (cdr nums))  (cons (svg:rotate (car nums) #false #false) sfrt))
+                                    (and (pair? (cddr nums)) (null? (cdddr nums)) (cons (svg:rotate (car nums) (cadr nums) (caddr nums)) sfrt)))]
+                               [(string=? transform "skewX") (and (null? (cdr nums)) (cons (svg:skewX (car nums)) sfrt))]
+                               [(string=? transform "skewY") (and (null? (cdr nums)) (cons (svg:skewY (car nums)) sfrt))]
+                               [else (make+exn:svg:function token) sfrt]))
+                    (and (make+exn:svg:malformed token) sfrt)))]
+             [else (make+exn:svg:malformed token) sfrt])))))
 
 (define svg-IRI-filter : (-> XML-Token String (XML-Option String))
   (lambda [token v]
-    (define url (svg-function-filter token v "url(" #true))
+    (define url (svg-function-filter token v "url" #true))
     (cond [(string? url) url]
           [(not url) v]
           [else url])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define svg-list-split : (->* ((Option XML-Token) String) (Byte Byte) (U exn:xml (Listof String)))
+(define svg-list-split : (->* (XML-Token String) (Byte Byte) (Listof String))
   (let ()
     (define (greedy-lookahead [raw : String] [pos : Nonnegative-Fixnum] [size : Index]) : (Values Nonnegative-Fixnum Boolean)
       (let body-lookahead ([idx : Nonnegative-Fixnum pos]
@@ -378,28 +421,27 @@
                   [end : Nonnegative-Fixnum 0]
                   [idx : Nonnegative-Fixnum 0]
                   [sgnirts : (Listof String) null]
-                  [malformed? : Boolean #false])
+                  [comma : Natural 0])
         (if (>= idx size)
             (let ()
-              (when (or malformed?) (make+exn:svg:malformed token))
+              (when (> comma 0) (make+exn:svg:malformed token))
               (cond [(>= start end) (reverse sgnirts)]
                     [else (reverse (cons (substring raw start end) sgnirts))]))
             
             (let ([ch (string-ref raw idx)]
                   [idx++ (+ idx 1)])
               (cond [(or (char-blank? ch) (eq? ch #\,))
-                     (if (>= start end)
-                         (let ()
-                           (when (and (eq? ch #\,) (null? sgnirts))
-                             (make+exn:svg:malformed token))
-                           (split idx++ idx++ idx++ sgnirts (or malformed? (eq? ch #\,))))
+                     (let ([comma++ (if (eq? ch #\,) (+ comma 1) comma)])
+                       (if (>= start end)
+                           (let ()
+                             (when (and (eq? ch #\,) (null? sgnirts))
+                               (make+exn:svg:malformed token))
+                             (split idx++ idx++ idx++ sgnirts comma++))
                          
                          (let lookahead ([aidx : Nonnegative-Fixnum idx++]
-                                         [comma : Index (if (eq? ch #\,) 1 0)])
+                                         [comma : Index (assert comma++ index?)])
                            (if (>= aidx size)
-                               (let ()
-                                 (when (> comma 0) (make+exn:svg:malformed token))
-                                 (split start end size sgnirts #false))
+                               (split start end size sgnirts comma)
                                
                                (let ([ach (string-ref raw aidx)]
                                      [aidx++ (+ aidx 1)])
@@ -409,18 +451,22 @@
                                               [else (lookahead aidx++ (+ comma 1))])]
                                        [(not (eq? ach #\())
                                         (when (< comma comma/min) (make+exn:svg:missing-comma token))
-                                        (split aidx aidx++ aidx++ (cons (substring raw start end) sgnirts) #false)]
+                                        (split aidx aidx++ aidx++ (cons (substring raw start end) sgnirts) 0)]
                                        [(> comma 0)
                                         (when (< comma comma/min) (make+exn:svg:missing-comma token))
-                                        (split aidx aidx aidx (cons (substring raw start end) sgnirts) #false)]
+                                        (split aidx aidx aidx (cons (substring raw start end) sgnirts) 0)]
                                        [else (let-values ([(bidx++ okay?) (greedy-lookahead raw aidx++ size)])
-                                               (cond [(not okay?) (make+exn:svg:malformed token) (split start size size sgnirts #false)]
-                                                     [else (split bidx++ bidx++ bidx++ (cons (substring raw start bidx++) sgnirts) #false)]))])))))]
-                    [(not (eq? ch #\()) (split (if (>= start end) idx start) idx++ idx++ sgnirts #false)]
+                                               (cond [(not okay?) (make+exn:svg:malformed token) (split start size size sgnirts 0)]
+                                                     [else (split bidx++ bidx++ bidx++ (cons (substring raw start bidx++) sgnirts) 0)]))]))))))]
+                    [(not (eq? ch #\()) (split (if (>= start end) idx start) idx++ idx++ sgnirts 0)]
                     [else (let-values ([(bidx++ okay?) (greedy-lookahead raw idx++ size)])
-                            (cond [(not okay?) (make+exn:svg:malformed token) (split start size size sgnirts #false)]
-                                  [else (split bidx++ bidx++ bidx++ (cons (substring raw start bidx++) sgnirts) #false)]))])))))))
-  
-(default-xml-error-topic 'exn:svg:syntax)
-(svg-list-split #false "    ,  a   b,  c  , d , (), skewX (30), matrix(translate (10, 20), scale(2)) ,  ")
-  
+                            (cond [(not okay?) (make+exn:svg:malformed token) (split start size size sgnirts 0)]
+                                  [else (split bidx++ bidx++ bidx++ (cons (substring raw start bidx++) sgnirts) 0)]))])))))))
+
+(define svg-wsp-list-split : (-> XML-Token String (Listof String))
+  (lambda [token raw]
+    (svg-list-split token raw 0 0)))
+
+(define svg-comma-wsp-list-split : (-> XML-Token String (Listof String))
+  (lambda [token raw]
+    (svg-list-split token raw 1 1)))
