@@ -19,6 +19,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type XML-Dimension (Pairof Flonum Symbol))
+(define-type XML-Boolean (U 'true 'false))
 (define-type XML-Nonnegative-Dimension (Pairof Nonnegative-Flonum Symbol))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -26,6 +27,7 @@
   (lambda [v]
     (cond [(string? v) v]
           [(symbol? v) (symbol->immutable-string v)]
+          [(and (integer? v) (inexact? v)) (number->string (inexact->exact v))]
           [(number? v) (number->string v)]
           [(list? v) (string-join (map xml:attr-datum->value v))]
           [else (~a v)])))
@@ -36,8 +38,8 @@
                    (symbol->immutable-string (cdr v)))))
 
 (define xml:attr-listof-type->value : (All (T) (->* ((Listof T) (-> T String)) (String) String))
-  (lambda [vs ->type-value [sep ", "]]
-    (string-join (map ->type-value vs) sep)))
+  (lambda [vs datum->value [sep ", "]]
+    (string-join (map datum->value vs) sep)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml:attr-value*->string : (-> XML-Element-Attribute-Value* String)
@@ -57,6 +59,12 @@
     (cond [(xml:string? v) (string-split (string-trim (xml:string-datum v)) sep)]
           [(list? v) (for/list : (Listof String) ([n (in-list v)]) (symbol->immutable-string (xml:name-datum n)))]
           [(xml:name? v) (list (symbol->immutable-string (xml:name-datum v)))]
+          [else #false])))
+
+(define xml:attr-value*->boolean : (-> XML-Element-Attribute-Value* (Option XML-Boolean))
+  (lambda [v]
+    (cond [(xml:string? v) (let ([datum (xml:string-datum v)]) (cond [(string=? datum "true") 'true] [(string=? datum "false") 'false] [else #false]))]
+          [(xml:name? v) (let ([datum (xml:name-datum v)]) (and (or (eq? v 'true) (eq? v 'false)) datum))]
           [else #false])))
 
 (define xml:attr-value*->integer : (-> XML-Element-Attribute-Value* (Option Integer))

@@ -8,6 +8,7 @@
 (require racket/symbol)
 
 (require digimon/string)
+(require digimon/number)
 (require digimon/syntax)
 (require digimon/dimension)
 
@@ -20,6 +21,7 @@
 (require (for-syntax syntax/parse))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define-type SVG-Animated-Control-Point (List Flonum Flonum Flonum Flonum))
 (define-type SVG-Paint-Server-Fallback (U SVG:KW:Paint FlColor (Pairof FlColor SVG-ICCColor)))
 (define-type SVG-Paint (U 'inherit SVG-Paint-Server-Fallback String SVG-Paint-Server))
 
@@ -133,7 +135,18 @@
   [length : XML-Dimension svg:attr-value*->dim:length])
 
 (define-svg-keywords
-  [paint : Paint [none currentColor]])
+  [paint : Paint [none currentColor]]
+  
+  [link:type : LinkType [simple]]
+  [link:show : LinkShow [new replace embed other none]]
+  [link:actuate : LinkActuate [onLoad]]
+
+  [filter:in : FilterIn [SourceGraphic SourceAlpha BackgroundImage BackgroundAlpha FillPaint StrokePaint]]
+
+  [ani:target:type : AniTargetType [CSS XML auto]]
+  [ani:additive : AniAdditive [sum replace]]
+  [ani:accumulate : AniAccumulate [sum none]]
+  [ani:interpolation : AniInterpolation [discrete linear paced spline]])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; NOTE
@@ -196,6 +209,32 @@
     (and (xml:string? v)
          (svg-transform-list-filter v (xml:string-datum v)))))
 
+(define svg:attr-value*->animated-values : (-> XML-Element-Attribute-Value* (XML-Option (Listof String)))
+  (lambda [v]
+    (cond [(xml:string? v) (svg-semicolon-wsp-list-split v (xml:string-datum v))]
+          [(list? v) (for/list : (Listof String) ([v-seg (in-list v)]) (symbol->immutable-string (xml:name-datum v-seg)))]
+          [else #false])))
+
+(define svg:attr-value*->animated-times : (-> XML-Element-Attribute-Value* (XML-Option (Listof Flonum)))
+  (lambda [v]
+    (cond [(xml:string? v)
+           (svg-animated-values-filter v (svg-semicolon-wsp-list-split v (xml:string-datum v)) svg-string->animated-flonum)]
+          [(pair? v)
+           (let ([vs (for/list : (Listof String) ([t (in-list v)]) (symbol->immutable-string (xml:name-datum t)))])
+             (svg-animated-values-filter (car v) vs svg-string->animated-flonum))]
+          [(null? v) null]
+          [else #false])))
+
+(define svg:attr-value*->animated-splines : (-> XML-Element-Attribute-Value* (XML-Option (Listof SVG-Animated-Control-Point)))
+  (lambda [v]
+    (cond [(xml:string? v)
+           (svg-animated-values-filter v (svg-semicolon-wsp-list-split v (xml:string-datum v)) svg-string->spline-control-point)]
+          [(pair? v)
+           (let ([cps (for/list : (Listof String) ([cp (in-list v)]) (symbol->immutable-string (xml:name-datum cp)))])
+             (svg-animated-values-filter (car v) cps svg-string->spline-control-point))]
+          [(null? v) null]
+          [else #false])))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define svg:attr-url->value : (-> String String)
   (lambda [url]
@@ -241,7 +280,19 @@
     
     (string-join #:before-first (string-append name "(")
                  #:after-last ")"
-                 argv ", ")))
+                 argv ",")))
+
+(define svg:attr-animated-values->value : (-> (Listof Any) String)
+  (lambda [avs]
+    (string-join (map xml:attr-datum->value avs) ";")))
+
+(define svg:attr-animated-splines->value : (-> (Listof SVG-Animated-Control-Point) String)
+  (lambda [cps]
+    (string-join (for/list : (Listof String) ([cp (in-list cps)])
+                   (format "~a ~a ~a ~a"
+                     (car cp) (cadr cp)
+                     (caddr cp) (cadddr cp)))
+                 ";")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define svg-function-filter : (case-> [XML-Token String String True -> (XML-Option String)]
@@ -403,8 +454,18 @@
           [(not url) v]
           [else url])))
 
+(define svg-animated-values-filter : (All (a) (-> XML-Token (Listof String) (-> XML-Token String (XML-Option a)) (Listof a)))
+  (lambda [token vs string->datum]
+    (let filter-datum ([vs : (Listof String) vs]
+                       [sl : (Listof a) null])
+      (cond [(null? vs) (reverse sl)]
+            [else (let-values ([(datum rest) (values (string->datum token (car vs)) (cdr vs))])
+                    (cond [(not datum) (make+exn:svg:range token) (filter-datum rest sl)]
+                          [(exn:xml? datum) (filter-datum rest sl)]
+                          [else (filter-datum rest (cons datum sl))]))]))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define svg-list-split : (->* (XML-Token String) (Byte Byte) (Listof String))
+(define svg-list-split : (->* (XML-Token String) (Byte Byte #:separator Char) (Listof String))
   (let ()
     (define (greedy-lookahead [raw : String] [pos : Nonnegative-Fixnum] [size : Index]) : (Values Nonnegative-Fixnum Boolean)
       (let body-lookahead ([idx : Nonnegative-Fixnum pos]
@@ -415,7 +476,7 @@
                       (cond [(eq? bch #\)) (if (<= bracket 1) (values idx++ #true) (body-lookahead idx++ (- bracket 1)))]
                             [(eq? bch #\() (body-lookahead idx++ (+ bracket 1))]
                             [else (body-lookahead idx++ bracket)]))])))
-    (lambda [token raw [comma/min 0] [comma/max 1]]
+    (lambda [token raw [comma/min 0] [comma/max 1] #:separator [separator #\,]]
       (define size (string-length raw))
       (let split ([start : Nonnegative-Fixnum 0]
                   [end : Nonnegative-Fixnum 0]
@@ -430,11 +491,11 @@
             
             (let ([ch (string-ref raw idx)]
                   [idx++ (+ idx 1)])
-              (cond [(or (char-blank? ch) (eq? ch #\,))
-                     (let ([comma++ (if (eq? ch #\,) (+ comma 1) comma)])
+              (cond [(or (char-blank? ch) (eq? ch separator))
+                     (let ([comma++ (if (eq? ch separator) (+ comma 1) comma)])
                        (if (>= start end)
                            (let ()
-                             (when (and (eq? ch #\,) (null? sgnirts))
+                             (when (and (eq? ch separator) (null? sgnirts))
                                (make+exn:svg:malformed token))
                              (split idx++ idx++ idx++ sgnirts comma++))
                          
@@ -446,7 +507,7 @@
                                (let ([ach (string-ref raw aidx)]
                                      [aidx++ (+ aidx 1)])
                                  (cond [(char-blank? ach) (lookahead aidx++ comma)]
-                                       [(eq? ach #\,)
+                                       [(eq? ach separator)
                                         (cond [(>= comma comma/max) (make+exn:svg:malformed token) (lookahead aidx++ comma)]
                                               [else (lookahead aidx++ (+ comma 1))])]
                                        [(not (eq? ach #\())
@@ -470,3 +531,27 @@
 (define svg-comma-wsp-list-split : (-> XML-Token String (Listof String))
   (lambda [token raw]
     (svg-list-split token raw 1 1)))
+
+(define svg-semicolon-wsp-list-split : (-> XML-Token String (Listof String))
+  (lambda [token raw]
+    (svg-list-split token raw 1 1 #:separator #\;)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define svg-string->animated-flonum : (-> XML-Token String (Option Flonum))
+  (lambda [token v]
+    (define fl (string->flonum v))
+    (and fl
+         (cond [(<= 0.0 fl 1.0) fl]
+               [else (make+exn:svg:range token) fl]))))
+
+(define svg-string->spline-control-point : (-> XML-Token String (XML-Option SVG-Animated-Control-Point))
+  (lambda [token v]
+    (define splines (string-split v #px"\\s+"))
+
+    (cond [(and (pair? splines) (pair? (cdr splines)) (pair? (cddr splines)) (pair? (cdddr splines)) (null? (cddddr splines)))
+           (let-values ([(x1 y1) (values (svg-string->animated-flonum token (car splines)) (svg-string->animated-flonum token (cadr splines)))]
+                        [(x2 y2) (values (svg-string->animated-flonum token (caddr splines)) (svg-string->animated-flonum token (cadddr splines)))])
+             (and (flonum? x1) (flonum? y1)
+                  (flonum? x2) (flonum? y2)
+                  (list x1 y1 x2 y2)))]
+          [else (make+exn:svg:malformed token)])))

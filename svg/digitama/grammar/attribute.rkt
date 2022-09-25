@@ -14,6 +14,8 @@
 (require sgml/digitama/plain/grammar)
 (require sgml/digitama/grammar)
 
+(require "datatype.rkt")
+
 (require (for-syntax syntax/parse))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -38,37 +40,37 @@
 (struct svg-attribute () #:type-name SVG-Attribute #:transparent)
 
 (define-svg-attribute core
-  ([xml:base : (Option String)  #:= #false #:<-> xml:attr-value*->string]
-   [xml:lang : (Option String)  #:= #false #:<-> xml:attr-value*->string]
-   [xml:space : (Option Symbol) #:= #false #:<-> xml:attr-value*->symbol]))
+  ([xml:base : (Option String)                                #:= #false #:<-> xml:attr-value*->string]
+   [xml:lang : (Option String)                                #:= #false #:<-> xml:attr-value*->string]
+   [xml:space : (Option Symbol)                               #:= #false #:<-> xml:attr-value*->symbol]))
 
 (define-svg-attribute condition
-  ([requiredFeatures : (Option (Listof Symbol)) #:= #false #:<-> xml:attr-value*->symbol-list]
-   [requiredExtensions : (Option String)        #:= #false #:<-> xml:attr-value*->string]
-   [systemLanguage : (Option String)            #:= #false #:<-> xml:attr-value*->string]))
+  ([requiredFeatures : (Option (Listof Symbol))               #:= #false #:<-> xml:attr-value*->symbol-list]
+   [requiredExtensions : (Option String)                      #:= #false #:<-> xml:attr-value*->string]
+   [systemLanguage : (Option String)                          #:= #false #:<-> xml:attr-value*->string]))
 
 (define-svg-attribute external
-  ([externalResourcesRequired : (Option String) #:= #false #:<-> xml:attr-value*->string]))
+  ([externalResourcesRequired : (Option XML-Boolean)          #:= #false #:<-> xml:attr-value*->boolean]))
 
 (define-svg-attribute xlink
-  ([xlink:actuate : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [xlink:arcrole : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [xlink:href : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [xlink:role : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [xlink:show : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [xlink:title : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [xlink:type : (Option String) #:= #false #:<-> xml:attr-value*->string]))
+  ([xlink:href : (Option String)                              #:= #false #:<-> svg:attr-value*->IRI]
+   [xlink:type : (Option SVG:KW:LinkType)                     #:= #false #:<-> svg:attr-value*->kw:link:type]
+   [xlink:role : (Option String)                              #:= #false #:<-> svg:attr-value*->IRI]
+   [xlink:arcrole : (Option String)                           #:= #false #:<-> svg:attr-value*->IRI]
+   [xlink:title : (Option String)                             #:= #false #:<-> xml:attr-value*->string]
+   [xlink:show : (Option SVG:KW:LinkShow)                     #:= #false #:<-> svg:attr-value*->kw:link:show]
+   [xlink:actuate : (Option SVG:KW:LinkActuate)               #:= #false #:<-> svg:attr-value*->kw:link:actuate]))
 
 (define-svg-attribute filter-primitive
-  ([x : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [y : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [width : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [height : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [result : (Option String) #:= #false #:<-> xml:attr-value*->string]))
+  ([x : (Option XML-Dimension)                                #:= #false #:<-> svg:attr-value*->coordinate]
+   [y : (Option XML-Dimension)                                #:= #false #:<-> svg:attr-value*->coordinate]
+   [width : (Option XML-Dimension)                            #:= #false #:<-> svg:attr-value*->dim:length]
+   [height : (Option XML-Dimension)                           #:= #false #:<-> svg:attr-value*->dim:length]
+   [result : (Option Symbol)                                  #:= #false #:<-> xml:attr-value*->symbol]))
 
 (define-svg-attribute style
-  ([class : (Option (Listof Symbol)) #:= #false #:<-> xml:attr-value*->symbol-list]
-   [style : (Option String)  #:= #false #:<-> xml:attr-value*->string]))
+  ([class : (Option (Listof Symbol))                          #:= #false #:<-> xml:attr-value*->symbol-list]
+   [style : (Option String)                                   #:= #false #:<-> xml:attr-value*->string]))
 
 (define-svg-attribute presentation
   ([alignment-baseline : (Option String) #:= #false #:<-> xml:attr-value*->string]
@@ -132,8 +134,8 @@
    [writing-mode : (Option String) #:= #false #:<-> xml:attr-value*->string]))
 
 (define-svg-attribute animation-target
-  ([attributeName : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [attributeType : (Option String) #:= #false #:<-> xml:attr-value*->string]))
+  ([attributeName : (Option Symbol)                           #:= #false #:<-> xml:attr-value*->symbol]
+   [attributeType : (Option SVG:KW:AniTargetType)             #:= #false #:<-> svg:attr-value*->kw:ani:target:type]))
 
 (define-svg-attribute animation-timing
   ([begin : (Option String) #:= #false #:<-> xml:attr-value*->string]
@@ -147,43 +149,43 @@
    [restart : (Option String) #:= #false #:<-> xml:attr-value*->string]))
 
 (define-svg-attribute animation-value
-  ([by : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [calcMode : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [from : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [keySplines : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [keyTimes : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [to : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [values : (Option String) #:= #false #:<-> xml:attr-value*->string]))
+  ([calcMode : (Option SVG:KW:AniInterpolation)               #:= #false #:<-> svg:attr-value*->kw:ani:interpolation]
+   [values : (Option (Listof String))                         #:= #false #:<-> svg:attr-value*->animated-values svg:attr-animated-values->value]
+   [keyTimes : (Option (Listof Flonum))                       #:= #false #:<-> svg:attr-value*->animated-times svg:attr-animated-values->value]
+   [keySplines : (Option (Listof SVG-Animated-Control-Point)) #:= #false #:<-> svg:attr-value*->animated-splines svg:attr-animated-splines->value]
+   [from : (Option String)                                    #:= #false #:<-> xml:attr-value*->string]
+   [to : (Option String)                                      #:= #false #:<-> xml:attr-value*->string]
+   [by : (Option String)                                      #:= #false #:<-> xml:attr-value*->string]))
 
 (define-svg-attribute animation-addition
-  ([accumulate : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [additive : (Option String) #:= #false #:<-> xml:attr-value*->string]))
+  ([additive : (Option SVG:KW:AniAdditive)                    #:= #false #:<-> svg:attr-value*->kw:ani:additive]
+   [accumulate : (Option SVG:KW:AniAccumulate)                #:= #false #:<-> svg:attr-value*->kw:ani:accumulate]))
 
 (define-svg-attribute document-event
-  ([onabort : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [onerror : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [onresize : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [onscroll : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [onunload : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [onzoom : (Option String) #:= #false #:<-> xml:attr-value*->string]))
+  ([onabort : (Option String)                                 #:= #false #:<-> xml:attr-value*->string]
+   [onerror : (Option String)                                 #:= #false #:<-> xml:attr-value*->string]
+   [onresize : (Option String)                                #:= #false #:<-> xml:attr-value*->string]
+   [onscroll : (Option String)                                #:= #false #:<-> xml:attr-value*->string]
+   [onunload : (Option String)                                #:= #false #:<-> xml:attr-value*->string]
+   [onzoom : (Option String)                                  #:= #false #:<-> xml:attr-value*->string]))
 
 (define-svg-attribute animation-event
-  ([onbegin : (Option String)  #:= #false #:<-> xml:attr-value*->string]
-   [onend : (Option String)    #:= #false #:<-> xml:attr-value*->string]
-   [onrepeat : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [onload : (Option String)   #:= #false #:<-> xml:attr-value*->string]))
+  ([onbegin : (Option String)                                 #:= #false #:<-> xml:attr-value*->string]
+   [onend : (Option String)                                   #:= #false #:<-> xml:attr-value*->string]
+   [onrepeat : (Option String)                                #:= #false #:<-> xml:attr-value*->string]
+   [onload : (Option String)                                  #:= #false #:<-> xml:attr-value*->string]))
 
 (define-svg-attribute graphical-event
-  ([onfocusin : (Option String)   #:= #false #:<-> xml:attr-value*->string]
-   [onfocusout : (Option String)  #:= #false #:<-> xml:attr-value*->string]
-   [onactivate : (Option String)  #:= #false #:<-> xml:attr-value*->string]
-   [onclick : (Option String)     #:= #false #:<-> xml:attr-value*->string]
-   [onmousedown : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [onmouseup : (Option String)   #:= #false #:<-> xml:attr-value*->string]
-   [onmouseover : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [onmousemove : (Option String) #:= #false #:<-> xml:attr-value*->string]
-   [onmouseout : (Option String)  #:= #false #:<-> xml:attr-value*->string]
-   [onload : (Option String)      #:= #false #:<-> xml:attr-value*->string]))
+  ([onfocusin : (Option String)                               #:= #false #:<-> xml:attr-value*->string]
+   [onfocusout : (Option String)                              #:= #false #:<-> xml:attr-value*->string]
+   [onactivate : (Option String)                              #:= #false #:<-> xml:attr-value*->string]
+   [onclick : (Option String)                                 #:= #false #:<-> xml:attr-value*->string]
+   [onmousedown : (Option String)                             #:= #false #:<-> xml:attr-value*->string]
+   [onmouseup : (Option String)                               #:= #false #:<-> xml:attr-value*->string]
+   [onmouseover : (Option String)                             #:= #false #:<-> xml:attr-value*->string]
+   [onmousemove : (Option String)                             #:= #false #:<-> xml:attr-value*->string]
+   [onmouseout : (Option String)                              #:= #false #:<-> xml:attr-value*->string]
+   [onload : (Option String)                                  #:= #false #:<-> xml:attr-value*->string]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define svg-attributes*-extract-core : (-> (Listof XML-Element-Attribute*) (Values (Option Symbol) (Option SVG:Attr:Core) (Listof XML-Element-Attribute*)))
