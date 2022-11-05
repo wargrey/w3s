@@ -39,8 +39,13 @@
                          #,read-sgml-doc))
          
          (module+ main
-           #,lang.sgml
+           (require racket/pretty)
+           (require racket/format)
            
+           (pretty-print-columns 160)
+
+           (define drracket? : Boolean (regexp-match? #px"DrRacket$" (find-system-path 'run-file)))
+           (if drracket? #,lang.sgml (printf "~a~n" (pretty-format #,lang.sgml)))
            (w3s-display-times '#,lang.sgml MB cpu real gc))
 
          (w3s-doc-process #,sgml-normalize #,lang*.sgml MB* cpu* real* gc* #,lang.sgml)))))

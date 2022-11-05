@@ -5,7 +5,6 @@
 (provide (all-defined-out))
 
 (require racket/string)
-(require racket/list)
 
 (require bitmap/base)
 (require bitmap/resize)

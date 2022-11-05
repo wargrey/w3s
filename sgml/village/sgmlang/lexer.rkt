@@ -40,7 +40,7 @@
   (lambda [t type subtype offset mode]
     (values "" type subtype
 
-            (w3s-token-start t) (w3s-token-end t)
+            (syn-token-start t) (syn-token-end t)
             
             ; the `backup distance` is nothing but an alternative to the `bad token`
             0

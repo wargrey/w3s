@@ -57,3 +57,21 @@
   (lambda [dt]
     (cond [(not dt) (values #false #false)]
           [else (values (car dt) (cdr dt))])))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define xml-doctype*->doctype : (-> XML-DocType* XML-DocType)
+  (lambda [doctype]
+    (define name (xml-doctype*-name doctype))
+    (define id (xml-doctype*-external doctype))
+    
+    (xml-doctype (and name (xml:name-datum name))
+                 (xml-external-id*->datum id))))
+
+(define xml-external-id*->datum : (-> XML-External-ID* XML-External-ID)
+  (lambda [id]
+    (cond [(not id) id]
+          [(xml:string? id) (xml:string-datum id)]
+          [else (let ([public (car id)]
+                      [system (cdr id)])
+                  (cons (and public (xml:string-datum public))
+                        (and system (xml:string-datum system))))])))

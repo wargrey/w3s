@@ -22,40 +22,13 @@
   (or (css-hex-color->rgba color-value)
       (make-exn:css:range color-value))
   #:where
-  [(define (short-color->number [color : String]) : (Option Nonnegative-Fixnum)
-     (for/fold ([hexcolor : (Option Nonnegative-Fixnum) 0])
-               ([ch : Char (in-string color)])
-       (define digit : (U Integer Void)
-         (cond [(char-numeric? ch)   (fx- (char->integer ch) #x30)]
-               [(char<=? #\a ch #\f) (fx- (char->integer ch) #x37)]
-               [(char<=? #\A ch #\F) (fx- (char->integer ch) #x57)]))
-       (and hexcolor (byte? digit)
-            (fxior (fxlshift hexcolor 8)
-                   (fxior (fxlshift digit 4)
-                          digit)))))
-   
-   (define (css-hex-color->rgba [color-value : CSS:Hash]) : (CSS-Option Hexa)
-     ;;; https://drafts.csswg.org/css-color/#numeric-rgb
-     (define color : String (keyword->immutable-string (css:hash-datum color-value)))
-     (define digits : Index (string-length color))
-     (define ?hexcolor : (CSS-Option Number)
-       (if (not no-alpha?)
-           (case digits
-             [(6 8) (string->number color 16)]
-             [(3 4) (short-color->number color)]
-             [else (make-exn:css:digit color-value)])
-           (case digits
-             [(6) (string->number color 16)]
-             [(3) (short-color->number color)]
-             [else (make-exn:css:digit color-value)])))
-     (cond [(exn:css? ?hexcolor) ?hexcolor]
-           [(or no-alpha? (fx= digits 3) (fx= digits 6)) (and (index? ?hexcolor) (hexa ?hexcolor 1.0))]
-           [else (and (exact-integer? ?hexcolor)
-                      (let ([hex-rgb (arithmetic-shift ?hexcolor -8)])
-                        (and (index? hex-rgb)
-                             (hexa hex-rgb
-                                   (fl/ (fx->fl (fxand ?hexcolor #xFF))
-                                        255.0)))))]))])
+  [(define (css-hex-color->rgba [color-value : CSS:Hash]) : (CSS-Option Hexa)
+     (define-values (rgb a)
+       (cond [(or no-alpha?) (values (css-#hex-color->rgb (css:hash-datum color-value)) #xFF)]
+             [else (css-#hex-color->rgba (css:hash-datum color-value))]))
+     (cond [(not rgb) #false]
+           [(symbol? rgb) (make-exn:css:digit color-value)]
+           [else (hexa rgb (/ (exact->inexact a) 255.0))]))])
 
 (define-css-function-filter <css-color-notation> #:-> FlColor
   ;;; https://drafts.csswg.org/css-color/#rgb-functions

@@ -95,11 +95,11 @@
     (define-values (--var ?fallback-list) (css-car (css:function-arguments var)))
     (define-values (?comma fallback) (css-car ?fallback-list))
     (cond [(not (css:ident=<-? --var symbol-unreadable?)) (make+exn:css:type:variable --var)]
-          [(not ?comma) (w3s-remake-token var css:var (css:ident-datum --var) null #false)]
+          [(not ?comma) (syn-remake-token var css:var (css:ident-datum --var) null #false)]
           [(not (css:comma? ?comma)) (make+exn:css:missing-comma ?comma)]
           [else (let-values ([(?fallback _ lazy?) (css-any->declaration-value ?comma fallback #true)])
                   (cond [(exn? ?fallback) ?fallback]
-                        [else (w3s-remake-token var css:var (css:ident-datum --var) ?fallback lazy?)]))])))
+                        [else (syn-remake-token var css:var (css:ident-datum --var) ?fallback lazy?)]))])))
 
 (define css-declaration-value-filter : (-> CSS-Token (Listof CSS-Token)
                                            (Values (U CSS-Token CSS-Syntax-Error) Boolean (Listof CSS-Token)))
@@ -123,13 +123,13 @@
            (define-values (next rest) (css-car/cdr candidates))
            (define binding : Symbol (string->symbol (substring (keyword->immutable-string (css:@keyword-datum token)) 1)))
            (if (or (not next) (not (css:block? next)))
-               (values (w3s-remake-token token css:racket binding) #false candidates)
+               (values (syn-remake-token token css:racket binding) #false candidates)
                (let-values ([(argl lazy?) (css-lazy-subtokens-map (filter-not css:whitespace? (css:block-components next)))])
                  (cond [(exn:css? argl) (values argl #false candidates)]
-                       [(and lazy?) (values (w3s-remake-token [token next] css:λracket binding argl lazy?) lazy? rest)]
+                       [(and lazy?) (values (syn-remake-token [token next] css:λracket binding argl lazy?) lazy? rest)]
                        [else (let ([reargl (css-λarguments-filter argl)])
                                (cond [(exn:css? reargl) (values reargl #false candidates)]
-                                     [else (values (w3s-remake-token [token next] css:λracket binding reargl lazy?) lazy? rest)]))])))]
+                                     [else (values (syn-remake-token [token next] css:λracket binding reargl lazy?) lazy? rest)]))])))]
           [(css:block? token)
            (define-values (subcomponents lazy?) (css-lazy-subtokens-map (css:block-components token)))
            (define block : (U CSS:Block CSS-Syntax-Error)
@@ -182,7 +182,7 @@
              (cond [(or (not ?:) (not (css:colon? ?:))) (rearrange swk (cons head lgra) rest)]
                    [(or (not ?kw) (not (css:ident? ?kw))) (rearrange swk (list* ?: head lgra) :kw+rest)]
                    [else (let* ([:kw (string->keyword (symbol->immutable-string (css:ident-datum ?kw)))]
-                                [<#:kw> (w3s-remake-token [head ?kw] css:#:keyword :kw)])
+                                [<#:kw> (syn-remake-token [head ?kw] css:#:keyword :kw)])
                            (cond [(not kw-value) (make+exn:css:missing-value <#:kw>)]
                                  [else (rearrange (cons kw-value (cons <#:kw> swk)) lgra others)]))])]
             [else (rearrange swk (cons head lgra) rest)]))))

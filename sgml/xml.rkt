@@ -5,11 +5,20 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (provide (all-defined-out) (all-from-out "dtd.rkt" "xexpr.rkt"))
-(provide (all-from-out "digitama/namespace.rkt" "digitama/whitespace.rkt"))
+(provide (all-from-out "digitama/namespace.rkt" "digitama/whitespace.rkt" "digitama/datatype.rkt"))
 (provide XML-DTD xml-load-relative-system-entity)
 (provide (struct-out XML-Document) read-xml-document xml-document-normalize xml-document*->document)
 (provide (struct-out XML-Document*) read-xml-document* xml-document*-normalize xml-document*-valid?)
 (provide XML-DTD-Guard XML-XXE-Guard make-xml-dtd-guard xml-dtd-guard? xml-xxe-guard?)
+(provide default-xml-error-topic)
+
+(provide XML-Element XML-Element-Attribute XML-Element-Attribute-Value)
+(provide XML-Processing-Instruction XML-Content XML-Subdatum)
+(provide (rename-out [xml-root-xexpr xml-doc-root]
+                     [xexpr-attr-ref xml-attr-ref]
+                     [xexpr-children-seek xml-children-seek]
+                     [Xexpr-Element-Children XML-Element-Children]
+                     [Xexpr-Attribute-Datum XML-Attribute-Datum]))
 
 (require "dtd.rkt")
 (require "xexpr.rkt")
@@ -18,6 +27,7 @@
 (require "digitama/doctype.rkt")
 (require "digitama/document.rkt")
 (require "digitama/normalize.rkt")
+(require "digitama/datatype.rkt")
 
 (require "digitama/digicore.rkt")
 (require "digitama/namespace.rkt")
@@ -38,15 +48,15 @@
      (cond [(xml-document? xml) (xml-document-prolog xml)]
            [else (xml-document*-prolog xml)]))))
 
-(define xml-doc-standalone? : (-> (U XML-Document XML-Document*) Boolean)
-  (lambda [xml]
-    (xml-prolog-standalone?
-     (cond [(xml-document? xml) (xml-document-prolog xml)]
-           [else (xml-document*-prolog xml)]))))
-
 (define xml-doc-encoding : (-> (U XML-Document XML-Document*) (Option String))
   (lambda [xml]
     (xml-prolog-encoding
+     (cond [(xml-document? xml) (xml-document-prolog xml)]
+           [else (xml-document*-prolog xml)]))))
+
+(define xml-doc-standalone? : (-> (U XML-Document XML-Document*) Boolean)
+  (lambda [xml]
+    (xml-prolog-standalone?
      (cond [(xml-document? xml) (xml-document-prolog xml)]
            [else (xml-document*-prolog xml)]))))
 
@@ -59,7 +69,7 @@
 (define xml-doc-external : (-> (U XML-Document XML-Document*) (U False String (Pairof String String)))
   (lambda [xml]
     (cond [(xml-document? xml) (xml-doctype-external (xml-document-doctype xml))]
-          [else (xml-external-id->datum (xml-doctype*-external (xml-document*-doctype xml)))])))
+          [else (xml-external-id*->datum (xml-doctype*-external (xml-document*-doctype xml)))])))
 
 (define xml-doc-namespaces : (-> (U XML-Document XML-Document*) (Listof (Pairof Symbol String)))
   (lambda [xml]
@@ -68,7 +78,7 @@
           (let ([?root (xml-document-root-element xml)])
             (if (not ?root) null (cadr ?root)))
           (let ([?root (xml-document*-root-element xml)])
-            (if (not ?root) null (map xml-attribute->datum (cadr ?root))))))
+            (if (not ?root) null (map xml-attribute*->datum (cadr ?root))))))
     
     (let filter-namespace ([as : (Listof XML-Element-Attribute) root-attlist]
                            [sn : (Listof (Pairof Symbol String)) null])

@@ -106,6 +106,7 @@
                                                 [else (λ-fold (cons datum (cons λ:kw swk)) (remq λ:kw λ:mkws) rest)]))]))])]
              [(pair? λ:mkws) (make-exn:css:arity <λ>)]
              [else (let ([λparser (λfilter λname #false)])
+                     (: argl (CSS-Option (Listof Any)))
                      (define-values (argl rest) (if (void? λparser) (values swk args) (λparser swk args)))
                      (cond [(exn:css? argl) argl]
                            [(not argl) (make-exn:css:type rest)]

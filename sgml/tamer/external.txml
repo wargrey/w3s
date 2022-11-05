@@ -6,7 +6,7 @@
     %SYMBOLS;
   ]]>
 
-  <!ENTITY SELF SYSTEM "external.xml">
+  <!ENTITY SELF SYSTEM "external.txml">
   <!ENTITY nested "&SELF;">
 ]>
 

@@ -349,7 +349,7 @@
 
 (define xsch-id-position : (-> XSch-ID-Attribute Positive-Integer)
   (lambda [idtype]
-    (w3s-token-start (car idtype))))
+    (syn-token-start (car idtype))))
 
 (define xsch-notation-attribute? : (-> XSch-Attribute (Option XSch-Notation-Attribute))
   (lambda [attr]
@@ -363,7 +363,7 @@
 
 (define xsch-notation-position : (-> XSch-Notation-Attribute Positive-Integer)
   (lambda [ntype]
-    (w3s-token-start (caar ntype))))
+    (syn-token-start (caar ntype))))
 
 (define xsch-error-tokens : (-> XML-Token XML-Element-Attribute-Value* (Listof XML-Token))
   (lambda [<aname> <avalue>]

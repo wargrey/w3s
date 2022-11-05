@@ -1,17 +1,15 @@
 #lang typed/racket/base
 
+(provide (all-defined-out))
 (provide (all-from-out racket/list racket/format))
-(provide (struct-out W3S-Token) w3s-token-location-string w3s-remake-token)
-(provide (except-out (all-defined-out) xml-make-syntax-error
-                     define-tokens define-token define-token-interface
-                     define-symbolic-tokens))
+(provide (struct-out SYN-Token) syn-token-location-string syn-remake-token)
 
 (require racket/list)
 (require racket/format)
 (require racket/symbol)
 (require racket/match)
 
-(require css/digitama/syntax/w3s)
+(require digimon/token)
 
 (require (for-syntax racket/base))
 (require (for-syntax racket/syntax))
@@ -23,39 +21,6 @@
 (define-type (XML-Option xml) (U xml XML-Syntax-Error False))
 (define-type (XML:Filter xml) (-> XML-Syntax-Any (XML-Option xml)))
 (define-type (XML-Parser xml) (-> xml (Listof XML-Token) (Values (XML-Option xml) (Listof XML-Token))))
-
-(define-syntax (define-token-interface stx)
-  (syntax-case stx [:]
-    [(_ symbolic-prefix : Type id? id-datum #:+ XML:ID #:eq? type=?)
-     (with-syntax ([<id> (format-id #'symbolic-prefix "<~a>" (syntax-e #'symbolic-prefix))]
-                   [id=:=? (format-id #'symbolic-prefix "~a=:=?" (syntax-e #'symbolic-prefix))])
-       (syntax/loc stx
-         (begin (define <id> : (All (a) (case-> [(-> Type Boolean : #:+ a) -> (XML:Filter a)]
-                                                [(U (-> Type Boolean) (Listof Type) Type) -> (XML:Filter Type)]
-                                                [-> (XML:Filter Type)]))
-                  (case-lambda
-                    [() (λ [[t : XML-Syntax-Any]] (and (id? t) (id-datum t)))]
-                    [(range?) (cond [(procedure? range?)
-                                     (λ [[t : XML-Syntax-Any]]
-                                       (and (id? t)
-                                            (or (let ([d : Type (id-datum t)]) (and (range? d) d))
-                                                (make-exn:rnc:range t))))]
-                                    [(list? range?)
-                                     (λ [[t : XML-Syntax-Any]]
-                                       (and (id? t)
-                                            (let ([d : Type (id-datum t)])
-                                              (cond [(member d range? type=?) d]
-                                                    [else (make-exn:rnc:range t)]))))]
-                                    [else (λ [[t : XML-Syntax-Any]]
-                                            (and (id? t)
-                                                 (let ([d : Type (id-datum t)])
-                                                   (if (type=? d range?) d (make-exn:rnc:range t)))))])]))
-
-                (define id=:=? : (-> Any Type (Option Type) : #:+ XML:ID) #| for performance |#
-                  (lambda [t v]
-                    (and (id? t)
-                         (let ([d : Type (id-datum t)])
-                           (and (type=? d v) d))))))))]))
 
 (define-syntax (define-token stx)
   (syntax-parse stx #:literals [: Symbol Keyword]
@@ -71,7 +36,7 @@
        (syntax/loc stx
          (begin (struct id parent ([datum : Type] rest ...) #:transparent #:type-name Otherwise)
                 (define (id=? [t1 : Otherwise] [t2 : Otherwise]) : Boolean (type=? (id-datum t1) (id-datum t2)))
-                (define-token-interface id : Type id? id-datum #:+ Otherwise #:eq? type=?))))]))
+                (define-token-interface id : Type id? id-datum #:+ Otherwise #:eq? type=? #:for XML-Syntax-Any #:throw exn:rnc:range))))]))
 
 (define-syntax (define-symbolic-tokens stx)
   (syntax-parse stx
@@ -127,7 +92,10 @@
      (syntax/loc stx (begin (list 'token line col) ...)))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-tokens xml-token w3s-token #:+ XML-Token
+(define default-xml-error-topic : (Parameterof Symbol) (make-parameter 'exn:xml:syntax))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define-tokens xml-token syn-token #:+ XML-Token
   [[xml:open            #:+ XML:Open            #:-> xml:delim]
    [xml:close           #:+ XML:Close           #:-> xml:delim]
    [xml:eq              #:+ XML:Eq              #:-> xml:delim]
@@ -167,7 +135,7 @@
     [xml:delim          #:+ XML:Delim           #:as (U Symbol Char)]
     [xml:name           #:+ XML:Name            #:as Symbol]
     [xml:pereference    #:+ XML:PEReference     #:as Keyword]
-    [xml:bad            #:+ XML:Bad             #:as (Pairof String Symbol)]))
+    [xml:bad            #:+ XML:Bad             #:as (Pairof Symbol String)]))
 
 (define-syntax-error exn:xml #:as XML-Syntax-Error #:for XML-Token
   ;;; https://www.w3.org/TR/xml/#sec-terminology
@@ -225,13 +193,23 @@
   [exn:rnc:uri           #:-> exn:rnc:vc]
   [exn:rnc:single        #:-> exn:rnc:vc]
   [exn:rnc:unqualified   #:-> exn:rnc:vc]
-  [exn:rnc:annotation    #:-> exn:rnc:vc])
+  [exn:rnc:annotation    #:-> exn:rnc:vc]
+
+  ; for SVG
+  [exn:svg:vc            #:-> exn:xml:vc]
+  [exn:svg:malformed     #:-> exn:svg:vc]
+  [exn:svg:unrecognized  #:-> exn:svg:vc]
+  [exn:svg:range         #:-> exn:svg:unrecognized]
+  [exn:svg:unit          #:-> exn:svg:range]
+  [exn:svg:function      #:-> exn:svg:range]
+  [exn:svg:digit         #:-> exn:svg:range]
+  [exn:svg:missing-comma #:-> exn:svg:malformed])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-token->syntax : (-> XML-Token Syntax)
   (lambda [instance]
     (datum->syntax #false (xml-token->datum instance)
-                   (w3s-token->syntax-location instance))))
+                   (syn-token->syntax-location instance))))
 
 (define xml-token-datum->string : (-> XML-Token String)
   (lambda [instance]
@@ -242,7 +220,7 @@
 
 (define xml-token->string : (->* (XML-Token) ((Option Any) (Option Any)) String)
   (lambda [instance [alt-object #false] [alt-datum #false]]
-    (string-append (w3s-token-location-string instance) ": "
+    (string-append (syn-token-location-string instance) ": "
                    (format "~a: ~a"
                      (or (object-name alt-object) (object-name instance))
                      (or alt-datum (xml-token-datum->string instance))))))
@@ -251,13 +229,13 @@
   (lambda [exn:xml any]
     (match any
       [(or #false (list)) (exn:xml (~a eof) (current-continuation-marks) null)]
-      [(list token) (w3s-token->exn exn:xml xml-token->string xml-token->syntax token)]
-      [(list main others ...) (w3s-token->exn exn:xml xml-token->string xml-token->syntax xml-token-datum->string main (filter-not xml:whitespace? others))]
-      [(? xml-token?) (w3s-token->exn exn:xml xml-token->string xml-token->syntax any)])))
+      [(list token) (syn-token->exn exn:xml xml-token->string xml-token->syntax token)]
+      [(list main others ...) (syn-token->exn exn:xml xml-token->string xml-token->syntax xml-token-datum->string main (filter-not xml:whitespace? others))]
+      [(? xml-token?) (syn-token->exn exn:xml xml-token->string xml-token->syntax any)])))
 
 (define xml-log-syntax-error : (->* (XML-Syntax-Error) ((Option XML-Token) (Option Log-Level)) Void)
   (lambda [errobj [property #false] [level #false]]
-    (w3s-log-syntax-error 'exn:xml:syntax xml-token->string xml-token->datum
+    (syn-log-syntax-error (default-xml-error-topic) xml-token->string xml-token->datum
                           errobj property (or level
                                               (cond [(exn:xml:fatal? errobj) 'error]
                                                     [(exn:xml:error? errobj) 'warning]

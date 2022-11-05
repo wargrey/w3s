@@ -25,10 +25,10 @@
 (define-type (XML-Prolog-Handler seed) (-> (U String Symbol) Nonnegative-Flonum (Option String) Boolean Boolean seed seed))
 (define-type (XML-Doctype-Handler seed) (-> (Option Symbol) (Option String) (Option String) seed seed))
 (define-type (XML-PI-Handler seed) (-> (Option Symbol) Symbol (Option String) seed seed))
-(define-type (XML-Element-Handler seed) (-> Symbol Index (Option SAX-Attributes #| `False` implies ETag|#) Boolean seed seed))
-(define-type (XML-PCData-Handler seed) (-> Symbol Index String Boolean #| indicator of `<![CDATA[]]>` |# seed seed))
+(define-type (XML-Element-Handler seed) (-> Symbol Index (Option SAX-Attributes #| `False` implies ETag|#) Boolean Boolean seed seed))
+(define-type (XML-PCData-Handler seed) (-> Symbol Index String Boolean #| <= preserve |# Boolean #| <= `<![CDATA[]]>` |# seed seed))
 (define-type (XML-GEReference-Handler seed) (-> (U Symbol Index) (Option Char) seed seed))
-(define-type (XML-Comment-Handler seed) (-> (Option Symbol) String seed seed))
+(define-type (XML-Comment-Handler seed) (-> (Option Symbol) String Boolean seed seed))
 
 (struct (seed) xml-event-handler
   ([prolog : (XML-Prolog-Handler seed)]
@@ -53,10 +53,10 @@
   (xml-event-handler (or (if (void? document) (and src (xml-event-handler-prolog src)) document) sax-identity/6)
                      (or (if (void? doctype) (and src (xml-event-handler-doctype src)) doctype) sax-identity/4)
                      (or (if (void? pi) (and src (xml-event-handler-pi src)) pi) sax-identity/4)
-                     (or (if (void? element) (and src (xml-event-handler-element src)) element) sax-identity/5)
-                     (or (if (void? pcdata) (and src (xml-event-handler-pcdata src)) pcdata) sax-identity/5)
+                     (or (if (void? element) (and src (xml-event-handler-element src)) element) sax-identity/6)
+                     (or (if (void? pcdata) (and src (xml-event-handler-pcdata src)) pcdata) sax-identity/6)
                      (or (if (void? geref) (and src (xml-event-handler-geref src)) geref) sax-identity/3)
-                     (or (if (void? comment) (and src (xml-event-handler-comment src)) comment) sax-identity/3)))
+                     (or (if (void? comment) (and src (xml-event-handler-comment src)) comment) sax-identity/4)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define #:forall (seed) load-xml-datum : (->* (SGML-StdIn (XML-Event-Handlerof (U Void seed)))
@@ -113,7 +113,7 @@
               [(eq? self #\<)
                (let-values ([(consume++++ scope++++ datum++) (xml-sax-element /dev/xmlin consume++ scope++ saxcb datum xml:lang xml:space xml:filter)])
                  (sax consume++++ scope++++ (or datum++ datum)))]
-              [(xml-comment? self) (sax consume++ scope++ (fcomment #false (xml-white-space-raw self) datum))]
+              [(xml-comment? self) (sax consume++ scope++ (fcomment #false (xml-white-space-raw self) (eq? xml:space 'preserve) datum))]
               [else (sax consume++ scope++ datum)])))))
 
 (define xml-sax-declaration : (-> Input-Port XML-Token-Consumer XML-Scope (Values (Option XML-Declaration) XML-Token-Consumer XML-Scope))
@@ -165,7 +165,7 @@
                        [felement (xml-event-handler-element saxcb)])
                   ; broken start tag should not affect its parent and sibling elements
                   (let*-values ([(?attrs empty? consume++++ scope++++ lang space) (xml-sax-element-attributes /dev/xmlin consume++ scope++ xml:lang xml:space)]
-                                [(datum) (and ?tagname ?attrs datum0 (felement ?tagname (assert scope++ index?) ?attrs empty? datum0))])
+                                [(datum) (and ?tagname ?attrs datum0 (felement ?tagname (assert scope++ index?) ?attrs empty? (eq? space 'preserve) datum0))])
                     (cond [(not empty?) (xml-sax-subelement ?tagname /dev/xmlin consume++++ scope++++ saxcb datum lang space xml:filter)]
                           [else (values consume++++ scope++++ datum)])))])))
 
@@ -203,6 +203,7 @@
     (define fpcdata : (XML-PCData-Handler seed) (xml-event-handler-pcdata saxcb))
     (define fgeref : (XML-GEReference-Handler seed) (xml-event-handler-geref saxcb))
     (define depth : Index (assert scope index?))
+    (define preserve? : Boolean (eq? xml:space 'preserve))
     
     (let sax-subelement ([consume : XML-Token-Consumer consume]
                          [scope : XML-Scope scope]
@@ -214,59 +215,58 @@
             [(xml-comment? self) ;; TODO: dealing with newlines
              (sax-subelement consume++ scope++
                              (and tagname datum
-                                  (fcomment tagname (xml-white-space-raw self)
-                                            (sax-cdata-process tagname atadc fpcdata depth datum)))
+                                  (fcomment tagname (xml-white-space-raw self) preserve?
+                                            (sax-cdata-process tagname atadc fpcdata depth preserve? datum)))
                              null #| comment itself is a kind of whitespace, thus whitespaces surrounded it should be consolidated altogether |#)]
             [(xml-white-space? self)
              (sax-subelement consume++ scope++ datum
                              (cond [(not (and datum tagname)) atadc]
-                                   [(eq? xml:space 'preserve) (cons (xml:space=preserve tagname self xml:filter xml:lang) atadc)]
+                                   [(or preserve?) (cons (xml:space=preserve tagname self xml:filter xml:lang) atadc)]
                                    [else (if (pair? atadc) (cons xml-whitespace/1 atadc) atadc)]))]
             [(eq? self #\<)
-             (let*-values ([(pcdatum) (and tagname datum (sax-cdata-process tagname atadc fpcdata depth datum))]
+             (let*-values ([(pcdatum) (and tagname datum (sax-cdata-process tagname atadc fpcdata depth preserve? datum))]
                            [(consume++++ scope++++ datum++) (xml-sax-element /dev/xmlin consume++ scope++ saxcb pcdatum xml:lang xml:space xml:filter)])
                (sax-subelement consume++++ scope++++ (or datum++ pcdatum) xml-whitespaces/0))]
             [(string? self) (sax-subelement consume++ scope++ datum (if (and datum tagname) (cons self atadc) atadc))]
             [(eq? self </)
-             (let*-values ([(pcdatum) (and tagname datum (sax-cdata-process tagname atadc fpcdata depth datum #true))]
+             (let*-values ([(pcdatum) (and tagname datum (sax-cdata-process tagname atadc fpcdata depth preserve? datum #true))]
                            [(?name consume++++ scope++++) (xml-consume-token /dev/xmlin consume++ scope++)]
                            [(?etag consume** scope**) (xml-consume-token /dev/xmlin consume++++ scope++++)])
                (values consume** scope**
                        (and pcdatum (eq? tagname ?name)
                             (symbol? ?name) (xml-etag? ?etag) 
-                            (felement ?name (assert scope++ index?)
-                                      #false #false pcdatum))))]
+                            (felement ?name (assert scope++ index?) #false #false preserve? pcdatum))))]
             [(eq? self <?)
-             (let*-values ([(pcdatum) (and tagname datum (sax-cdata-process tagname atadc fpcdata depth datum))]
+             (let*-values ([(pcdatum) (and tagname datum (sax-cdata-process tagname atadc fpcdata depth preserve? datum))]
                            [(p consume++++ scope++++) (xml-sax-pi /dev/xmlin consume++ scope++)])
                (sax-subelement consume++++ scope++++
                                (if (mpair? p) (and tagname pcdatum (fprocess tagname (mcar p) (mcdr p) pcdatum)) pcdatum)
                                xml-whitespaces/0))]
             [(eq? self <!&CDATA&)
-             (let*-values ([(pcdatum) (and tagname datum (sax-cdata-process tagname atadc fpcdata depth datum))]
+             (let*-values ([(pcdatum) (and tagname datum (sax-cdata-process tagname atadc fpcdata depth preserve? datum))]
                            [(?cdata consume++++ scope++++) (xml-consume-token /dev/xmlin consume++ scope++)]
                            [(?ecdata consume** scope**) (xml-consume-token /dev/xmlin consume++++ scope++++)])
                (cond [(not (string? ?cdata)) (sax-subelement consume** scope** pcdatum null)]
                      [else (sax-subelement consume** scope**
-                                           (and tagname pcdatum (fpcdata tagname depth ?cdata #true pcdatum))
+                                           (and tagname pcdatum (fpcdata tagname depth ?cdata preserve? #true pcdatum))
                                            xml-whitespaces/0)]))]
             [(index? self)
              (sax-subelement consume++ scope++
                              (and tagname datum
                                   (fgeref self (integer->char self)
-                                          (sax-cdata-process tagname atadc fpcdata depth datum)))
+                                          (sax-cdata-process tagname atadc fpcdata depth preserve? datum)))
                              xml-whitespaces/0)]
             [(symbol? self)
              (sax-subelement consume++ scope++
                              (and tagname datum
                                   (fgeref self (xml-prentity-value-ref self)
-                                          (sax-cdata-process tagname atadc fpcdata depth datum)))
+                                          (sax-cdata-process tagname atadc fpcdata depth preserve? datum)))
                              xml-whitespaces/0)]
             [else #| deadcode |# (sax-subelement consume++ scope++ datum atadc)]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define sax-cdata-process : (All (seed) (->* (Symbol (Listof (U XML-White-Space String)) (XML-PCData-Handler seed) Index seed) (Boolean) seed))
-  (lambda [tagname atadc fpcdata depth datum [tail? #false]]
+(define sax-cdata-process : (All (seed) (->* (Symbol (Listof (U XML-White-Space String)) (XML-PCData-Handler seed) Index Boolean seed) (Boolean) seed))
+  (lambda [tagname atadc fpcdata depth preserve? datum [tail? #false]]
     (cond [(null? atadc) datum]
           [else (let ([cdata/?1 (reverse (if (and tail? (eq? (car atadc) xml-whitespace/1)) (cdr atadc) atadc))])
                   (cond [(null? cdata/?1) datum]
@@ -274,7 +274,7 @@
                                 (cond [(null? cdata) datum]
                                       [else (fpcdata tagname depth
                                                      (apply string-append (map xml-cdata->datum cdata))
-                                                     #false datum)]))]))])))
+                                                     preserve? #false datum)]))]))])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-whitespaces/0 : (Listof XML-White-Space) (list xml-whitespace/0))

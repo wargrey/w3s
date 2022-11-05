@@ -3,19 +3,11 @@
 ;;; https://www.w3.org/TR/xml/#charsets
 
 (provide (all-defined-out))
+(provide char-hexdigit? char->hexadecimal)
+
+(require digimon/character)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define char-hexdigit? : (-> Char Boolean)
-  (lambda [ch]
-    (or (char-numeric? ch)
-        (char-ci<=? #\a ch #\f))))
-
-(define char->hexadecimal : (-> Char Fixnum)
-  (lambda [hexch]
-    (cond [(char<=? #\a hexch) (- (char->integer hexch) #x57)]
-          [(char<=? #\A hexch) (- (char->integer hexch) #x37)]
-          [else (- (char->integer hexch) #x30)])))
-
 (define natural->char-entity : (-> Fixnum (Option Index))
   (lambda [n]
     (and (or (= n #x9)
@@ -82,3 +74,17 @@
         (char<=? #\uF900 ch #\uFDCF)
         (char<=? #\uFDF0 ch #\uFFFD)
         (char<=? #\U10000 ch #\UEFFFF))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define xml-name? : (-> String Boolean)
+  (lambda [v]
+    (cond [(string=? v "") #false]
+          [else (and (xml-name-start-char? (string-ref v 0))
+                     (for/and ([c (in-string v 1)])
+                       (xml-name-char? c)))])))
+
+(define xml-name-fix : (->* (String) (Char) String)
+  (lambda [name [errchar #\_]]
+    (list->string
+     (for/list ([c (in-string name)])
+       (if (xml-name-char? c) c errchar)))))

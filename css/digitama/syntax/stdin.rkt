@@ -3,8 +3,9 @@
 (provide (all-defined-out))
 (provide css-read-syntax css-peek-syntax)
 
-(require racket/path)
 (require racket/port)
+
+(require digimon/token)
 
 (require "digicore.rkt")
 (require "tokenizer.rkt")
@@ -17,7 +18,7 @@
  [[peek-byte-or-special css-peek-syntax] (->* (Input-Port Natural) (U CSS-Token EOF))])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-type CSS-StdIn (U Input-Port Path-String Bytes (Listof CSS-Token)))
+(define-type CSS-StdIn (U Syn-Token-StdIn (Listof CSS-Token)))
 
 (define css-open-input-port : (-> CSS-StdIn Input-Port)
   ;;; https://drafts.csswg.org/css-syntax/#parser-entry-points
@@ -25,7 +26,7 @@
     (if (list? /dev/stdin)
         (let ([total : Index (length /dev/stdin)]
               [cursor : Integer 0])
-          (make-input-port (if (pair? /dev/stdin) (w3s-token-source (car /dev/stdin)) '/dev/cssin/null)
+          (make-input-port (if (pair? /dev/stdin) (syn-token-source (car /dev/stdin)) '/dev/cssin/null)
                            (λ [[buf : Bytes]]
                              (λ _ (cond [(>= cursor total) eof]
                                         [(set! cursor (add1 cursor))
@@ -34,18 +35,10 @@
                              (λ _ (cond [(>= (+ skip cursor) total) eof]
                                         [else (list-ref /dev/stdin (+ skip cursor))])))
                            void))
-        (let* ([/dev/rawin (cond [(port? /dev/stdin) /dev/stdin]
-                                 [(path? /dev/stdin) (open-input-file /dev/stdin)]
-                                 [(regexp-match? #px"\\.css$" /dev/stdin) (open-input-file (~a /dev/stdin))]
-                                 [(string? /dev/stdin) (open-input-string /dev/stdin '/dev/cssin/string)]
-                                 [(bytes? /dev/stdin) (open-input-bytes /dev/stdin '/dev/cssin/bytes)]
-                                 [else (open-input-string (~s /dev/stdin) '/dev/cssin/error)])]
+        (let* ([/dev/rawin (syn-token-stdin->port /dev/stdin #px"\\.css$" 'cssin)]
                [/dev/cssin : Input-Port (css-fallback-encode-input-port /dev/rawin)]
-               [peek-pool : (Listof (U CSS-Token EOF)) null])
-          (define portname : (U String Symbol)
-            (let ([src (object-name /dev/cssin)])
-              (cond [(path? src) (path->string (simple-form-path src))]
-                    [else (string->symbol (~a src))])))
+               [peek-pool : (Listof (U CSS-Token EOF)) null]
+               [portname : (U String Symbol) (syn-token-port-name /dev/cssin)])
           (make-input-port portname
                            (λ [[buf : Bytes]]
                              (λ _ (cond [(null? peek-pool) (css-consume-token /dev/cssin portname)]
@@ -81,46 +74,17 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define px.charset #px"^@charset \"(.*?)\";")
 
-(define css-skip-lang-line : (-> Input-Port Void)
-  (lambda [/dev/cssin]
-    (let skip ()
-      (define ch : (U EOF Char) (peek-char /dev/cssin))
-
-      (cond [(eq? ch #\#)
-             (cond [(equal? (peek-bytes 5 1 /dev/cssin) #"lang ") (read-line /dev/cssin)]
-                   [else (let ([nch (peek-byte /dev/cssin 1)])
-                           (cond [(eq? nch #;#\; #x3B) (read /dev/cssin) (skip)]
-                                 [(eq? nch #;#\| #x7C) (regexp-match-positions #px"^.*(?<=[|])[#]\\s*" /dev/cssin) (skip)]))])]
-            [(eq? ch #\;) (read-line /dev/cssin) (skip)]
-            [(and (char? ch) (char-whitespace? ch)) (regexp-match-positions #px"^\\s+" /dev/cssin) (skip)]))
-
-    (regexp-match-positions #px"^\\s*" /dev/cssin)
-    (void)))
-
-(define test-lang-line : (-> String (U String EOF))
-  (lambda [src]
-    (define /dev/cssin (open-input-string src))
-
-    (css-skip-lang-line /dev/cssin)
-    (read-line /dev/cssin)))
-
-(define css-fallback-charset : (-> Bytes String)
-  (lambda [from]
-    (define CHARSET : String (string-upcase (bytes->string/utf-8 from)))
-    (cond [(member CHARSET '("UTF-16BE" "UTF-16LE")) "UTF-8"]
-          [else CHARSET])))
-  
 (define css-fallback-encode-input-port : (-> Input-Port Input-Port)
   ;;; https://drafts.csswg.org/css-syntax/#input-byte-stream
   ;;; https://drafts.csswg.org/css-syntax/#charset-rule
   (lambda [/dev/rawin]
     (unless (port-counts-lines? /dev/rawin) (port-count-lines! /dev/rawin))
 
-    (css-skip-lang-line /dev/rawin)
+    (syn-token-port-skip-lang-line /dev/rawin)
     
     (define magic : (Option (Pairof Bytes (Listof (Option Bytes)))) (regexp-match-peek px.charset /dev/rawin))
     (define charset : (Option Bytes) (and magic (let ([name (cdr magic)]) (and (pair? name) (car name)))))
-    (define CHARSET : (Option String) (and charset (css-fallback-charset charset)))
+    (define CHARSET : (Option String) (and charset (syn-token-fallback-charset charset)))
     (cond [(or (false? CHARSET) (string-ci=? CHARSET "UTF-8")) /dev/rawin]
           [else (with-handlers ([exn? (λ _ /dev/rawin)])
                   (reencode-input-port /dev/rawin CHARSET (car (assert magic pair?))

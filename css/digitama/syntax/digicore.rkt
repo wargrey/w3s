@@ -1,12 +1,8 @@
 #lang typed/racket/base
 
+(provide (all-defined-out))
 (provide (all-from-out racket/flonum racket/fixnum racket/bool racket/list racket/format))
-(provide (struct-out W3S-Token) w3s-remake-token)
-(provide (except-out (all-defined-out)
-                     css-make-syntax-error css-tee-computed-value css-ref-raw
-                     define-tokens define-token define-token-interface
-                     define-symbolic-tokens define-numeric-tokens
-                     define-prefab-keyword))
+(provide (struct-out SYN-Token) syn-token-port-location syn-remake-token)
 
 (require racket/fixnum)
 (require racket/flonum)
@@ -17,8 +13,9 @@
 (require racket/keyword)
 (require racket/match)
 
+(require digimon/token)
+
 (require "misc.rkt")
-(require "w3s.rkt")
 
 (require (for-syntax racket/base))
 (require (for-syntax racket/string))
@@ -82,86 +79,6 @@
                 (define (#%property) : DataType initial-value) ...
                 (define pref:bindings : (Listof Symbol) (list 'properties ...)) ...)))]))
 
-(define-syntax (define-token-interface stx)
-  (syntax-case stx [:]
-    [(_ symbolic-prefix : Type id? id-datum #:+ CSS:ID #:eq? type=?)
-     (with-syntax ([<id> (format-id #'symbolic-prefix "<~a>" (syntax-e #'symbolic-prefix))]
-                   [id=<-? (format-id #'symbolic-prefix "~a=<-?" (syntax-e #'symbolic-prefix))]
-                   [id=:=? (format-id #'symbolic-prefix "~a=:=?" (syntax-e #'symbolic-prefix))])
-       (syntax/loc stx
-         (begin (define id=<-? : (All (a) (case-> [Any (-> Type Boolean : #:+ a) -> (Option a) : #:+ CSS:ID]
-                                                  [Any (U (-> Type Boolean) (Listof Type)) -> (Option Type) : #:+ CSS:ID]))
-                  (lambda [token range?]
-                    (and (id? token)
-                         (let ([datum : Type (id-datum token)])
-                           (cond [(procedure? range?) (and (range? datum) datum)]
-                                 [else (and (member datum range? type=?) datum)])))))
-
-                (define <id> : (All (a) (case-> [(-> Type Boolean : #:+ a) -> (CSS:Filter a)]
-                                                [(U (-> Type Boolean) (Listof Type) Type) -> (CSS:Filter Type)]
-                                                [-> (CSS:Filter Type)]))
-                  (case-lambda
-                    [() (λ [[t : CSS-Syntax-Any]] (and (id? t) (id-datum t)))]
-                    [(range?) (cond [(procedure? range?)
-                                     (λ [[t : CSS-Syntax-Any]]
-                                       (and (id? t)
-                                            (or (let ([d : Type (id-datum t)]) (and (range? d) d))
-                                                (make-exn:css:range t))))]
-                                    [(list? range?)
-                                     (λ [[t : CSS-Syntax-Any]]
-                                       (and (id? t)
-                                            (let ([d : Type (id-datum t)])
-                                              (cond [(member d range? type=?) d]
-                                                    [else (make-exn:css:range t)]))))]
-                                    [else (λ [[t : CSS-Syntax-Any]]
-                                            (and (id? t)
-                                                 (let ([d : Type (id-datum t)])
-                                                   (if (type=? d range?) d (make-exn:css:range t)))))])]))
-
-                (define id=:=? : (-> Any Type (Option Type) : #:+ CSS:ID) #| for performance |#
-                  (lambda [t v]
-                    (and (id? t)
-                         (let ([d : Type (id-datum t)])
-                           (and (type=? d v) d))))))))]
-    [(_ numeric-prefix : Type id? id-datum #:+ CSS:ID #:= type=?)
-     (with-syntax ([<id> (format-id #'numeric-prefix "<~a>" (syntax-e #'numeric-prefix))]
-                   [id=<-? (format-id #'numeric-prefix "~a=<-?" (syntax-e #'numeric-prefix))])
-       (syntax/loc stx
-         (begin (define id=<-? : (All (a) (case-> [Any (-> Type Boolean : #:+ a) -> (Option a) : #:+ CSS:ID]
-                                                  [Any (-> Type Type Boolean) Type -> (Option Type) : #:+ CSS:ID]
-                                                  [Any Type (-> Type Type Boolean) Type -> (Option Type) : #:+ CSS:ID]
-                                                  [Any (Listof Type) -> (Option Type) : #:+ CSS:ID]))
-                  (case-lambda
-                    [(token op n)   (and (id? token) (let ([d : Type (id-datum token)]) (and (op d n) d)))]
-                    [(token l op r) (and (id? token) (let ([m : Type (id-datum token)]) (and (op l m) (op m r) m)))]
-                    [(token range?) (and (id? token) (let ([d : Type (id-datum token)])
-                                                       (cond [(procedure? range?) (and (range? d) d)]
-                                                             [else (for/or : (Option Type) ([v (in-list range?)])
-                                                                     (and (type=? d v) d))])))]))
-
-                (define <id> : (All (a) (case-> [(-> Type Boolean : #:+ a) -> (CSS:Filter a)]
-                                                [(-> Type Type Boolean) Type -> (CSS:Filter Type)]
-                                                [Type (-> Type Type Boolean) Type -> (CSS:Filter Type)]
-                                                [(Listof Type) -> (CSS:Filter Type)]
-                                                [-> (CSS:Filter Type)]))
-                  (case-lambda
-                    [() (λ [[t : CSS-Syntax-Any]] (and (id? t) (id-datum t)))]
-                    [(op n) (λ [[t : CSS-Syntax-Any]]
-                              (and (id? t)
-                                   (let ([d : Type (id-datum t)])
-                                     (if (op d n) d (make-exn:css:range t)))))]
-                    [(l op r) (λ [[t : CSS-Syntax-Any]]
-                                (and (id? t)
-                                     (let ([m : Type (id-datum t)])
-                                       (if (and (op l m) (op m r)) m (make-exn:css:range t)))))]
-                    [(range?) (λ [[t : CSS-Syntax-Any]]
-                                (and (id? t)
-                                     (let ([d : Type (id-datum t)])
-                                       (or (cond [(procedure? range?) (and (range? d) d)]
-                                                 [(list? range?) (and (member d range? type=?) d)]
-                                                 [else (and (type=? d range?) d)])
-                                           (make-exn:css:range t)))))])))))]))
-
 (define-syntax (define-token stx)
   (syntax-parse stx #:literals [: Symbol Keyword]
     [(_ id : Number parent #:as Type #:=? type=? #:with id? id-datum)
@@ -169,7 +86,7 @@
        (syntax/loc stx
          (begin (struct id parent ([datum : Type]) #:transparent #:type-name Number)
                 (define (id=? [t1 : Number] [t2 : Number]) : Boolean (type=? (id-datum t1) (id-datum t2)))
-                (define-token-interface id : Type id? id-datum #:+ Number #:= type=?))))]
+                (define-token-interface id : Type id? id-datum #:+ Number #:= type=? #:for CSS-Syntax-Any #:throw exn:css:range))))]
     [(_ id : Identifier parent ((~and (~or Symbol Keyword) Type) #:ci rest ...) #:with id? id-datum)
      (with-syntax ([id=? (format-id #'id "~a=?" (syntax-e #'id))]
                    [id-norm=? (format-id #'id "~a-norm=?" (syntax-e #'id))]
@@ -178,15 +95,15 @@
          (begin (struct id parent ([datum : Type] [norm : Type] rest ...) #:transparent #:type-name Identifier)
                 (define (id=? [t1 : Identifier] [t2 : Identifier]) : Boolean (eq? (id-datum t1) (id-datum t2)))
                 (define (id-norm=? [t1 : Identifier] [t2 : Identifier]) : Boolean (eq? (id-norm t1) (id-norm t2)))
-                (define-token-interface id : Type id? id-datum #:+ Identifier #:eq? eq?)
-                (define-token-interface id-norm : Type id? id-norm  #:+ Identifier #:eq? eq?))))]
+                (define-token-interface id : Type id? id-datum #:+ Identifier #:eq? eq? #:for CSS-Syntax-Any #:throw exn:css:range)
+                (define-token-interface id-norm : Type id? id-norm  #:+ Identifier #:eq? eq? #:for CSS-Syntax-Any #:throw exn:css:range))))]
     [(_ id : Otherwise parent (Type rest ...) #:with id? id-datum)
      (with-syntax ([type=? (case (syntax-e #'Type) [(String) #'string=?] [(Char) #'char=?] [else #'equal?])]
                    [id=? (format-id #'id "~a=?" (syntax-e #'id))])
        (syntax/loc stx
          (begin (struct id parent ([datum : Type] rest ...) #:transparent #:type-name Otherwise)
                 (define (id=? [t1 : Otherwise] [t2 : Otherwise]) : Boolean (type=? (id-datum t1) (id-datum t2)))
-                (define-token-interface id : Type id? id-datum #:+ Otherwise #:eq? type=?))))]))
+                (define-token-interface id : Type id? id-datum #:+ Otherwise #:eq? type=? #:for CSS-Syntax-Any #:throw exn:css:range))))]))
 
 (define-syntax (define-symbolic-tokens stx)
   (syntax-parse stx
@@ -276,7 +193,7 @@
 (define-type CSS-Zero (U CSS:Zero CSS:Flzero))
 (define-type CSS-One (U CSS:One CSS:Flone))
 
-(define-tokens css-token w3s-token #:+ CSS-Token
+(define-tokens css-token syn-token #:+ CSS-Token
   [[css-numeric         #:+ CSS-Numeric         #:-> css-token   ([representation : String] [signed? : Boolean])]
    [css:dimension       #:+ CSS:Dimension       #:-> css-numeric ([datum : Flonum] [unit : Symbol])]]
 
@@ -304,7 +221,7 @@
 
   ; WARNING: Carefully defining types to avoid happening to mess up '(list? datum)'. 
   (define-symbolic-tokens css-bad-token #:+ CSS-Bad-Token
-    [css:bad            #:+ CSS:Bad             #:as String]
+    [css:bad            #:+ CSS:Bad             #:as (Pairof Symbol String)]
     [css:close          #:+ CSS:Close           #:as Char])
     
   ; TODO: Typed Racket is buggy if there are more than 11 conditions
@@ -393,7 +310,7 @@
 (define css-token->syntax : (-> CSS-Token Syntax)
   (lambda [instance]
     (datum->syntax #false (css-token->datum instance)
-                   (w3s-token->syntax-location instance))))
+                   (syn-token->syntax-location instance))))
 
 (define css-token-datum->string : (-> CSS-Token String)
   (lambda [instance]
@@ -408,7 +325,7 @@
   
 (define css-token->string : (->* (CSS-Token) ((Option Any) (Option Any)) String)
   (lambda [instance [alt-object #false] [alt-datum #false]]
-    (string-append (w3s-token-location-string instance) ": "
+    (string-append (syn-token-location-string instance) ": "
                    (format "~a: ~a"
                      (or (object-name alt-object) (object-name instance))
                      (or alt-datum (css-token-datum->string instance))))))
@@ -419,16 +336,16 @@
   (lambda [exn:css any]
     (match any
       [(or #false (list)) (exn:css (~a eof) (current-continuation-marks) null)]
-      [(list token) (w3s-token->exn exn:css css-token->string css-token->syntax token)]
-      [(list main others ...) (w3s-token->exn exn:css css-token->string css-token->syntax css-token-datum->string main (filter-not css:whitespace? others))]
-      [(? css:function? main) (w3s-token->exn exn:css css-token->string css-token->syntax css-token-datum->string main (css:function-arguments main))]
-      [(? css:λracket? main) (w3s-token->exn exn:css css-token->string css-token->syntax css-token-datum->string main (css:λracket-arguments main))]
-      [(? css:block? main) (w3s-token->exn exn:css css-token->string css-token->syntax css-token-datum->string main (css:block-components main))]
-      [(? css-token?) (w3s-token->exn exn:css css-token->string css-token->syntax any)])))
+      [(list token) (syn-token->exn exn:css css-token->string css-token->syntax token)]
+      [(list main others ...) (syn-token->exn exn:css css-token->string css-token->syntax css-token-datum->string main (filter-not css:whitespace? others))]
+      [(? css:function? main) (syn-token->exn exn:css css-token->string css-token->syntax css-token-datum->string main (css:function-arguments main))]
+      [(? css:λracket? main) (syn-token->exn exn:css css-token->string css-token->syntax css-token-datum->string main (css:λracket-arguments main))]
+      [(? css:block? main) (syn-token->exn exn:css css-token->string css-token->syntax css-token-datum->string main (css:block-components main))]
+      [(? css-token?) (syn-token->exn exn:css css-token->string css-token->syntax any)])))
 
 (define css-log-syntax-error : (->* (CSS-Syntax-Error) ((Option CSS-Token) (Option Log-Level)) Void)
   (lambda [errobj [property #false] [level #false]]
-    (w3s-log-syntax-error 'exn:css:syntax css-token->string css-token->datum
+    (syn-log-syntax-error 'exn:css:syntax css-token->string css-token->datum
                           errobj property (or level 'warning))))
 
 ;;; https://drafts.csswg.org/css-syntax/#parsing

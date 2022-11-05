@@ -268,9 +268,9 @@
 (define do-filter : (All (a b) (-> CSS:Ident (CSS:Filter a) (Listof+ CSS-Token) b (U a b CSS-Wide-Keyword)))
   (lambda [<desc-name> css-filter declared-values unset]
     (define single-value? : Boolean (null? (cdr declared-values)))
-    (define maybe-value (and single-value? (css-filter (car declared-values))))
+    (define maybe-value : (CSS-Option a) (and single-value? (css-filter (car declared-values))))
     (cond [(not single-value?) (make+exn:css:overconsumption (cdr declared-values) <desc-name>) unset]
-          [(nor (false? maybe-value) (exn:css? maybe-value)) maybe-value]
+          [(nor (not maybe-value) (exn:css? maybe-value)) maybe-value]
           [else (let ([maybe-wide ((<css-wide-keywords>) (car declared-values))])
                   (cond [(css-wide-keyword? maybe-wide) maybe-wide]
                         [(exn:css? maybe-value) (css-log-syntax-error maybe-value <desc-name>) unset]

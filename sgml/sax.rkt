@@ -7,8 +7,11 @@
 (provide XML-Element-Handler SAX-Attribute-Value)
 (provide XML-PCData-Handler XML-GEReference-Handler)
 (provide XML-Comment-Handler XML-Event-Handler)
+(provide sax-handler/xml-writer)
 
 (require "digitama/plain/sax.rkt")
 (require "digitama/plain/prompt.rkt")
 (require "digitama/namespace.rkt")
 (require "digitama/whitespace.rkt")
+
+(require "digitama/plain/sax/handler/writer.rkt")

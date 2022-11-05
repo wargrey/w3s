@@ -1,0 +1,16 @@
+#lang svg
+
+<!DOCTYPE svg [
+  <![INCLUDE[
+    <!ENTITY % SYMBOLS SYSTEM "symbols.tdtd">
+    %SYMBOLS;
+  ]]>
+
+  <!ENTITY SELF SYSTEM "external.tsvg">
+  <!ENTITY nested "&SELF;">
+]>
+
+<svg>
+ <text>&SELF;</text>
+ <text>&nested;</text>
+</svg>
