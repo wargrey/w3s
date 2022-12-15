@@ -25,7 +25,7 @@
       [else fallback])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define read-svg-document : (-> SGML-StdIn SVG)
+(define read-svg-document : (-> SGML-Stdin SVG)
   (lambda [/dev/svgin]
     (define xml.svg : XML-Document (xml-document-normalize (read-xml-document /dev/svgin)))
     (define prolog : XML-Prolog (xml-document-prolog xml.svg))
@@ -37,7 +37,7 @@
           (xml-prolog-location prolog)
           (xml-doctype-name doctype)))))
 
-(define read-svg-document* : (-> SGML-StdIn SVG)
+(define read-svg-document* : (-> SGML-Stdin SVG)
   (lambda [/dev/svgin]
     (parameterize ([default-xml-error-topic 'exn:svg:syntax])
       (define xml.svg : XML-Document* (xml-document*-normalize (read-xml-document* /dev/svgin)))

@@ -45,7 +45,7 @@
   #:type-name XML-Document+Schema)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define read-xml-document : (-> SGML-StdIn XML-Document)
+(define read-xml-document : (-> SGML-Stdin XML-Document)
   (lambda [/dev/rawin]
     (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin #false))
     (define tokens : (Listof XML-Datum) (read-xml-tokens /dev/xmlin))
@@ -69,7 +69,7 @@
     (xml-document (xml-document-prolog doc) (xml-document-doctype doc)
                   (xml-normalize (xml-document-content doc) xml:lang xml:space xml:space-filter))))
 
-(define read-xml-document* : (-> SGML-StdIn XML-Document*)
+(define read-xml-document* : (-> SGML-Stdin XML-Document*)
   (lambda [/dev/rawin]
     (define-values (/dev/xmlin version encoding standalone?) (xml-open-input-port /dev/rawin #true))
     (define source : (U Symbol String) (sgml-port-name /dev/xmlin))

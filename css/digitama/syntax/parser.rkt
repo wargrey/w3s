@@ -23,7 +23,7 @@
     [(_ id #:-> ->T (lambda [/dev/cssin [args : T defval ...] ...] body ...))
      (syntax/loc stx
        (begin (define (css-parse [/dev/cssin : Input-Port] [args : T defval ...] ...) : ->T body ...)
-              (define (id [/dev/stdin : CSS-StdIn (current-input-port)] [args : T defval ...] ...) : ->T
+              (define (id [/dev/stdin : CSS-Stdin (current-input-port)] [args : T defval ...] ...) : ->T
                 (define /dev/cssin : Input-Port (css-open-input-port /dev/stdin))
                 (dynamic-wind (λ [] '(css-open-input-port has already enabled line counting))
                               (λ [] (css-parse /dev/cssin args ...))

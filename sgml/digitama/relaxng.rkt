@@ -1,6 +1,6 @@
 #lang typed/racket/base
 
-(provide (all-defined-out) SGML-StdIn)
+(provide (all-defined-out) SGML-Stdin)
 (provide rnc-check-prefix?)
 
 (require "relaxng/rnc.rkt")
@@ -21,7 +21,7 @@
   #:type-name RNC-Grammar)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define read-rnc-grammar : (->* (SGML-StdIn) ((U False String Symbol) #:tagname Symbol) RNC-Grammar)
+(define read-rnc-grammar : (->* (SGML-Stdin) ((U False String Symbol) #:tagname Symbol) RNC-Grammar)
   (lambda [/dev/rawin [port-name #false] #:tagname [name 'grammar]]
     (define /dev/dtdin : Input-Port (rnc-open-input-port /dev/rawin #true port-name))
     (define source : (U Symbol String) (or port-name (sgml-port-name /dev/dtdin)))

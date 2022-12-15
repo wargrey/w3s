@@ -18,9 +18,9 @@
  [[peek-byte-or-special css-peek-syntax] (->* (Input-Port Natural) (U CSS-Token EOF))])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-type CSS-StdIn (U Syn-Token-StdIn (Listof CSS-Token)))
+(define-type CSS-Stdin (U Syn-Token-Stdin (Listof CSS-Token)))
 
-(define css-open-input-port : (-> CSS-StdIn Input-Port)
+(define css-open-input-port : (-> CSS-Stdin Input-Port)
   ;;; https://drafts.csswg.org/css-syntax/#parser-entry-points
   (lambda [/dev/stdin]
     (if (list? /dev/stdin)

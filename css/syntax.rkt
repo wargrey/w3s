@@ -2,7 +2,7 @@
 
 ;;; https://drafts.csswg.org/css-syntax
 
-(provide (all-defined-out) CSS-StdIn)
+(provide (all-defined-out) CSS-Stdin)
 (provide (struct-out CSS-Subject) make-css-subject)
 (provide current-css-child-index current-css-children-count)
 
@@ -38,13 +38,13 @@
 (require "recognizer.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define read-css-component-values : (-> CSS-StdIn CSS-Declaration-Parser (U CSS-Syntax-Error False (Listof Any)))
+(define read-css-component-values : (-> CSS-Stdin CSS-Declaration-Parser (U CSS-Syntax-Error False (Listof Any)))
   (lambda [/dev/cssin parse]
     (define-values (comp-values rest) (read-css-component-values* /dev/cssin parse))
 
     comp-values))
 
-(define read-css-component-values* : (-> CSS-StdIn CSS-Declaration-Parser (Values (U CSS-Syntax-Error False (Listof Any)) (Listof CSS-Token)))
+(define read-css-component-values* : (-> CSS-Stdin CSS-Declaration-Parser (Values (U CSS-Syntax-Error False (Listof Any)) (Listof CSS-Token)))
   (lambda [/dev/cssin parse]
     (define tokens : (Listof CSS-Token) (filter-not css:whitespace? (css-parse-component-values /dev/cssin)))
     (define-values (seulav rest)

@@ -46,15 +46,15 @@
                            ...))))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define tamer-parse : (-> CSS-StdIn Procedure (Values (U CSS-Syntax-Error False (Listof Any)) (Listof CSS-Token)))
+(define tamer-parse : (-> CSS-Stdin Procedure (Values (U CSS-Syntax-Error False (Listof Any)) (Listof CSS-Token)))
   (lambda [com.css atom-parser]
     (read-css-component-values* com.css atom-parser)))
 
-(define tamer-An+B : (-> CSS-StdIn (Option (Pairof Integer Integer)))
+(define tamer-An+B : (-> CSS-Stdin (Option (Pairof Integer Integer)))
   (lambda [com.css]
     (css-extract-An+B (css-parse-component-values com.css))))
 
-(define tamer-An+B-predicate : (-> CSS-StdIn (Option Keyword) CSS-An+B-Predicate)
+(define tamer-An+B-predicate : (-> CSS-Stdin (Option Keyword) CSS-An+B-Predicate)
   (lambda [com.css last?]
     (let ([A.B (tamer-An+B com.css)])
       (cond [(and A.B) (css-An+B-predicate A.B (and last? #true))]

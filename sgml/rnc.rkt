@@ -4,7 +4,7 @@
 ;     strong mathematical theory on regular expressions, and
 ;     what adapts the hedge automata theory
 
-(provide (all-defined-out) SGML-StdIn default-rnc-error-literal)
+(provide (all-defined-out) SGML-Stdin default-rnc-error-literal)
 (provide RNC-Grammar (struct-out rnc-grammar) rnc-check-prefix? read-rnc-grammar)
 (provide RNG-Grammar (struct-out rng-grammar) rnc-grammar-simplify)
 

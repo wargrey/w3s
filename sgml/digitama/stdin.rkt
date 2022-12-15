@@ -1,7 +1,7 @@
 #lang typed/racket/base
 
 (provide (all-defined-out))
-(provide (rename-out [Syn-Token-StdIn SGML-StdIn]
+(provide (rename-out [Syn-Token-Stdin SGML-Stdin]
                      [syn-token-port-name sgml-port-name]))
 
 (require racket/port)
@@ -10,7 +10,7 @@
 (require digimon/token)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-open-input-port : (->* (Syn-Token-StdIn) (Boolean) (Values Input-Port Nonnegative-Flonum (Option String) Boolean))
+(define xml-open-input-port : (->* (Syn-Token-Stdin) (Boolean) (Values Input-Port Nonnegative-Flonum (Option String) Boolean))
   ;;; https://www.w3.org/TR/xml/#sec-prolog-dtd
   ;;; https://www.w3.org/TR/xml/#NT-EncodingDecl
   ;;; https://www.w3.org/TR/xml/#sec-TextDecl
@@ -25,7 +25,7 @@
     (let-values ([(version encoding standalone?) (xml-read-declaration /dev/rawin)])
       (values (xml-reencode-port /dev/rawin encoding) version encoding standalone?))))
 
-(define dtd-open-input-port : (->* (Syn-Token-StdIn) (Boolean (U String Symbol False)) Input-Port)
+(define dtd-open-input-port : (->* (Syn-Token-Stdin) (Boolean (U String Symbol False)) Input-Port)
   (lambda [/dev/stdin [enable-line-counting? #false] [port-name #false]]
     (define /dev/rawin : Input-Port (syn-token-stdin->port /dev/stdin #px"\\.t?dtd$" 'dtdin port-name))
 
@@ -37,7 +37,7 @@
     (let-values ([(version encoding standalone?) (xml-read-declaration /dev/rawin)])
       (xml-reencode-port /dev/rawin encoding))))
 
-(define rnc-open-input-port : (->* (Syn-Token-StdIn) (Boolean (U String Symbol False)) Input-Port)
+(define rnc-open-input-port : (->* (Syn-Token-Stdin) (Boolean (U String Symbol False)) Input-Port)
   (lambda [/dev/stdin [enable-line-counting? #false] [port-name #false]]
     (define /dev/rawin : Input-Port (syn-token-stdin->port /dev/stdin #px"\\.t?rnc$" 'rncin port-name))
 

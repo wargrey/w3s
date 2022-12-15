@@ -217,7 +217,7 @@
    [css:bad:char        #:+ CSS:Bad:Char        #:-> css:bad]
    [css:bad:blank       #:+ CSS:Bad:Blank       #:-> css:bad]
    [css:bad:range       #:+ CSS:Bad:Range       #:-> css:bad]
-   [css:bad:stdin       #:+ CSS:Bad:StdIn       #:-> css:bad]]
+   [css:bad:stdin       #:+ CSS:Bad:Stdin       #:-> css:bad]]
 
   ; WARNING: Carefully defining types to avoid happening to mess up '(list? datum)'. 
   (define-symbolic-tokens css-bad-token #:+ CSS-Bad-Token

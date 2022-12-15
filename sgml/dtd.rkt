@@ -1,6 +1,6 @@
 #lang typed/racket/base
 
-(provide (all-defined-out) SGML-StdIn)
+(provide (all-defined-out) SGML-Stdin)
 (provide (struct-out XML-DTD) read-xml-type-definition)
 (provide XML-Schema xml-schema? struct:xml-schema)
 (provide Open-Input-XML-XXE)
