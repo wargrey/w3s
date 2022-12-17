@@ -17,8 +17,8 @@
 (provide (rename-out [xml-root-xexpr xml-doc-root]
                      [xexpr-attr-ref xml-attr-ref]
                      [xexpr-children-seek xml-children-seek]
-                     [Xexpr-Element-Children XML-Element-Children]
-                     [Xexpr-Attribute-Datum XML-Attribute-Datum]))
+                     [XExpr-Element-Children XML-Element-Children]
+                     [XExpr-Attribute-Datum XML-Attribute-Datum]))
 
 (require "dtd.rkt")
 (require "xexpr.rkt")

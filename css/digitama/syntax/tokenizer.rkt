@@ -99,7 +99,7 @@
 (define css-consume-whitespace-token : (-> CSS-Srcloc CSS:WhiteSpace)
   (lambda [srcloc]
     (define /dev/cssin : Input-Port (css-srcloc-in srcloc))
-    (css-consume-whitespace /dev/cssin)
+    (syn-token-skip-whitespace /dev/cssin)
     (css-make-token srcloc css:whitespace #\space)))
   
 (define css-consume-ident-token : (-> CSS-Srcloc Char (U CSS:Ident CSS:Function CSS:URL CSS:URange CSS:Bad))
@@ -195,14 +195,14 @@
   ;;; https://drafts.csswg.org/css-values/#about-invalid
   (lambda [srcloc]
     (define /dev/cssin : Input-Port (css-srcloc-in srcloc))
-    (css-consume-whitespace /dev/cssin)
+    (syn-token-skip-whitespace /dev/cssin)
     (let consume-url-token ([srahc : (Listof Char) null])
       (define ch : (U EOF Char) (read-char /dev/cssin))
       (cond [(or (eof-object? ch) (char=? ch #\)))
              (define uri : String (list->string (reverse srahc)))
              (when (eof-object? ch) (css-make-bad-token srcloc css:bad:eof struct:css:url uri))
              (css-make-token srcloc css:url uri null #false)]
-            [(and (char-whitespace? ch) (css-consume-whitespace /dev/cssin))
+            [(and (char-whitespace? ch) (syn-token-skip-whitespace /dev/cssin))
              (define end : (U EOF Char) (read-char /dev/cssin))
              (define uri : String (list->string (reverse srahc)))
              (cond [(or (eof-object? end) (char=? end #\))) (css-make-token srcloc css:url uri null #false)]
@@ -273,11 +273,6 @@
           [else (css-make-token srcloc css:delim prefix)])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define css-consume-whitespace : (-> Input-Port Void)
-  (lambda [/dev/cssin]
-    (regexp-match #px"\\s*" /dev/cssin)
-    (void)))
-  
 (define css-consume-name : (-> Input-Port (Option Char) String)
   ;;; https://drafts.csswg.org/css-syntax/#consume-a-name
   (lambda [/dev/cssin ?head]

@@ -1,6 +1,7 @@
 #lang typed/racket/base
 
-(provide (all-defined-out) syn-token-port-location)
+(provide (all-defined-out))
+(provide syn-token-port-location syn-token-skip-whitespace)
 
 (require digimon/token)
 

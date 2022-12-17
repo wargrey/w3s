@@ -1,7 +1,7 @@
 #lang typed/racket/base
 
 (provide (all-defined-out))
-(provide Xexpr Xexpr-AttList Xexpr-Element Xexpr-Attribute Xexpr-Attribute-Value Xexpr-Datum Xexpr-PI)
+(provide XExpr XExpr-AttList XExpr-Element XExpr-Attribute XExpr-Attribute-Value XExpr-Datum XExpr-PI)
 (provide xexpr? write-xexpr xexpr->bytes xexpr->string)
 
 (require "digitama/document.rkt")
@@ -9,8 +9,8 @@
 (require "digitama/plain/xexpr.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-type Xexpr-Element-Children (U XML-Element XML-Subdatum))
-(define-type Xexpr-Attribute-Datum (U String Symbol (Listof Symbol)))
+(define-type XExpr-Element-Children (U XML-Element XML-Subdatum))
+(define-type XExpr-Attribute-Datum (U String Symbol (Listof Symbol)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-root-xexpr : (-> (U XML-Document XML-Document*) (Option XML-Element))
@@ -23,7 +23,7 @@
              #:when (list? e))
       e)))
 
-(define xexpr-attr-ref : (-> XML-Element Symbol (Option Xexpr-Attribute-Datum))
+(define xexpr-attr-ref : (-> XML-Element Symbol (Option XExpr-Attribute-Datum))
   (lambda [elem name]
     (define attr : (Option XML-Element-Attribute) (assq name (cadr elem)))
       (and attr
@@ -33,7 +33,7 @@
 
 (define xexpr-children-seek : (-> XML-Element Symbol (U String Regexp) (Listof XML-Element))
   (lambda [docs.xml attr-name value]
-    (let seek : (Listof XML-Element) ([siblings : (Listof Xexpr-Element-Children) (caddr docs.xml)]
+    (let seek : (Listof XML-Element) ([siblings : (Listof XExpr-Element-Children) (caddr docs.xml)]
                                       [stnemele : (Listof XML-Element) null])
       (cond [(null? siblings) (reverse stnemele)]
             [else (let-values ([(self rest) (values (car siblings) (cdr siblings))])

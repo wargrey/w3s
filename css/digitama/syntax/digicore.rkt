@@ -2,7 +2,7 @@
 
 (provide (all-defined-out))
 (provide (all-from-out racket/flonum racket/fixnum racket/bool racket/list racket/format))
-(provide (struct-out SYN-Token) syn-token-port-location syn-remake-token)
+(provide (struct-out SYN-Token) syn-token-port-location syn-remake-token syn-token-skip-whitespace)
 
 (require racket/fixnum)
 (require racket/flonum)

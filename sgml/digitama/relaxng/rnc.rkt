@@ -63,7 +63,7 @@
 (define rnc-consume-token:* : RNC-Token-Consumer
   (lambda [/dev/rncin ch scope]
     (cond [(char-whitespace? ch)
-           (xml-skip-whitespace /dev/rncin)
+           (syn-token-skip-whitespace /dev/rncin)
            (values xml-collapsed-whitespace scope)]
           [(xml-name-char? ch)
            (let-values ([(id scope++) (rnc-consume-identify-or-keyword /dev/rncin ch)])

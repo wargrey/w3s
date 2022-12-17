@@ -744,7 +744,7 @@
   (lambda [/dev/entin [port-name #false]]
     (define /dev/entout : Output-Port (open-output-string '/dev/entout))
 
-    (xml-skip-whitespace /dev/entin)
+    (syn-token-skip-whitespace /dev/entin)
 
     (for ([line (in-bytes-lines /dev/entin)])
       (write-bytes line /dev/entout)

@@ -8,6 +8,7 @@
 (require racket/unsafe/ops)
 
 (require digimon/stdio)
+(require digimon/token)
 
 (require "characters.rkt")
 (require "delimiter.rkt")
@@ -62,7 +63,7 @@
               [(or (eq? ch #\?) (eq? ch #\])) (xml-consume-close-token /dev/xmlin ch xml-consume-token:* scope)] ; for PIs and CDATAs
               [else (values (xml-consume-contentchars /dev/xmlin ch) xml-consume-token:* scope)])
         (cond [(char-whitespace? ch)
-               (xml-skip-whitespace /dev/xmlin)
+               (syn-token-skip-whitespace /dev/xmlin)
                (values xml-collapsed-whitespace xml-consume-token:* scope)]
               [(or (xml-name-char? ch) (eq? ch #\# #| `#` is not special, but some keywords, like #REQUIRED, start with it |#))
                (let ([kw (xml-consume-nmtoken /dev/xmlin ch)])
@@ -83,14 +84,14 @@
   (lambda [/dev/xmlin ch scope]
     (cond [(xml-name-start-char? ch) (values (xml-consume-nmtoken /dev/xmlin ch) xml-consume-token:start-condition-block scope)]
           [(eq? ch #\%) (values (xml-consume-reference-token /dev/xmlin ch) xml-consume-token:start-condition-block scope)]
-          [(char-whitespace? ch) (xml-skip-whitespace /dev/xmlin) (xml-consume-token /dev/xmlin xml-consume-token:start-condition scope)]
+          [(char-whitespace? ch) (syn-token-skip-whitespace /dev/xmlin) (xml-consume-token /dev/xmlin xml-consume-token:start-condition scope)]
           [else (values (cons (xml-consume-chars-literal/exclusive /dev/xmlin #\[ (list ch)) !char) xml-consume-token:* scope)])))
 
 (define xml-consume-token:start-condition-block : XML-Token-Consumer
   ;;; https://www.w3.org/TR/xml/#sec-condition-sect
   (lambda [/dev/xmlin ch scope]
     (cond [(eq? ch #\[) (values csec& xml-consume-token:* scope)]
-          [(char-whitespace? ch) (xml-skip-whitespace /dev/xmlin) (xml-consume-token /dev/xmlin xml-consume-token:start-condition-block scope)]
+          [(char-whitespace? ch) (syn-token-skip-whitespace /dev/xmlin) (xml-consume-token /dev/xmlin xml-consume-token:start-condition-block scope)]
           [else (values (cons (xml-consume-chars-literal/exclusive /dev/xmlin #\[ (list ch)) !char) xml-consume-token:start-condition-block scope)])))
 
 (define xml-consume-token:start-decl-name : XML-Token-Consumer
@@ -109,7 +110,7 @@
 (define xml-consume-token:entity-name : XML-Token-Consumer
   ;;; https://www.w3.org/TR/xml/#sec-entity-decl
   (lambda [/dev/xmlin ch scope]
-    (cond [(char-whitespace? ch) (xml-skip-whitespace /dev/xmlin) (xml-consume-token /dev/xmlin xml-consume-token:entity-name scope)]
+    (cond [(char-whitespace? ch) (syn-token-skip-whitespace /dev/xmlin) (xml-consume-token /dev/xmlin xml-consume-token:entity-name scope)]
           [(eq? ch #\%)
            (if (eq? scope 'ENTITY)
                (values ch xml-consume-token:entity-name 'ENTITY%)
@@ -153,7 +154,7 @@
 (define xml-consume-token:tag-attr-name : XML-Token-Consumer
   ;;; https://www.w3.org/TR/xml/#NT-Attribute
   (lambda [/dev/xmlin ch scope]
-    (cond [(char-whitespace? ch) (xml-skip-whitespace /dev/xmlin) (xml-consume-token /dev/xmlin xml-consume-token:tag-attr-name scope)]
+    (cond [(char-whitespace? ch) (syn-token-skip-whitespace /dev/xmlin) (xml-consume-token /dev/xmlin xml-consume-token:tag-attr-name scope)]
           [(xml-name-start-char? ch) (values (xml-consume-nmtoken /dev/xmlin ch) xml-consume-token:tag-attr-eq scope)]
           [(eq? ch #\>) (values stag> xml-consume-token:* scope)] ; non-empty (start) tag does not have a close delimiter.
           [(eq? ch #\/)
@@ -188,7 +189,7 @@
 
 (define xml-consume-token:tag-end : XML-Token-Consumer
   (lambda [/dev/xmlin ch scope]
-    (cond [(char-whitespace? ch) (xml-skip-whitespace /dev/xmlin) (xml-consume-token /dev/xmlin xml-consume-token:tag-end scope)]
+    (cond [(char-whitespace? ch) (syn-token-skip-whitespace /dev/xmlin) (xml-consume-token /dev/xmlin xml-consume-token:tag-end scope)]
           [(eq? ch #\>) (values ch xml-consume-token:* (xml-doc-scope-- scope))]
           [else (values (cons (xml-consume-chars-literal/exclusive /dev/xmlin #\> (list ch)) !char) xml-consume-token:* scope)])))
 
@@ -303,10 +304,6 @@
             [(eq? ?space #\space) (read-whitespace (unsafe-fx+ span 1) newline?)]
             [(char-whitespace? ?space) (read-whitespace (unsafe-fx+ span 1) (or newline? (xml-newline-char? ?space)))]
             [else (xml-make-whitespace /dev/xmlin span leader newline?)]))))
-
-(define xml-skip-whitespace : (-> Input-Port Any)
-  (lambda [/dev/xmlin]
-    (regexp-match-positions #px"\\s*" /dev/xmlin)))
 
 (define xml-consume-comment-body+tail : (-> Input-Port (U XML-Comment XML-Error))
   ;;; https://www.w3.org/TR/xml/#sec-comments
@@ -448,13 +445,13 @@
 (define xml-consume-chars-literal/within-tag : (->* (Input-Port (Pairof Char (Listof Char))) (Boolean) (Listof Char))
   (lambda [/dev/xmlin chars [stop-at-whitespace? #false]]
     (when (and stop-at-whitespace? (char-whitespace? (car chars)))
-      (xml-skip-whitespace /dev/xmlin))
+      (syn-token-skip-whitespace /dev/xmlin))
     
     (let consume-literal ([srahc : (Listof Char) chars])
       (define ch : (U EOF Char) (peek-char /dev/xmlin))
       (cond [(eof-object? ch) (reverse srahc)]
             [(eq? ch #\>) (reverse srahc)]
-            [(and stop-at-whitespace? (char-whitespace? ch)) (xml-skip-whitespace /dev/xmlin) (reverse srahc)]
+            [(and stop-at-whitespace? (char-whitespace? ch)) (syn-token-skip-whitespace /dev/xmlin) (reverse srahc)]
             [(not (eq? ch #\/)) (read-char /dev/xmlin) (consume-literal (cons ch srahc))]
             [else (let ([ach (peek-char /dev/xmlin 1)])
                     (cond [(eof-object? ach) (read-char /dev/xmlin) (reverse (cons ch srahc))]
