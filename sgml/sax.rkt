@@ -4,7 +4,7 @@
 (provide (all-defined-out) load-xml-datum read-xml-datum sax-stop-with)
 (provide XML-Event-Handlerof xml-event-handler? make-xml-event-handler)
 (provide XML-Prolog-Handler XML-Doctype-Handler XML-PI-Handler)
-(provide XML-Element-Handler SAX-Attribute-Value)
+(provide XML-Element-Handler SAX-Attributes SAX-Attribute-Value)
 (provide XML-PCData-Handler XML-GEReference-Handler)
 (provide XML-Comment-Handler XML-Event-Handler)
 (provide sax-handler/xml-writer)
