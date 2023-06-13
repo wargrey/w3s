@@ -211,7 +211,7 @@
                          [atadc : (Listof (U XML-White-Space String)) null])
       (define-values (self consume++ scope++) (xml-consume-token /dev/xmlin consume scope))
       
-      (cond [(eof-object? rest) (values consume++ scope++ datum0)]
+      (cond [(eof-object? rest) (values consume++ scope++ datum)]
             [(xml-comment? self) ;; TODO: dealing with newlines
              (sax-subelement consume++ scope++
                              (and tagname datum

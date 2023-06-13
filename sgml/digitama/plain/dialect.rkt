@@ -1,18 +1,14 @@
 #lang typed/racket/base
 
 (provide (all-defined-out))
-(provide (all-from-out "shared/dialect.rkt"))
+(provide (all-from-out "../shared/dialect.rkt"))
 
 (require digimon/syntax)
 (require digimon/function)
 
-(require "digicore.rkt")
-(require "document.rkt")
-(require "namespace.rkt")
 (require "datatype.rkt")
 
-(require "shared/dialect.rkt")
-(require "plain/grammar.rkt")
+(require "../shared/dialect.rkt")
 (require "grammar.rkt")
 
 (require (for-syntax syntax/parse))
@@ -26,16 +22,16 @@
         #:with attrs omits elem report-unknown report-range-exn
         #:fields [[field xml-value->datum defval ...] ...])
      (syntax/loc stx
-       (let extract ([_attrs : (Listof XML-Element-Attribute*) attrs]
-                     [_srtta : (Listof XML-Element-Attribute*) null]
-                     [field : (Option XML-Element-Attribute*) #false] ...)
+       (let extract ([_attrs : (Listof XML-Element-Attribute) attrs]
+                     [_srtta : (Listof XML-Element-Attribute) null]
+                     [field : (Option XML-Element-Attribute) #false] ...)
          (if (pair? _attrs)
              (let*-values ([(self tail) (values (car _attrs) (cdr _attrs))])
-               (case (xml:name-datum (car self))
+               (case (car self)
                  [(field) (with-a-field-replaced (extract tail _srtta #:fields (field ...)) #:for field #:set self)] ...
                  [else (extract tail (cons self _srtta) field ...)]))
              (func pre-argl ...
-                   (xml-attribute->datum/safe field xml-value->datum (or defval ...) report-range-exn report-unknown omits elem) ...
+                   (xml-attribute->datum/safe field xml-value->datum (or defval ...) report-unknown omits elem) ...
                    _srtta
                    post-argl ...))))]))
 
@@ -45,18 +41,34 @@
      (syntax/loc stx (values (func pre-argl ... post-argl ...) attrs))]
     [(_ func : DOM-Elem #:pre-args [pre-argl ...] #:post-args [post-argl ...] #:with attrs report-range-exn #:fields [[field xml->datum defval ...] ...])
      (syntax/loc stx
-       (let extract : (Values DOM-Elem (Listof XML-Element-Attribute*)) ([_attrs : (Listof XML-Element-Attribute*) attrs]
-                                                                         [_srtta : (Listof XML-Element-Attribute*) null]
-                                                                         [field : (Option XML-Element-Attribute*) #false] ...)
+       (let extract : (Values DOM-Elem (Listof XML-Element-Attribute)) ([_attrs : (Listof XML-Element-Attribute) attrs]
+                                                                        [_srtta : (Listof XML-Element-Attribute) null]
+                                                                        [field : (Option XML-Element-Attribute) #false] ...)
          (if (pair? _attrs)
              (let*-values ([(self tail) (values (car _attrs) (cdr _attrs))])
-               (case (xml:name-datum (car self))
+               (case (car self)
                  [(field) (with-a-field-replaced (extract tail _srtta #:fields (field ...)) #:for field #:set self)] ...
                  [else (extract tail (cons self _srtta) field ...)]))
              (values (func pre-argl ...
-                           (xml-attribute->datum/safe field xml->datum (or defval ...) report-range-exn) ...
+                           (xml-attribute->datum/safe field xml->datum (or defval ...)) ...
                            post-argl ...)
                      _srtta))))]))
+
+(define-syntax (dom-attribute-list stx)
+  (syntax-case stx [:]
+    [(_ [field value #:~> datum->value] ...)
+     (syntax/loc stx
+       (for/list : (Listof (Pairof Symbol String))
+         ([fname (in-list ((inst list Symbol) 'field ...))]
+          [datum (in-list ((inst list (Option String)) (and value (datum->value value)) ...))]
+          #:when datum)
+         (cons fname datum)))]
+    [(_ header [attr #:=> attr->xml] ...)
+     (syntax/loc stx
+       (for/fold ([attrs : (Listof (Pairof Symbol String)) header])
+                 ([alist (in-list ((inst list (Option (Listof (Pairof Symbol String)))) (and attr (attr->xml attr)) ...))]
+                  #:when alist)
+         (append attrs alist)))]))
 
 (define-syntax (define-dom-element stx)
   (syntax-parse stx #:literals [:]
@@ -77,7 +89,6 @@
         options ...)
      (with-syntax* ([make-dom (make-identifier #'dom-elem "make-~a")]
                     [remake-dom (make-identifier #'dom-elem "remake-~a")]
-                    [remake-dom* (make-identifier #'dom-elem "remake-~a*")]
                     [([(ifield IFieldType [idefval  ...] ifield-ref) ...] [(excfield ExcFieldType [excdefval ...] excfield-ref) ...])
                      (let ([omitted-fields (syntax->datum #'(excfield-name ...))]
                            [<supfield>s (syntax->list #'([hfield HFieldType [hdefval ...] hfield-ref] ...))])
@@ -180,7 +191,7 @@
                 (define refine : (->* (XML-Element*) ((Listof Symbol)) (Option SubDOM))
                   (lambda [e [valid-tagnames null]]
                     (or (subdom-refine e valid-tagnames) ...
-                        (let-values ([(ns e-tagname) (xml-qname-split (xml:name-datum (car e)))])
+                        (let-values ([(ns e-tagname) (xml-qname-split (car e))])
                           (case e-tagname
                             [(dom-tagname) (and (or (null? valid-tagnames) (memq e-tagname valid-tagnames)) (refine-elem e))] ...
                             [else #false])))))
@@ -191,8 +202,8 @@
                           [(dom-elem? self) (dom-flatten-attributes self)] ...
                           [else null])))
 
-                (define (extract-header [attrs : (Listof XML-Element-Attribute*)] [omits : (Listof Symbol) null] [elem : (Option XML:Name) #false])
-                  : (Values HFieldType ... (Option Attrib) ... MFieldType ... (Listof XML-Element-Attribute*))
+                (define (extract-header [attrs : (Listof XML-Element-Attribute)] [omits : (Listof Symbol) null] [elem : (Option Symbol) #false])
+                  : (Values HFieldType ... (Option Attrib) ... MFieldType ... (Listof XML-Element-Attribute))
                   (let*-values ([(hfield ... tail) (header-values attrs omits elem)]
                                 [(attrib tail) (extract-attrib tail omits elem)] ...)
                     (extract-dom-values values #:pre-args [hfield ... attrib ...] #:post-args [] #:with tail omits elem report-unknown report-range-exn
@@ -248,7 +259,7 @@
                 (define refine : (->* (XML-Element*) ((Listof Symbol)) DOM-Element)
                   (lambda [e [valid-tagnames null]]
                     (or (subdom-refine e valid-tagnames) ...
-                        (let-values ([(ns e-tagname) (xml-qname-split (xml:name-datum (car e)))])
+                        (let-values ([(ns e-tagname) (xml-qname-split (car e))])
                           (case e-tagname
                             [(dom-tagname) (and (or (null? valid-tagnames) (memq e-tagname valid-tagnames)) (refine-elem e))] ...
                             [else #false]))
@@ -265,13 +276,13 @@
                   (lambda [e]
                     (let-values ([(?src ?id ?core other-attrs) (extract-header (cadr e) null (car e))])
                       (dom-unknown ?src ?id ?core
-                                   (xml:name-datum (car e))
+                                   (car e)
                                    (map xml-attribute*->datum other-attrs)
                                    (map xml-mixed-content*->datum (caddr e))))))
 
                 (define extract-header
-                  : (->* ((Listof XML-Element-Attribute*) (Listof Symbol)) ((Option XML:Name))
-                         (Values HFieldType ... (Listof XML-Element-Attribute*)))
+                  : (->* ((Listof XML-Element-Attribute) (Listof Symbol)) ((Option Symbol))
+                         (Values HFieldType ... (Listof XML-Element-Attribute)))
                   (lambda [attrs [omits null] [elem #false]]
                     (let-values ([(?src) (and elem (xml-token->source elem))]
                                  [(?id ?core other-attrs) (header-extract attrs)])
@@ -301,36 +312,33 @@
     [(_ extract-attr : XML-Attr #:inline #:with report-unknown report-range-exn
         (xml-attr [field : [XML-Type field-idx false] xml-attr-value->datum defval ...] ...))
      (syntax/loc stx
-       (define extract-attr : (->* ((Listof XML-Element-Attribute*)) ((Listof Symbol) (Option XML:Name)) (Values (Option XML-Attr) (Listof XML-Element-Attribute*)))
+       (define extract-attr : (->* ((Listof XML-Element-Attribute)) ((Listof Symbol) (Option Symbol)) (Values (Option XML-Attr) (Listof XML-Element-Attribute)))
          (lambda [attrs [omits null] [elem #false]]
-           (let extract ([_attrs : (Listof XML-Element-Attribute*) attrs]
-                         [_srtta : (Listof XML-Element-Attribute*) null]
+           (let extract ([_attrs : (Listof XML-Element-Attribute) attrs]
+                         [_srtta : (Listof XML-Element-Attribute) null]
                          [field : (Option XML-Type) #false] ...)
              (cond [(pair? _attrs)
                     (let*-values ([(self rest) (values (car _attrs) (cdr _attrs))])
-                      (case (xml:name-datum (car self))
+                      (case (car self)
                         [(field)
                          (with-a-field-replaced (extract rest _srtta #:fields (field ...))
-                           #:for field #:set (xml-attribute->datum/safe self xml-attr-value->datum #false
-                                                                        report-range-exn report-unknown omits elem))] ...
+                           #:for field #:set (xml-attribute->datum/safe self xml-attr-value->datum #false report-unknown omits elem))] ...
                         [else (extract rest (cons self _srtta) field ...)]))]
                    [(or field ...) (values (xml-attr (xml-attribute-field-datum/safe 'xml-attr 'field field defval ...) ...) _srtta)]
                    [else (values #false attrs)])))))]
     [(_ extract-attr : XML-Attr #:vector #:with report-unknown report-range-exn
         (xml-attr [field : [XML-Type field-idx false] xml-attr-value->datum defval ...] ...))
      (syntax/loc stx
-       (define extract-attr : (->* ((Listof XML-Element-Attribute*)) ((Listof Symbol) (Option XML:Name)) (Values (Option XML-Attr) (Listof XML-Element-Attribute*)))
+       (define extract-attr : (->* ((Listof XML-Element-Attribute)) ((Listof Symbol) (Option Symbol)) (Values (Option XML-Attr) (Listof XML-Element-Attribute)))
          (lambda [attrs [omits null] [elem #false]]
            (let ([avec : (Vector (Option XML-Type) ...) (vector false ...)])
-             (let extract ([_attrs : (Listof XML-Element-Attribute*) attrs]
-                           [_srtta : (Listof XML-Element-Attribute*) null]
+             (let extract ([_attrs : (Listof XML-Element-Attribute) attrs]
+                           [_srtta : (Listof XML-Element-Attribute) null]
                            [collected? : Any #false])
                (cond [(pair? _attrs)
                       (let*-values ([(self rest) (values (car _attrs) (cdr _attrs))])
-                        (case (xml:name-datum (car self))
-                          [(field) (vector-set! avec field-idx
-                                                (xml-attribute->datum/safe self xml-attr-value->datum #false
-                                                                           report-range-exn report-unknown omits elem))
+                        (case (car self)
+                          [(field) (vector-set! avec field-idx (xml-attribute->datum/safe self xml-attr-value->datum #false report-unknown omits elem))
                                    (extract rest _srtta (or collected? (vector-ref avec field-idx)))] ...
                           [else (extract rest (cons self _srtta) collected?)]))]
                      [(not collected?) (values #false attrs)]
@@ -338,74 +346,62 @@
     [(_ extract-attr : XML-Attr #:hash #:with report-unknown report-range-exn
         (xml-attr [field : [XML-Type field-idx false] xml-attr-value->datum defval ...] ...))
      (syntax/loc stx
-       (define extract-attr : (->* ((Listof XML-Element-Attribute*)) ((Listof Symbol) (Option XML:Name))
-                                   (Values (Option XML-Attr) (Listof XML-Element-Attribute*)))
+       (define extract-attr : (->* ((Listof XML-Element-Attribute)) ((Listof Symbol) (Option Symbol))
+                                   (Values (Option XML-Attr) (Listof XML-Element-Attribute)))
          (lambda [attrs [omits null] [elem #false]]
-           (let-values ([(adict _srtta) (xml-attributes*-extract attrs '(field ...) report-unknown omits elem)])
+           (let-values ([(adict _srtta) (xml-attributes-extract attrs '(field ...) report-unknown omits elem)])
              (cond [(hash-empty? adict) (values #false attrs)]
                    [else (values (xml-attr (xml-attribute->datum/safe (hash-ref adict 'field λfalse) xml-attr-value->datum
-                                                                      (xml-attribute-field-datum/safe 'xml-attr 'field #false defval ...)
-                                                                      report-range-exn report-unknown omits elem)
-                                           ...)
+                                                                      (xml-attribute-field-datum/safe 'xml-attr 'field defval ...)
+                                                                      report-unknown omits elem) ...)
                                  _srtta)])))))]))
 
 (define-syntax (define-xml-attribute stx)
   (syntax-parse stx #:literals [:]
     [(_ attr : Attr #:-> super #:with extract-attr attr->xexpr rest ...)
      (syntax/loc stx
-         (define-xml-attribute/extract attr : Attr #:-> super
-           #:with define-xml-attribute-extract extract-attr attr->xexpr rest ...))]))
+       (define-xml-attribute/extract attr : Attr #:-> super
+         #:with define-xml-attribute-extract extract-attr attr->xexpr rest ...))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-attributes*-extract
-  : (All (T) (case-> [(Listof XML-Element-Attribute*) Symbol -> (Values (Option XML-Element-Attribute-Value*) (Listof XML-Element-Attribute*))]
-                     [(Listof XML-Element-Attribute*) (-> Symbol Boolean) (-> XML-Element-Attribute* T) -> (Values (Listof T) (Listof XML-Element-Attribute*))]
-                     [(Listof XML-Element-Attribute*) (Listof Symbol) (-> (Option XML:Name) (Listof XML-Element-Attribute*) Void) (Listof Symbol) (Option XML:Name)
-                                                      -> (Values (Immutable-HashTable Symbol XML-Element-Attribute*) (Listof XML-Element-Attribute*))]))
+(define xml-attributes-extract
+  : (All (T) (case-> [(Listof XML-Element-Attribute) (U Symbol (-> Symbol Boolean)) -> (Values (Option XML-Element-Attribute-Value) (Listof XML-Element-Attribute))]
+                     [(Listof XML-Element-Attribute) (-> Symbol Boolean) (-> XML-Element-Attribute T) -> (Values (Listof T) (Listof XML-Element-Attribute))]
+                     [(Listof XML-Element-Attribute) (Listof Symbol) (-> (Option Symbol) (Listof XML-Element-Attribute) Void) (Listof Symbol) (Option Symbol)
+                                                     -> (Values (Immutable-HashTable Symbol XML-Element-Attribute) (Listof XML-Element-Attribute))]))
   (case-lambda
     [(attrs name)
-     (let extract ([_attrs : (Listof XML-Element-Attribute*) attrs]
-                   [_srtta : (Listof XML-Element-Attribute*) null])
+     (let extract ([_attrs : (Listof XML-Element-Attribute) attrs]
+                   [_srtta : (Listof XML-Element-Attribute) null])
        (cond [(null? _attrs) (values #false _srtta)]
              [else (let-values ([(self rest) (values (car _attrs) (cdr _attrs))])
-                     (cond [(xml:name=:=? (car self) name) (values (cdr self) (append rest _srtta))]
+                     (cond [(eq? (car self) name) (values (cdr self) (append rest _srtta))]
                            [else (extract rest (cons self _srtta))]))]))]
     [(attrs name? attr->datum)
-     (let extract ([_attrs : (Listof XML-Element-Attribute*) attrs]
-                   [_srtta : (Listof XML-Element-Attribute*) null]
+     (let extract ([_attrs : (Listof XML-Element-Attribute) attrs]
+                   [_srtta : (Listof XML-Element-Attribute) null]
                    [attrs : (Listof T) null])
        (cond [(null? _attrs) (values attrs _srtta)]
              [else (let-values ([(self rest) (values (car _attrs) (cdr _attrs))])
-                     (cond [(xml:name=<-? (car self) name?) (extract rest _srtta (cons (attr->datum self) attrs))]
+                     (cond [(name? (car self)) (extract rest _srtta (cons (attr->datum self) attrs))]
                            [else (extract rest (cons self _srtta) attrs)]))]))]
     [(attrs names report-unknown omits elem)
-     (let extract ([_attrs : (Listof XML-Element-Attribute*) attrs]
-                   [_srtta : (Listof XML-Element-Attribute*) null]
-                   [adict : (Immutable-HashTable Symbol XML-Element-Attribute*) (hasheq)])
+     (let extract ([_attrs : (Listof XML-Element-Attribute) attrs]
+                   [_srtta : (Listof XML-Element-Attribute) null]
+                   [adict : (Immutable-HashTable Symbol XML-Element-Attribute) (hasheq)])
        (cond [(null? _attrs) (values adict _srtta)]
              [else (let*-values ([(self rest) (values (car _attrs) (cdr _attrs))]
-                                 [(attr) (xml:name-datum (car self))])
+                                 [(attr) (car self)])
                      (cond [(not (memq attr names)) (extract rest (cons self _srtta) adict)]
                            [(not (memq attr omits)) (extract rest _srtta (hash-set adict attr self))]
                            [else (report-unknown elem (list self)) (extract rest _srtta adict)]))]))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-token->source : (-> XML-Token (Option XML-Source))
-  (lambda [t]
-    (cons (syn-token-source t)
-          (cons (syn-token-line t)
-                (syn-token-column t)))))
-
-(define xml-attribute->datum/safe : (All (a b) (->* ((Option XML-Element-Attribute*)
-                                                     (-> XML-Element-Attribute-Value* (XML-Option a)) b
-                                                     (Option (->* (XML-Element-Attribute-Value*) ((Option XML-Token) (Option Log-Level)) exn)))
-                                                    ((Option (-> (Option XML:Name) (Listof XML-Element-Attribute*) Void))
-                                                     (Listof Symbol) (Option XML:Name))
+(define xml-attribute->datum/safe : (All (a b) (->* ((Option XML-Element-Attribute) (-> XML-Element-Attribute-Value (Option a)) b)
+                                                    ((Option (-> (Option Symbol) (Listof XML-Element-Attribute) Void)) (Listof Symbol) (Option Symbol))
                                                     (U a b)))
-  (lambda [attr value->datum fallback report-range-error [report-unknown #false] [omits null] [elem #false]]
+  (lambda [attr value->datum fallback [report-unknown #false] [omits null] [elem #false]]
     (cond [(not attr) fallback]
-          [(and report-unknown (pair? omits) (xml:name=<-? (car attr) omits)) (report-unknown elem (list attr)) fallback]
+          [(and report-unknown (pair? omits) (memq (car attr) omits)) (report-unknown elem (list attr)) fallback]
           [else (let ([datum (value->datum (cdr attr))])
-                  (cond [(not datum) (and report-range-error (report-range-error (cdr attr) elem)) fallback]
-                        [(exn? datum) fallback]
-                        [else datum]))])))
+                  (if (not datum) fallback datum))])))

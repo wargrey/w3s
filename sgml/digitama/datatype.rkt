@@ -2,6 +2,7 @@
 
 (provide (all-defined-out))
 (provide (rename-out [xml:attr-value*+>integer xml:attr-value*->natural]))
+(provide (all-from-out "shared/datatype.rkt"))
 
 (require racket/string)
 
@@ -12,34 +13,31 @@
 (require "grammar.rkt")
 (require "digicore.rkt")
 
+(require "shared/enum.rkt")
+(require "shared/datatype.rkt")
+
+(require (for-syntax racket/base))
+(require (for-syntax racket/syntax))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; NOTE
 ; Normalizing the attributes' values require DTD or other schema,
 ; These APIs are designed to manually normalizing,
 ; Thus, the input tokens are usually XML:String instances.
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-type XML-Dimension (Pairof Flonum Symbol))
-(define-type XML-Boolean (U 'true 'false))
-(define-type XML-Nonnegative-Dimension (Pairof Nonnegative-Flonum Symbol))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml:attr-datum->value : (-> Any String)
-  (lambda [v]
-    (cond [(string? v) v]
-          [(symbol? v) (symbol->immutable-string v)]
-          [(and (integer? v) (inexact? v)) (number->string (inexact->exact v))]
-          [(number? v) (number->string v)]
-          [(list? v) (string-join (map xml:attr-datum->value v))]
-          [else (~a v)])))
-
-(define xml:attr-dimension->value : (-> (Pairof Real Symbol) String)
-  (lambda [v]
-    (string-append (number->string (car v))
-                   (symbol->immutable-string (cdr v)))))
-
-(define xml:attr-listof-type->value : (All (T) (->* ((Listof T) (-> T String)) (String) String))
-  (lambda [vs datum->value [sep ", "]]
-    (string-join (map datum->value vs) sep)))
+(define-syntax (define-xml-enumeration* stx)
+  (syntax-case stx [:]
+    [(_ id : TypeU [enum ...])
+     (with-syntax ([xml:attr->id (format-id #'id "xml:attr-value->~a" #'id)]
+                   [xml:attr*->id (format-id #'id "xml:attr-value*->~a" #'id)])
+       (syntax/loc stx
+         (begin (define-xml-enumeration id : TypeU [enum ...])
+                
+                (define xml:attr*->id : (-> XML-Element-Attribute-Value* (Option TypeU))
+                  (lambda [v]
+                    (cond [(xml:string? v) (xml:attr->id (xml:string-datum v))]
+                          [(xml:name? v) (xml:attr->id (xml:name-datum v))]
+                          [else #false]))))))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml:attr-value*->string : (-> XML-Element-Attribute-Value* String)
@@ -63,7 +61,7 @@
 
 (define xml:attr-value*->boolean : (-> XML-Element-Attribute-Value* (Option XML-Boolean))
   (lambda [v]
-    (cond [(xml:string? v) (let ([datum (xml:string-datum v)]) (cond [(string=? datum "true") 'true] [(string=? datum "false") 'false] [else #false]))]
+    (cond [(xml:string? v) (let ([datum (xml:string-datum v)]) (cond [(member datum '("true" "1")) 'true] [(member datum '("false" "0")) 'false] [else #false]))]
           [(xml:name? v) (let ([datum (xml:name-datum v)]) (and (or (eq? v 'true) (eq? v 'false)) datum))]
           [else #false])))
 
@@ -71,6 +69,12 @@
   (lambda [v]
     (cond [(xml:string? v) (string->integer (string-trim (xml:string-datum v)))]
           [(xml:name? v) (string->integer (symbol->immutable-string (xml:name-datum v)))]
+          [else #false])))
+
+(define xml:attr-value*->index : (-> XML-Element-Attribute-Value* (Option Index))
+  (lambda [v]
+    (cond [(xml:string? v) (string->index (string-trim (xml:string-datum v)))]
+          [(xml:name? v) (string->index (symbol->immutable-string (xml:name-datum v)))]
           [else #false])))
 
 (define xml:attr-value*+>integer : (-> XML-Element-Attribute-Value* (Option Natural))

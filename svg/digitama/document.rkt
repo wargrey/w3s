@@ -6,7 +6,6 @@
 (require sgml/digitama/doctype)
 (require sgml/digitama/document)
 (require sgml/digitama/digicore)
-(require sgml/digitama/dialect)
 (require sgml/digitama/convert)
 
 (require "grammar.rkt")

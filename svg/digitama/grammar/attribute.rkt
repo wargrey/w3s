@@ -11,7 +11,6 @@
 (require sgml/digitama/digicore)
 (require sgml/digitama/datatype)
 
-(require sgml/digitama/plain/grammar)
 (require sgml/digitama/grammar)
 
 (require "datatype.rkt")
