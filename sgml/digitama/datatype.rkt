@@ -68,11 +68,68 @@
           [(xml:name? v) (let ([datum (xml:name-datum v)]) (and (or (eq? v 'true) (eq? v 'false)) datum))]
           [else #false])))
 
-(define xml:attr-value*->integer : (-> XML-Element-Attribute-Value* (Option Integer))
-  (lambda [v]
-    (cond [(xml:string? v) (string->integer (string-trim (xml:string-datum v)))]
-          [(xml:name? v) (string->integer (symbol->immutable-string (xml:name-datum v)))]
-          [else #false])))
+(define xml:attr-value*->integer : (case-> [XML-Element-Attribute-Value* -> (Option Integer)]
+                                           [XML-Element-Attribute-Value* (Option Integer) -> (Option Integer)]
+                                           [XML-Element-Attribute-Value* (Option Integer) (Option Integer) -> (Option Integer)])
+  (case-lambda
+    [(v)
+     (cond [(xml:string? v) (string->integer (string-trim (xml:string-datum v)))]
+           [(xml:name? v) (string->integer (symbol->immutable-string (xml:name-datum v)))]
+           [else #false])]
+    [(v min)
+     (let ([n (xml:attr-value*->integer v)])
+       (and n
+            (cond [(and min) (and (<= min n) n)]
+                  [else n])))]
+    [(v min max)
+     (let ([n (xml:attr-value*->integer v)])
+       (and n
+            (cond [(and min max) (and (<= min n max) n)]
+                  [(and min) (and (<= min n) n)]
+                  [(and max) (and (<= n max) n)]
+                  [else n])))]))
+
+(define xml:attr-value*->fixnum : (case-> [XML-Element-Attribute-Value* -> (Option Fixnum)]
+                                          [XML-Element-Attribute-Value* (Option Fixnum) -> (Option Fixnum)]
+                                          [XML-Element-Attribute-Value* (Option Fixnum) (Option Fixnum) -> (Option Fixnum)])
+  (case-lambda
+    [(v)
+     (cond [(xml:string? v) (string->fixnum (string-trim (xml:string-datum v)))]
+           [(xml:name? v) (string->fixnum (symbol->immutable-string (xml:name-datum v)))]
+           [else #false])]
+    [(v min)
+     (let ([n (xml:attr-value*->fixnum v)])
+       (and n
+            (cond [(and min) (and (<= min n) n)]
+                  [else n])))]
+    [(v min max)
+     (let ([n (xml:attr-value*->fixnum v)])
+       (and n
+            (cond [(and min max) (and (<= min n max) n)]
+                  [(and min) (and (<= min n) n)]
+                  [(and max) (and (<= n max) n)]
+                  [else n])))]))
+
+(define xml:attr-value*+>fixnum : (case-> [XML-Element-Attribute-Value* -> (Option Nonnegative-Fixnum)]
+                                          [XML-Element-Attribute-Value* (Option Nonnegative-Fixnum) -> (Option Nonnegative-Fixnum)]
+                                          [XML-Element-Attribute-Value* (Option Nonnegative-Fixnum) (Option Nonnegative-Fixnum) -> (Option Nonnegative-Fixnum)])
+  (case-lambda
+    [(v)
+     (cond [(xml:string? v) (string+>fixnum (string-trim (xml:string-datum v)))]
+           [(xml:name? v) (string+>fixnum (symbol->immutable-string (xml:name-datum v)))]
+           [else #false])]
+    [(v min)
+     (let ([n (xml:attr-value*->fixnum v)])
+       (and n
+            (cond [(and min) (and (<= min n) n)]
+                  [else (and (<= 0 n) n)])))]
+    [(v min max)
+     (let ([n (xml:attr-value*->fixnum v)])
+       (and n
+            (cond [(and min max) (and (<= min n) (<= n max) n)]
+                  [(and min) (and (<= min n) n)]
+                  [(and max) (and (<= 0 n) (<= n max) n)]
+                  [else (and (<= 0 n) n)])))]))
 
 (define xml:attr-value*->index : (case-> [XML-Element-Attribute-Value* -> (Option Index)]
                                          [XML-Element-Attribute-Value* (Option Index) -> (Option Index)]
@@ -116,11 +173,26 @@
                   [(and max) (and (<= 0 nat) (<= nat max) nat)]
                   [else nat])))]))
 
-(define xml:attr-value*->flonum : (-> XML-Element-Attribute-Value* (Option Flonum))
-  (lambda [v]
-    (cond [(xml:string? v) (string->flonum (string-trim (xml:string-datum v)))]
-          [(xml:name? v) (string->flonum (symbol->immutable-string (xml:name-datum v)))]
-          [else #false])))
+(define xml:attr-value*->flonum : (case-> [XML-Element-Attribute-Value* -> (Option Flonum)]
+                                         [XML-Element-Attribute-Value* (Option Flonum) -> (Option Flonum)]
+                                         [XML-Element-Attribute-Value* (Option Flonum) (Option Flonum) -> (Option Flonum)])
+  (case-lambda
+    [(v)
+     (cond [(xml:string? v) (string->flonum (string-trim (xml:string-datum v)))]
+           [(xml:name? v) (string->flonum (symbol->immutable-string (xml:name-datum v)))]
+           [else #false])]
+    [(v min)
+     (let ([n (xml:attr-value*->flonum v)])
+       (and n
+            (cond [(and min) (and (<= min n) n)]
+                  [else n])))]
+    [(v min max)
+     (let ([n (xml:attr-value*->flonum v)])
+       (and n
+            (cond [(and min max) (and (<= min n) (<= n max) n)]
+                  [(and min) (and (<= min n) n)]
+                  [(and max) (and (<= n max) n)]
+                  [else n])))]))
 
 (define xml:attr-value*+>flonum : (case-> [XML-Element-Attribute-Value* -> (Option Nonnegative-Flonum)]
                                           [XML-Element-Attribute-Value* (Option Nonnegative-Flonum) -> (Option Nonnegative-Flonum)]
