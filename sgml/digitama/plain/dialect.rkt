@@ -9,6 +9,7 @@
 (require "datatype.rkt")
 
 (require "../shared/dialect.rkt")
+(require "../namespace.rkt")
 (require "grammar.rkt")
 
 (require (for-syntax syntax/parse))
@@ -395,6 +396,22 @@
                      (cond [(not (memq attr names)) (extract rest (cons self _srtta) adict)]
                            [(not (memq attr omits)) (extract rest _srtta (hash-set adict attr self))]
                            [else (report-unknown elem (list self)) (extract rest _srtta adict)]))]))]))
+
+(define mox-attributes-extract-xmlns : (-> (Listof XML-Element-Attribute) (Values MOX-Namespaces (Listof XML-Element-Attribute)))
+  (let ([xml:attr->namespace (λ [[attr : XML-Element-Attribute]] (cons (xml-qname-local-part (car attr)) (xml:attr-value->string (cdr attr))))])
+    (lambda [attrs]
+      (xml-attributes-extract attrs xml-qname-xmlns? xml:attr->namespace))))
+
+(define mox-attributes-extract-pair : (All (X Y) (-> (Listof XML-Element-Attribute) Symbol Symbol
+                                                     (XML-Attribute-Value->Datum (Option X)) (XML-Attribute-Value->Datum (Option Y))
+                                                     (Values (Option (Pairof X Y)) (Listof XML-Element-Attribute))))
+  (lambda [attrs car-name cdr-name val->car val->cdr]
+    (let*-values ([(1st rest) (xml-attributes-extract attrs car-name)]
+                  [(2nd rest) (xml-attributes-extract rest cdr-name)])
+      (values (let ([x (and 1st (val->car 1st))]
+                    [y (and 2nd (val->cdr 2nd))])
+                (and x y (cons x y)))
+              rest))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-attribute->datum/safe : (All (a b) (->* ((Option XML-Element-Attribute) (-> XML-Element-Attribute-Value (Option a)) b)

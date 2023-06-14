@@ -16,6 +16,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type XML-Source (U String Symbol (Pairof (U String Symbol) (Pairof Positive-Integer Natural))))
+(define-type MOX-Namespaces (Listof (Pairof Symbol String)))
 
 (define-syntax (dom-attribute-list stx)
   (syntax-case stx [:]

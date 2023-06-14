@@ -1,6 +1,7 @@
 #lang typed/racket/base
 
 (provide (all-from-out "digitama/namespace.rkt" "digitama/whitespace.rkt"))
+(provide (all-from-out "digitama/plain/grammar.rkt" "digitama/plain/dialect.rkt" "digitama/plain/datatype.rkt"))
 (provide (all-defined-out) load-xml-datum read-xml-datum sax-stop-with)
 (provide XML-Event-Handlerof xml-event-handler? make-xml-event-handler)
 (provide XML-Prolog-Handler XML-Doctype-Handler XML-PI-Handler)
@@ -11,6 +12,10 @@
 
 (require "digitama/plain/sax.rkt")
 (require "digitama/plain/prompt.rkt")
+(require "digitama/plain/grammar.rkt")
+(require "digitama/plain/dialect.rkt")
+(require "digitama/plain/datatype.rkt")
+
 (require "digitama/namespace.rkt")
 (require "digitama/whitespace.rkt")
 
