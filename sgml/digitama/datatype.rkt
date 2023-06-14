@@ -1,7 +1,7 @@
 #lang typed/racket/base
 
 (provide (all-defined-out))
-(provide (rename-out [xml:attr-value*+>integer xml:attr-value*->natural]))
+(provide (rename-out [xml:attr-value*->natural xml:attr-value*+>integer]))
 (provide (all-from-out "shared/datatype.rkt"))
 
 (require racket/string)
@@ -25,6 +25,9 @@
 ; These APIs are designed to manually normalizing,
 ; Thus, the input tokens are usually XML:String instances.
 
+(define-type (XML-Attribute-Value*->Datum T) (-> XML-Element-Attribute-Value* T))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-syntax (define-xml-enumeration* stx)
   (syntax-case stx [:]
     [(_ id : TypeU [enum ...])
@@ -71,17 +74,47 @@
           [(xml:name? v) (string->integer (symbol->immutable-string (xml:name-datum v)))]
           [else #false])))
 
-(define xml:attr-value*->index : (-> XML-Element-Attribute-Value* (Option Index))
-  (lambda [v]
-    (cond [(xml:string? v) (string->index (string-trim (xml:string-datum v)))]
-          [(xml:name? v) (string->index (symbol->immutable-string (xml:name-datum v)))]
-          [else #false])))
+(define xml:attr-value*->index : (case-> [XML-Element-Attribute-Value* -> (Option Index)]
+                                         [XML-Element-Attribute-Value* (Option Index) -> (Option Index)]
+                                         [XML-Element-Attribute-Value* (Option Index) (Option Index) -> (Option Index)])
+  (case-lambda
+    [(v)
+     (cond [(string? v) (string->index (string-trim v))]
+           [(symbol? v) (string->index (symbol->immutable-string v))]
+           [else #false])]
+    [(v min)
+     (let ([nat (xml:attr-value*->integer v)])
+       (and nat
+            (cond [(and min) (and (<= min nat) (index? nat) nat)]
+                  [else (and (index? nat) nat)])))]
+    [(v min max)
+     (let ([nat (xml:attr-value*->integer v)])
+       (and nat
+            (cond [(and min max) (and (<= min nat) (<= nat max) nat)]
+                  [(and min) (and (<= min nat) (index? nat) nat)]
+                  [(and max) (and (<= 0 nat) (<= nat max) nat)]
+                  [else (and (index? nat) nat)])))]))
 
-(define xml:attr-value*+>integer : (-> XML-Element-Attribute-Value* (Option Natural))
-  (lambda [v]
-    (cond [(xml:string? v) (string->natural (string-trim (xml:string-datum v)))]
-          [(xml:name? v) (string->natural (symbol->immutable-string (xml:name-datum v)))]
-          [else #false])))
+(define xml:attr-value*->natural : (case-> [XML-Element-Attribute-Value* -> (Option Natural)]
+                                           [XML-Element-Attribute-Value* (Option Natural) -> (Option Natural)]
+                                           [XML-Element-Attribute-Value* (Option Natural) (Option Natural) -> (Option Natural)])
+  (case-lambda
+    [(v)
+     (cond [(xml:string? v) (string->natural (string-trim (xml:string-datum v)))]
+           [(xml:name? v) (string->natural (symbol->immutable-string (xml:name-datum v)))]
+           [else #false])]
+    [(v min)
+     (let ([nat (xml:attr-value*->integer v)])
+       (and nat
+            (cond [(and min) (and (<= min nat) nat)]
+                  [else (and (<= 0 nat) nat)])))]
+    [(v min max)
+     (let ([nat (xml:attr-value*->natural v)])
+       (and nat
+            (cond [(and min max) (and (<= min nat) (<= nat max) nat)]
+                  [(and min) (and (<= min nat) nat)]
+                  [(and max) (and (<= 0 nat) (<= nat max) nat)]
+                  [else nat])))]))
 
 (define xml:attr-value*->flonum : (-> XML-Element-Attribute-Value* (Option Flonum))
   (lambda [v]
@@ -89,11 +122,26 @@
           [(xml:name? v) (string->flonum (symbol->immutable-string (xml:name-datum v)))]
           [else #false])))
 
-(define xml:attr-value*+>flonum : (-> XML-Element-Attribute-Value* (Option Nonnegative-Flonum))
-  (lambda [v]
-    (cond [(xml:string? v) (string+>flonum (string-trim (xml:string-datum v)))]
-          [(xml:name? v) (string+>flonum (symbol->immutable-string (xml:name-datum v)))]
-          [else #false])))
+(define xml:attr-value*+>flonum : (case-> [XML-Element-Attribute-Value* -> (Option Nonnegative-Flonum)]
+                                          [XML-Element-Attribute-Value* (Option Nonnegative-Flonum) -> (Option Nonnegative-Flonum)]
+                                          [XML-Element-Attribute-Value* (Option Nonnegative-Flonum) (Option Nonnegative-Flonum) -> (Option Nonnegative-Flonum)])
+  (case-lambda
+    [(v)
+     (cond [(xml:string? v) (string+>flonum (string-trim (xml:string-datum v)))]
+           [(xml:name? v) (string+>flonum (symbol->immutable-string (xml:name-datum v)))]
+           [else #false])]
+    [(v min)
+     (let ([n (xml:attr-value*->flonum v)])
+       (and n
+            (cond [(and min) (and (<= min n) n)]
+                  [else (and (<= 0 n) n)])))]
+    [(v min max)
+     (let ([n (xml:attr-value*->flonum v)])
+       (and n
+            (cond [(and min max) (and (<= min n) (<= n max) n)]
+                  [(and min) (and (<= min n) n)]
+                  [(and max) (and (>= n 0.0) (<= n max) n)]
+                  [else (and (>= n 0.0) n)])))]))
 
 (define xml:attr-value*->number : (-> XML-Element-Attribute-Value* (Option Real))
   (lambda [v]
