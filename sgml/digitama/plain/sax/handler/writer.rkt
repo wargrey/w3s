@@ -6,33 +6,36 @@
 (require sgml/digitama/plain/prompt)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define sax-display-prolog : (XML-Prolog-Handler Void)
+(define #:forall (T) sax-display-prolog : (XML-Prolog-Handler T)
   (lambda [pname version encoding standalone? etype? datum]
     (if (or etype?)
         (printf "<?xml version=\"~a\" encoding=\"~a\" standalone=\"~a\" ?>~n"
                 version (if (not encoding) "UTF-8" encoding) (if standalone? 'yes 'no))
-        (printf "<!-- END OF ~a -->~n" pname))))
+        (printf "<!-- END OF ~a -->~n" pname))
+    datum))
 
-(define sax-display-doctype : (XML-Doctype-Handler Void)
+(define #:forall (T) sax-display-doctype : (XML-Doctype-Handler T)
   (lambda [?name public system datum]
     (cond [(not ?name) (sax-stop-with datum)]
           [(and public system) (printf "<!DOCTYPE ~a PUBLIC \"~a\" \"~a\">~n" ?name public system)]
           [(and system) (printf "<!DOCTYPE ~a SYSTEM \"~a\">~n" ?name system)]
-          [else (printf "<!DOCTYPE ~a>~n" ?name)])))
+          [else (printf "<!DOCTYPE ~a>~n" ?name)])
+    datum))
 
-(define sax-display-pi : (XML-PI-Handler Void)
+(define #:forall (T) sax-display-pi : (XML-PI-Handler T)
   (lambda [?element target body datum]
     (cond [(not body) (printf "<?~a?>~n" target)]
-          [else (printf "<!~a ~a>~n" target body)])))
+          [else (printf "<!~a ~a>~n" target body)])
+    datum))
 
-(define sax-display-comment : (XML-Comment-Handler Void)
+(define #:forall (T) sax-display-comment : (XML-Comment-Handler T)
   (lambda [?element comment preserve? datum]
     (printf "<!--~a-->" comment)
-
     (when (not preserve?)
-      (newline))))
+      (newline))
+    datum))
 
-(define sax-display-element : (XML-Element-Handler Void)
+(define #:forall (T) sax-display-element : (XML-Element-Handler T)
   (lambda [name depth attrs empty? preserve? datum]
     (define indent (make-string (* depth 4) #\space))
 
@@ -41,9 +44,10 @@
                 (for ([attr (in-list attrs)])
                   (printf " ~a=\"~a\"" (car attr) (cdr attr)))
                 (if (not empty?) (printf ">") (printf "/>"))
-                (when (not preserve?) (newline))])))
+                (when (not preserve?) (newline))])
+    datum))
 
-(define sax-display-pcdata : (XML-PCData-Handler Void)
+(define #:forall (T) sax-display-pcdata : (XML-PCData-Handler T)
   (lambda [element depth pcdata preserve? cdata? datum]
     (define indention
       (cond [(or preserve?) ""]
@@ -52,16 +56,21 @@
     (cond [(and cdata?) (printf "<![CDATA[~a[[>" pcdata)]
           [else (printf "~a~a" indention pcdata)
                 (when (not preserve?)
-                  (newline))])))
+                  (newline))])
+    datum))
 
-(define sax-display-entity : (XML-GEReference-Handler Void)
+(define #:forall (T) sax-display-entity : (XML-GEReference-Handler T)
   (lambda [entity ?default-char datum]
     (when (char? ?default-char)
-      (display ?default-char))))
+      (display ?default-char))
+    datum))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define sax-handler/xml-writer
-  ((inst make-xml-event-handler Void)
-   #:prolog sax-display-prolog #:doctype sax-display-doctype #:pi sax-display-pi
-   #:element sax-display-element #:pcdata sax-display-pcdata
-   #:gereference sax-display-entity #:comment sax-display-comment))
+(define #:forall (T) sax-xml-writer : (-> (XML-Event-Handlerof T))
+  (lambda []
+    ((inst make-xml-event-handler T)
+     #:prolog sax-display-prolog #:doctype sax-display-doctype #:pi sax-display-pi
+     #:element sax-display-element #:pcdata sax-display-pcdata
+     #:gereference sax-display-entity #:comment sax-display-comment)))
+
+(define sax-handler/xml-writer ((inst sax-xml-writer Void)))

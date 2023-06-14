@@ -8,7 +8,9 @@
 (provide XML-Element-Handler SAX-Attributes SAX-Attribute-Value)
 (provide XML-PCData-Handler XML-GEReference-Handler)
 (provide XML-Comment-Handler XML-Event-Handler)
-(provide sax-handler/xml-writer)
+(provide default-sax-event-prefilter default-sax-event-postfilter)
+(provide make-xml-event-handler/fold make-xml-event-handler/filter)
+(provide sax-xml-writer sax-handler/xml-writer)
 
 (require "digitama/plain/sax.rkt")
 (require "digitama/plain/prompt.rkt")
