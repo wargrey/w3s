@@ -54,13 +54,13 @@
                          #:gereference [geref : (U (XML-GEReference-Handler seed) False Void) (void)]
                          #:comment [comment : (U (XML-Comment-Handler seed) False Void) (void)]
                          [src : (Option (XML-Event-Handlerof seed)) #false]) : (XML-Event-Handlerof seed)
-  (xml-event-handler (or (if (void? document) (and src (xml-event-handler-prolog src)) document) sax-false/6)
-                     (or (if (void? doctype) (and src (xml-event-handler-doctype src)) doctype) sax-false/4)
-                     (or (if (void? pi) (and src (xml-event-handler-pi src)) pi) sax-false/4)
-                     (or (if (void? element) (and src (xml-event-handler-element src)) element) sax-false/6)
-                     (or (if (void? pcdata) (and src (xml-event-handler-pcdata src)) pcdata) sax-false/6)
-                     (or (if (void? geref) (and src (xml-event-handler-geref src)) geref) sax-false/3)
-                     (or (if (void? comment) (and src (xml-event-handler-comment src)) comment) sax-false/4)))
+  (xml-event-handler (or (if (void? document) (and src (xml-event-handler-prolog src)) document) sax-identity/6)
+                     (or (if (void? doctype) (and src (xml-event-handler-doctype src)) doctype) sax-identity/4)
+                     (or (if (void? pi) (and src (xml-event-handler-pi src)) pi) sax-identity/4)
+                     (or (if (void? element) (and src (xml-event-handler-element src)) element) sax-identity/6)
+                     (or (if (void? pcdata) (and src (xml-event-handler-pcdata src)) pcdata) sax-identity/6)
+                     (or (if (void? geref) (and src (xml-event-handler-geref src)) geref) sax-identity/3)
+                     (or (if (void? comment) (and src (xml-event-handler-comment src)) comment) sax-identity/4)))
 
 (define #:forall (seed) make-xml-event-handler/fold : (-> (Listof (XML-Event-Handlerof seed)) (XML-Event-Handlerof seed))
   (lambda [handlers]
@@ -157,8 +157,17 @@
                                               Void)
   (lambda [#:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:filter #false]
            /dev/rawin saxcb]
-    (void (read-xml-datum #:xml:lang xml:lang #:xml:space xml:space #:xml:space-filter xml:filter
-                          /dev/rawin saxcb (void)))))
+    (read-xml-datum* #:xml:lang xml:lang #:xml:space xml:space #:xml:space-filter xml:filter
+                     /dev/rawin saxcb (void) void)))
+
+(define #:forall (seed datum) read-xml-datum* : (->* (SGML-Stdin (XML-Event-Handlerof seed) seed (-> seed datum))
+                                                     (#:xml:lang String #:xml:space Symbol #:xml:space-filter (Option XML:Space-Filter))
+                                                     datum)
+  (lambda [#:xml:lang [xml:lang ""] #:xml:space [xml:space 'default] #:xml:space-filter [xml:filter #false]
+           /dev/rawin saxcb seed0 datum-unbox]
+    (datum-unbox
+     (read-xml-datum #:xml:lang xml:lang #:xml:space xml:space #:xml:space-filter xml:filter
+                     /dev/rawin saxcb seed0))))
 
 (define #:forall (seed) read-xml-datum : (->* (SGML-Stdin (XML-Event-Handlerof seed) seed)
                                               (#:xml:lang String #:xml:space Symbol #:xml:space-filter (Option XML:Space-Filter))
@@ -378,14 +387,14 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-whitespaces/0 : (Listof XML-White-Space) (list xml-whitespace/0))
 
-(define sax-false/3 : (All (seed) (-> Any Any seed False))
+(define sax-identity/3 : (All (seed) (-> Any Any seed seed))
   (lambda [a1 a2 datum]
-    #false))
+    datum))
 
-(define sax-false/4 : (All (seed) (-> Any Any Any seed False))
+(define sax-identity/4 : (All (seed) (-> Any Any Any seed seed))
   (lambda [a1 a2 a3 datum]
-    #false))
+    datum))
 
-(define sax-false/6 : (All (seed) (-> Any Any Any Any Any seed False))
+(define sax-identity/6 : (All (seed) (-> Any Any Any Any Any seed seed))
   (lambda [a1 a2 a3 a4 a5 datum]
-    #false))
+    datum))
