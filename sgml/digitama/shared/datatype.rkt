@@ -23,6 +23,10 @@
           [(list? v) (string-join (map xml:attr-datum->value v))]
           [else (~a v)])))
 
+(define xml:attr-hexdecimal->value : (-> Integer String)
+  (lambda [v]
+    (number->string v 16)))
+
 (define xml:attr-dimension->value : (-> (Pairof Real Symbol) String)
   (lambda [v]
     (string-append (number->string (car v))
