@@ -43,17 +43,31 @@
                           [else #false]))))))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml:attr-value*->string : (-> XML-Element-Attribute-Value* String)
-  (lambda [v]
-    (cond [(xml:string? v) (xml:string-datum v)]
-          [(xml:name? v) (symbol->immutable-string (xml:name-datum v))]
-          [else (symbol-join (map xml:name-datum v))])))
+(define xml:attr-value*->string
+  : (case-> [XML-Element-Attribute-Value* -> String]
+            [XML-Element-Attribute-Value* (U String Bytes Regexp Byte-Regexp) -> (Option String)])
+  (case-lambda
+    [(v)
+     (cond [(xml:string? v) (xml:string-datum v)]
+           [(xml:name? v) (symbol->immutable-string (xml:name-datum v))]
+           [else (symbol-join (map xml:name-datum v))])]
+    [(v pattern)
+     (let ([s (xml:attr-value*->string v)])
+       (and (regexp-match? pattern s)
+            s))]))
 
-(define xml:attr-value*->string/trim : (-> XML-Element-Attribute-Value* String)
-  (lambda [v]
-    (cond [(xml:string? v) (string-trim (xml:string-datum v))]
-          [(xml:name? v) (symbol->immutable-string (xml:name-datum v))]
-          [else (symbol-join (map xml:name-datum v))])))
+(define xml:attr-value*->string/trim
+  : (case-> [XML-Element-Attribute-Value* -> String]
+            [XML-Element-Attribute-Value* (U String Bytes Regexp Byte-Regexp) -> (Option String)])
+  (case-lambda
+    [(v)
+     (cond [(xml:string? v) (string-trim (xml:string-datum v))]
+           [(xml:name? v) (symbol->immutable-string (xml:name-datum v))]
+           [else (symbol-join (map xml:name-datum v))])]
+    [(v pattern)
+     (let ([s (xml:attr-value*->string/trim v)])
+       (and (regexp-match? pattern s)
+            s))]))
 
 (define xml:attr-value*->string-list : (->* (XML-Element-Attribute-Value*) ((U String Regexp)) (Option (Listof String)))
   (lambda [v [sep #px"\\s+"]]
@@ -276,6 +290,24 @@
             [else (values #false canonical-unit)]))
 
     (and n (>= n 0.0) (cons n unit))))
+
+(define xml:attr-value*->percentage : (->* (XML-Element-Attribute-Value*) (Symbol) (Option XML-Percentage))
+  (lambda [v [canonical-unit '||]]
+    (define-values (n unit)
+      (cond [(xml:string? v) (string->dimension (xml:string-datum v) canonical-unit #:ci? #false)]
+            [(xml:name? v) (string->dimension (xml:name-datum v) canonical-unit #:ci? #false)]
+            [else (values #false canonical-unit)]))
+
+    (and n (eq? unit '%) (cons n unit))))
+
+(define xml:attr-value*+>percentage : (->* (XML-Element-Attribute-Value*) (Symbol) (Option XML-Nonnegative-Dimension))
+  (lambda [v [canonical-unit '||]]
+    (define-values (n unit)
+      (cond [(xml:string? v) (string->dimension (xml:string-datum v) canonical-unit #:ci? #false)]
+            [(xml:name? v) (string->dimension (xml:name-datum v) canonical-unit #:ci? #false)]
+            [else (values #false canonical-unit)]))
+
+    (and n (>= n 0.0) (eq? unit '%) (cons n unit))))
 
 (define xml:attr-value*->dimension/ci : (->* (XML-Element-Attribute-Value*) (Symbol) (Option XML-Dimension))
   (lambda [v [canonical-unit '||]]

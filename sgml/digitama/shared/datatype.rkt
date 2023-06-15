@@ -7,9 +7,11 @@
 (require racket/symbol)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-type XML-Dimension (Pairof Flonum Symbol))
 (define-type XML-Boolean (U 'true 'false))
+(define-type XML-Dimension (Pairof Flonum Symbol))
 (define-type XML-Nonnegative-Dimension (Pairof Nonnegative-Flonum Symbol))
+(define-type XML-Percentage (Pairof Flonum '%))
+(define-type XML-Nonnegative-Percentage (Pairof Nonnegative-Flonum '%))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml:attr-datum->value : (-> Any String)
