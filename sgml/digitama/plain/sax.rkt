@@ -25,7 +25,7 @@
 (define-type (XML-Prolog-Handler seed) (-> (U String Symbol) Nonnegative-Flonum (Option String) Boolean Boolean seed (Option seed)))
 (define-type (XML-Doctype-Handler seed) (-> (Option Symbol) (Option String) (Option String) seed (Option seed)))
 (define-type (XML-PI-Handler seed) (-> (Option Symbol) Symbol (Option String) seed (Option seed)))
-(define-type (XML-Element-Handler seed) (-> Symbol Index (Option SAX-Attributes #| `False` implies ETag|#) Boolean Boolean seed (Option seed)))
+(define-type (XML-Element-Handler seed) (-> Symbol Index (Option SAX-Attributes #| `False` implies ETag |#) Boolean Boolean seed (Option seed)))
 (define-type (XML-PCData-Handler seed) (-> Symbol Index String Boolean #| <= preserve |# Boolean #| <= `<![CDATA[]]>` |# seed (Option seed)))
 (define-type (XML-GEReference-Handler seed) (-> (U Symbol Index) (Option Char) seed (Option seed)))
 (define-type (XML-Comment-Handler seed) (-> (Option Symbol) String Boolean seed (Option seed)))

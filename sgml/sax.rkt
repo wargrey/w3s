@@ -2,7 +2,7 @@
 
 (provide (all-from-out "digitama/namespace.rkt" "digitama/whitespace.rkt"))
 (provide (all-from-out "digitama/plain/grammar.rkt" "digitama/plain/dialect.rkt" "digitama/plain/datatype.rkt"))
-(provide (all-defined-out) load-xml-datum read-xml-datum sax-stop-with)
+(provide (all-defined-out) load-xml-datum read-xml-datum read-xml-datum* sax-stop-with)
 (provide XML-Event-Handlerof xml-event-handler? make-xml-event-handler)
 (provide XML-Prolog-Handler XML-Doctype-Handler XML-PI-Handler)
 (provide XML-Element-Handler SAX-Attributes SAX-Attribute-Value)
