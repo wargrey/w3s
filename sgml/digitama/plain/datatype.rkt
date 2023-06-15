@@ -224,17 +224,45 @@
                   [(and max) (and (>= n 0.0) (<= n max) n)]
                   [else (and (>= n 0.0) n)])))]))
 
-(define xml:attr-value->number : (-> XML-Element-Attribute-Value (Option Real))
-  (lambda [v]
-    (cond [(string? v) (string->real (string-trim v))]
-          [(symbol? v) (string->real (symbol->immutable-string v))]
-          [else #false])))
+(define #:forall (N) xml:attr-value->number
+  : (case-> [XML-Element-Attribute-Value -> (Option Real)]
+            [XML-Element-Attribute-Value (-> Any Boolean : (∩ Real N)) -> (Option N)]
+            [XML-Element-Attribute-Value (-> Any Boolean : (∩ Real N)) (Option (∩ Real N)) (Option (∩ Real N)) -> (Option N)])
+  (case-lambda
+    [(v)
+     (cond [(string? v) (string->real (string-trim v))]
+           [(symbol? v) (string->real (symbol->immutable-string v))]
+           [else #false])]
+    [(v number?)
+     (let ([r (xml:attr-value->number v)])
+       (and r (number? r) r))]
+    [(v number? min max)
+     (let ([r (xml:attr-value->number v)])
+       (and r (number? r)
+            (cond [(and min max) (and (<= min r) (<= r max) r)]
+                  [(and min) (and (<= min r) r)]
+                  [(and max) (and (<= r max) r)]
+                  [else r])))]))
 
-(define xml:attr-value+>number : (-> XML-Element-Attribute-Value (Option Nonnegative-Real))
-  (lambda [v]
-    (cond [(string? v) (string+>real (string-trim v))]
-          [(symbol? v) (string+>real (symbol->immutable-string v))]
-          [else #false])))
+(define #:forall (N) xml:attr-value+>number
+  : (case-> [XML-Element-Attribute-Value -> (Option Nonnegative-Real)]
+            [XML-Element-Attribute-Value (-> Any Boolean : (∩ Real N)) -> (Option N)]
+            [XML-Element-Attribute-Value (-> Any Boolean : (∩ Real N)) (Option (∩ Real N)) (Option (∩ Real N)) -> (Option N)])
+  (case-lambda
+    [(v)
+     (cond [(string? v) (string+>real (string-trim v))]
+           [(symbol? v) (string+>real (symbol->immutable-string v))]
+           [else #false])]
+    [(v number?)
+     (let ([r (xml:attr-value+>number v)])
+       (and r (number? r) r))]
+    [(v number? min max)
+     (let ([r (xml:attr-value+>number v)])
+       (and r (number? r)
+            (cond [(and min max) (and (<= min r) (<= r max) r)]
+                  [(and min) (and (<= min r) r)]
+                  [(and max) (and (<= r max) r)]
+                  [else r])))]))
 
 (define xml:attr-value->symbol : (-> XML-Element-Attribute-Value Symbol)
   (lambda [v]
