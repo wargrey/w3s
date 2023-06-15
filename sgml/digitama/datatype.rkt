@@ -19,6 +19,7 @@
 
 (require (for-syntax racket/base))
 (require (for-syntax racket/syntax))
+(require (for-syntax syntax/parse))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; NOTE
@@ -30,12 +31,12 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-syntax (define-xml-enumeration* stx)
-  (syntax-case stx [:]
-    [(_ id : TypeU [enum ...])
+  (syntax-parse stx #:literals [:]
+    [(_ id : TypeU (~optional (~seq #:for prefix) #:defaults ([prefix #'xml])) [enum ...])
      (with-syntax ([xml:attr->id (format-id #'id "xml:attr-value->~a" #'id)]
                    [xml:attr*->id (format-id #'id "xml:attr-value*->~a" #'id)])
        (syntax/loc stx
-         (begin (define-xml-enumeration id : TypeU [enum ...])
+         (begin (define-xml-enumeration id : TypeU #:for prefix [enum ...])
                 
                 (define xml:attr*->id : (-> XML-Element-Attribute-Value* (Option TypeU))
                   (lambda [v]

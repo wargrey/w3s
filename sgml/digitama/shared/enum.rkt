@@ -8,11 +8,14 @@
 (require (for-syntax racket/list))
 (require (for-syntax racket/symbol))
 (require (for-syntax racket/syntax))
+(require (for-syntax syntax/parse))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-syntax (define-xml-enumeration stx)
-  (syntax-case stx [:]
-    [(_ id : TypeU [enum ...])
+  (syntax-parse stx #:literals [:]
+    [(_ id : TypeU
+        (~optional (~seq #:for prefix) #:defaults ([prefix #'xml]))
+        [enum ...])
      (with-syntax ([(senum ...) (let* ([enums (syntax->list #'[enum ...])]
                                        [<enum> (check-duplicates enums eq? #:key syntax-e)])
                                   (when (syntax? <enum>)
@@ -23,7 +26,7 @@
                                   (for/list ([<e> (in-list enums)])
                                     (datum->syntax <e> (symbol->immutable-string (syntax-e <e>)))))]
                    [id? (format-id #'id "~a?" #'id)]
-                   [xml:attr->id (format-id #'id "xml:attr-value->~a" #'id)])
+                   [xml:attr->id (format-id #'id "~a:attr-value->~a" #'prefix #'id)])
        (syntax/loc stx
          (begin (define-type TypeU (U 'enum ...))
                 (define id? : (-> Any Boolean : TypeU) (λ [v] (or (eq? v 'enum) ...)))
