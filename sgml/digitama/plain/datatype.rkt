@@ -40,7 +40,7 @@
 
 (define xml:attr-value->string/trim
   : (case-> [XML-Element-Attribute-Value -> String]
-            [XML-Element-Attribute-Value (U String Bytes Regexp Byte-Regexp) -> (Option String)])
+            [XML-Element-Attribute-Value (U String Bytes Regexp Byte-Regexp (-> String Boolean)) -> (Option String)])
   (case-lambda
     [(v)
      (cond [(string? v) (string-trim v)]
@@ -49,8 +49,8 @@
            [else (xml:attr-value->string (unbox v))])]
     [(v pattern)
      (let ([s (xml:attr-value->string/trim v)])
-       (and (regexp-match? pattern s)
-            s))]))
+       (cond [(procedure? pattern) (and (pattern s) s)]
+             [else (and (regexp-match? pattern s) s)]))]))
 
 (define xml:attr-value->string-list : (->* (XML-Element-Attribute-Value) ((U String Regexp)) (Option (Listof String)))
   (lambda [v [sep #px"\\s+"]]
@@ -354,8 +354,17 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml:attr-value->guid-uri : (-> XML-Element-Attribute-Value (Option String))
   (lambda [v]
-    (xml:attr-value->string v string-uri?)))
+    (xml:attr-value->string/trim v string-uri?)))
 
 (define xml:attr-value->guid-string : (-> XML-Element-Attribute-Value (Option String))
   (lambda [v]
-    (xml:attr-value->string v string-guid?)))
+    (xml:attr-value->string/trim v string-guid?)))
+
+(define xml:attr-value->panose-string : (-> XML-Element-Attribute-Value (Option String))
+  (lambda [v]
+    (xml:attr-value->string/trim v string-panose?)))
+
+(define xml:attr-value->panose : (-> XML-Element-Attribute-Value (Option Index))
+  (lambda [v]
+    (define s (xml:attr-value->panose-string v))
+    (and s (string->index s 16))))
