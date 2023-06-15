@@ -1,13 +1,14 @@
 #lang typed/racket/base
 
 (provide (all-defined-out))
-(provide (rename-out [xml:attr-value->natural xml:attr-value+>integer]))
 (provide (all-from-out "../shared/datatype.rkt"))
 (provide (all-from-out "../shared/enum.rkt"))
-
-(require racket/string)
+(provide (rename-out [xml:attr-value->natural xml:attr-value+>integer]
+                     [xml:attr-value->boolean xml:attr-value->on-off]
+                     [xml:attr-value->symbol xml:attr-value->name]))
 
 (require digimon/symbol)
+(require digimon/string)
 (require digimon/dimension)
 (require digimon/number)
 
@@ -25,7 +26,7 @@
 
 (define xml:attr-value->string
   : (case-> [XML-Element-Attribute-Value -> String]
-            [XML-Element-Attribute-Value (U String Bytes Regexp Byte-Regexp) -> (Option String)])
+            [XML-Element-Attribute-Value (U String Bytes Regexp Byte-Regexp (-> String Boolean)) -> (Option String)])
   (case-lambda
     [(v)
      (cond [(string? v) v]
@@ -34,8 +35,8 @@
            [else (xml:attr-value->string (unbox v))])]
     [(v pattern)
      (let ([s (xml:attr-value->string v)])
-       (and (regexp-match? pattern s)
-            s))]))
+       (cond [(procedure? pattern) (and (pattern s) s)]
+             [else (and (regexp-match? pattern s) s)]))]))
 
 (define xml:attr-value->string/trim
   : (case-> [XML-Element-Attribute-Value -> String]
@@ -149,8 +150,8 @@
                   [else (and (index? nat) nat)])))]))
 
 (define xml:attr-value->natural : (case-> [XML-Element-Attribute-Value -> (Option Natural)]
-                                                 [XML-Element-Attribute-Value (Option Natural) -> (Option Natural)]
-                                                 [XML-Element-Attribute-Value (Option Natural) (Option Natural) -> (Option Natural)])
+                                          [XML-Element-Attribute-Value (Option Natural) -> (Option Natural)]
+                                          [XML-Element-Attribute-Value (Option Natural) (Option Natural) -> (Option Natural)])
   (case-lambda
     [(v)
      (cond [(string? v) (string->natural (string-trim v))]
@@ -168,6 +169,18 @@
                   [(and min) (and (<= min nat) nat)]
                   [(and max) (and (<= 0 nat) (<= nat max) nat)]
                   [else nat])))]))
+
+(define xml:attr-value->hexdecimal : (case-> [XML-Element-Attribute-Value -> (Option Index)]
+                                             [XML-Element-Attribute-Value Positive-Byte -> (Option Index)])
+  (case-lambda
+    [(v)
+     (cond [(string? v) (string->index (string-trim v) 16)]
+           [(symbol? v) (string->index (symbol->immutable-string v) 16)]
+           [else #false])]
+    [(v len)
+     (let ([hex (xml:attr-value->string v)])
+       (and (= (string-length hex) len)
+            (string->index hex 16)))]))
 
 (define xml:attr-value->flonum : (case-> [XML-Element-Attribute-Value -> (Option Flonum)]
                                          [XML-Element-Attribute-Value (Option Flonum) -> (Option Flonum)]
@@ -338,3 +351,11 @@
              (cond [(not datum) null]
                    [else (list datum)]))]
           [else null])))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define xml:attr-value->guid-uri : (-> XML-Element-Attribute-Value (Option String))
+  (lambda [v]
+    (xml:attr-value->string v string-uri?)))
+
+(define xml:attr-value->guid-string : (-> XML-Element-Attribute-Value (Option String))
+  (lambda [v]
+    (xml:attr-value->string v string-guid?)))
