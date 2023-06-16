@@ -311,7 +311,8 @@
 (define-syntax (define-xml-attribute-extract stx)
   (syntax-parse stx #:literals [:]
     [(_ extract-attr : XML-Attr #:inline #:with report-unknown report-range-exn
-        (xml-attr [field : [XML-Type field-idx false] xml-attr-value->datum defval ...] ...))
+        (xml-attr [field : [XML-Type field-idx false] xml-attr-value->datum defval ...] ...)
+        mandatory-fields)
      (syntax/loc stx
        (define extract-attr : (->* ((Listof XML-Element-Attribute))
                                    ((Option Symbol) (Listof Symbol))
@@ -330,9 +331,11 @@
                    [(or field ...)
                     (values (xml-attr (or field (xml-report-missing-mandatory-attribute elem 'xml-attr 'field defval ...)) ...)
                             _srtta)]
+                   [(pair? mandatory-fields) (values (xml-report-missing-mandatory-attribute elem 'xml-attr mandatory-fields) attrs)]
                    [else (values #false attrs)])))))]
     [(_ extract-attr : XML-Attr #:vector #:with report-unknown report-range-exn
-        (xml-attr [field : [XML-Type field-idx false] xml-attr-value->datum defval ...] ...))
+        (xml-attr [field : [XML-Type field-idx false] xml-attr-value->datum defval ...] ...)
+        mandatory-fields)
      (syntax/loc stx
        (define extract-attr : (->* ((Listof XML-Element-Attribute))
                                    ((Option Symbol) (Listof Symbol))
@@ -351,16 +354,18 @@
                      [(or collected?)
                       (values (xml-attr (or (vector-ref avec field-idx) (xml-report-missing-mandatory-attribute elem 'xml-attr 'field defval ...)) ...)
                               _srtta)]
+                     [(pair? mandatory-fields) (values (xml-report-missing-mandatory-attribute elem 'xml-attr mandatory-fields) attrs)]
                      [else (values #false attrs)]))))))]
     [(_ extract-attr : XML-Attr #:hash #:with report-unknown report-range-exn
-        (xml-attr [field : [XML-Type field-idx false] xml-attr-value->datum defval ...] ...))
+        (xml-attr [field : [XML-Type field-idx false] xml-attr-value->datum defval ...] ...)
+        mandatory-fields)
      (syntax/loc stx
        (define extract-attr : (->* ((Listof XML-Element-Attribute))
                                    ((Option Symbol) (Listof Symbol))
                                    (Values (Option XML-Attr) (Listof XML-Element-Attribute)))
          (lambda [attrs [elem #false] [omits null]]
            (let-values ([(adict _srtta) (xml-attributes-extract attrs '(field ...) report-unknown elem omits)])
-             (cond [(hash-empty? adict) (values #false attrs)]
+             (cond [(hash-empty? adict) (values (if (null? mandatory-fields) #false (xml-report-missing-mandatory-attribute elem 'xml-attr mandatory-fields)))]
                    [else (values (xml-attr (xml-attribute->datum/safe (hash-ref adict 'field λfalse) xml-attr-value->datum
                                                                       (xml-report-missing-mandatory-attribute elem 'xml-attr 'field defval ...)
                                                                       report-unknown elem omits) ...)
@@ -423,10 +428,13 @@
               rest))))
 
 (define #:forall (T) xml-report-missing-mandatory-attribute : (case-> [(Option Symbol) Symbol Symbol T -> T]
-                                                                      [(Option Symbol) Symbol Symbol -> Nothing])
+                                                                      [(Option Symbol) Symbol (U Symbol (Listof Symbol)) -> Nothing])
   (case-lambda
     [(elem attr field default-value) default-value]
-    [(elem attr field) (raise-syntax-error (or elem attr) (format "missing mandatory attribute `~a`" field))]))
+    [(elem attr fields) (raise-syntax-error (or elem attr)
+                                            (cond [(symbol? fields) (format "missing mandatory attribute: ~a" fields)]
+                                                  [(null? (cdr fields)) (format "missing mandatory attribute: ~a" (car fields))]
+                                                  [else (format "missing mandatory attributes: ~a" fields)]))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-attribute->datum/safe : (All (a b) (->* ((Option XML-Element-Attribute) (-> XML-Element-Attribute-Value (Option a)) b)

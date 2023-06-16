@@ -49,13 +49,15 @@
                     [(field-total field-idx ...) (make-identifier-indices #'(field ...))]
                     [(field-ref ...) (make-identifiers #'attr #'(field ...))]
                     [([kw-args ...] [kw-reargs ...] [kw-reargs* ...]) (make-keyword-arguments #'self #'(field ...) #'(FieldType ...) #'([defval ...] ...) #'(field-ref ...))]
-                    [switch (let ([count (syntax-e #'field-total)])
-                              ;;; TODO: find a better strategy
-                              ; #:inline is definitely bad for large structs, whereas
-                              ; #:vector and #:hash are almost identical for large structs. 
-                              (cond [(<= count 10) #'#:inline]
-                                    [(<= count 20) #'#:vector]
-                                    [else          #'#:hash]))])
+                    [manatory-fields (for/list ([<field> (syntax->list #'(field ...))]
+                                                [<defvals> (syntax->list #'([defval ...] ...))]
+                                                #:when (null? (syntax-e <defvals>)))
+                                       <field>)]
+
+                    ;;; TODO: find a better strategy
+                    ; #:inline is definitely bad for large structs, whereas
+                    ; #:vector and #:hash are almost identical for large structs. 
+                    [switch (let ([count (syntax-e #'field-total)]) (cond [(<= count 10) #'#:inline] [(<= count 20) #'#:vector] [else #'#:hash]))])
        (syntax/loc stx
          (begin (struct attr super ([field : FieldType] ...)
                   #:type-name Attr #:transparent
@@ -74,7 +76,7 @@
                   (attr (if (void? field) (field-ref self) field) ...))
 
                 (define-xml-attribute-extract extract-attr : Attr switch #:with report-unknown report-range-exn
-                  (attr [field : [FieldType field-idx #false] xml->datum defval ...] ...))
+                  (attr [field : [FieldType field-idx #false] xml->datum defval ...] ...) 'manatory-fields)
 
                 (define (attr->xexpr [self : Attr]) : (Listof (Pairof Symbol String))
                   (dom-attribute-list [field (field-ref self) #:~> datum->xml] ...))
