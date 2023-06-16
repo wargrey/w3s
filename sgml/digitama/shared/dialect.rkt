@@ -95,12 +95,7 @@
                                         [else (xml-name-fix name)])))))
                     (symbol->immutable-string (gensym 'id)))])))
 
-(define #:forall (T) xml-attribute-field-datum/safe : (case-> [Symbol Symbol (Option T) T -> T]
-                                                              [Symbol Symbol (Option T) -> T])
-  (case-lambda
-    [(elem attr-name field default-value) (or field default-value)]
-    [(elem attr-name field) (or field (error elem "missing mandatory attribute: ~a" attr-name))]))
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-element-custom-write : (-> Symbol Output-Port (U Zero One Boolean) (Pairof Symbol (Listof Symbol)) (Pairof Any (Listof Any)) (Listof Any) Void)
   (lambda [id /dev/stdout mode fields all-data body-data]
     (define write-datum : (-> Any Output-Port Void) (stdio-select-writer mode))
