@@ -23,21 +23,21 @@
     datum))
 
 (define #:forall (T) sax-display-pi : (XML-PI-Handler T)
-  (lambda [?element target body datum]
+  (lambda [xpath target body datum]
     (cond [(not body) (printf "<?~a?>~n" target)]
           [else (printf "<!~a ~a>~n" target body)])
     datum))
 
 (define #:forall (T) sax-display-comment : (XML-Comment-Handler T)
-  (lambda [?element comment preserve? datum]
+  (lambda [xpath comment preserve? datum]
     (printf "<!--~a-->" comment)
     (when (not preserve?)
       (newline))
     datum))
 
 (define #:forall (T) sax-display-element : (XML-Element-Handler T)
-  (lambda [name depth attrs empty? preserve? datum]
-    (define indent (make-string (* depth 4) #\space))
+  (lambda [name xpath attrs empty? preserve? datum]
+    (define indent (make-string (* (length xpath) 4) #\space))
 
     (cond [(not attrs) (printf "~a</~a>~n" (if preserve? "" indent) name)]
           [else (printf "~a<~a" indent name)
@@ -48,10 +48,10 @@
     datum))
 
 (define #:forall (T) sax-display-pcdata : (XML-PCData-Handler T)
-  (lambda [element depth pcdata preserve? cdata? datum]
+  (lambda [element xpath pcdata preserve? cdata? datum]
     (define indention
       (cond [(or preserve?) ""]
-            [else (make-string (* (+ depth 1) 4) #\space)]))
+            [else (make-string (* (+ (length xpath) 1) 4) #\space)]))
     
     (cond [(and cdata?) (printf "<![CDATA[~a[[>" pcdata)]
           [else (printf "~a~a" indention pcdata)

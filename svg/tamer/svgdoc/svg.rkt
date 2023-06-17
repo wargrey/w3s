@@ -246,8 +246,8 @@
   (define /dev/w3cin (read-w3c-url "https://www.w3.org/TR/SVG11/Overview.html"))
 
   (define sax-seek-tocline : (XML-Element-Handler SAX-Toclist-Statue)
-    (lambda [name depth attrs empty? preserve? datum]
-      (define indent (make-string (* depth 4) #\space))
+    (lambda [name xpath attrs empty? preserve? datum]
+      (define indent (make-string (* (length xpath) 4) #\space))
       
       (or (and attrs
                (case name
