@@ -147,6 +147,27 @@
                   [(and max) (and (<= 0 n) (<= n max) n)]
                   [else (and (<= 0 n) n)])))]))
 
+(define xml:attr-value*->byte : (case-> [XML-Element-Attribute-Value* -> (Option Byte)]
+                                       [XML-Element-Attribute-Value* (Option Byte) -> (Option Byte)]
+                                       [XML-Element-Attribute-Value* (Option Byte) (Option Byte) -> (Option Byte)])
+  (case-lambda
+    [(v)
+     (cond [(xml:string? v) (string->byte (string-trim (xml:string-datum v)))]
+           [(xml:name? v) (string->byte (symbol->immutable-string (xml:name-datum v)))]
+           [else #false])]
+    [(v min)
+     (let ([b (xml:attr-value*->integer v)])
+       (and b
+            (cond [(and min) (and (<= min b) (byte? b) b)]
+                  [else (and (byte? b) b)])))]
+    [(v min max)
+     (let ([b (xml:attr-value*->integer v)])
+       (and b
+            (cond [(and min max) (and (<= min b) (<= b max) b)]
+                  [(and min) (and (<= min b) (byte? b) b)]
+                  [(and max) (and (<= 0 b) (<= b max) b)]
+                  [else (and (byte? b) b)])))]))
+
 (define xml:attr-value*->index : (case-> [XML-Element-Attribute-Value* -> (Option Index)]
                                          [XML-Element-Attribute-Value* (Option Index) -> (Option Index)]
                                          [XML-Element-Attribute-Value* (Option Index) (Option Index) -> (Option Index)])
