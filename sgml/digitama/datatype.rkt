@@ -372,6 +372,26 @@
 
     (and n (>= n 0.0) (eq? unit '%) (cons n unit))))
 
+(define xml:attr-value*->fixed-percentage : (->* (XML-Element-Attribute-Value*) (Symbol) (Option XML-Percentage))
+  (lambda [v [canonical-unit '||]]
+    (define-values (n unit)
+      (cond [(xml:string? v) (string->dimension (xml:string-datum v) canonical-unit #:ci? #false)]
+            [(xml:name? v) (string->dimension (xml:name-datum v) canonical-unit #:ci? #false)]
+            [else (values #false canonical-unit)]))
+
+    (and n (>= n -100.0) (<= n 100.0)
+         (eq? unit '%) (cons n unit))))
+
+(define xml:attr-value*+>fixed-percentage : (->* (XML-Element-Attribute-Value*) (Symbol) (Option XML-Nonnegative-Dimension))
+  (lambda [v [canonical-unit '||]]
+    (define-values (n unit)
+      (cond [(xml:string? v) (string->dimension (xml:string-datum v) canonical-unit #:ci? #false)]
+            [(xml:name? v) (string->dimension (xml:name-datum v) canonical-unit #:ci? #false)]
+            [else (values #false canonical-unit)]))
+
+    (and n (>= n 0.0) (<= n 100.0)
+         (eq? unit '%) (cons n unit))))
+
 (define xml:attr-value*->dimension/ci : (->* (XML-Element-Attribute-Value*) (Symbol) (Option XML-Dimension))
   (lambda [v [canonical-unit '||]]
     (define-values (n unit)
