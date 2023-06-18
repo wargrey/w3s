@@ -178,7 +178,7 @@
                   (xexpr-attribute-value? (cadr e))
                   (null? (cddr e)))))))
 
-(define xexpr-attrlist? : (-> Any Boolean : XExpr-AttList)
+(define xexpr-attlist? : (-> Any Boolean : XExpr-AttList)
   (lambda [a]
     (and (list? a)
          (andmap xexpr-attribute? a))))
@@ -199,7 +199,7 @@
     (and (pair? e)
          (symbol? (car e))
          (pair? (cdr e))
-         (xexpr-attrlist? (cadr e))
+         (xexpr-attlist? (cadr e))
          (pair? (cddr e))
          (null? (cdddr e))
          (xexpr-list? (caddr e)))))
@@ -218,5 +218,5 @@
          (symbol? (car e))
          (or (null? (cdr e))
              (and (pair? (cdr e))
-                  (xexpr-attrlist? (cadr e))
+                  (xexpr-attlist? (cadr e))
                   (null? (cddr e)))))))

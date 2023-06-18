@@ -403,6 +403,32 @@
                            [(not (memq attr omits)) (extract rest _srtta (hash-set adict attr self))]
                            [else (report-unknown elem (list self)) (extract rest _srtta adict)]))]))]))
 
+(define xml-attributes-extract-pair : (All (X Y) (-> (Listof XML-Element-Attribute*) Symbol Symbol
+                                                     (XML-Attribute-Value*->Datum (Option X)) (XML-Attribute-Value*->Datum (Option Y))
+                                                     (Values (Option (Pairof X Y)) (Listof XML-Element-Attribute*))))
+  (lambda [attrs car-name cdr-name val->car val->cdr]
+    (let*-values ([(1st rest) (xml-attributes*-extract attrs car-name)]
+                  [(2nd rest) (xml-attributes*-extract rest cdr-name)])
+      (let ([x (and 1st (val->car 1st))]
+            [y (and 2nd (val->cdr 2nd))])
+        (cond [(and x y) (values (cons x y) rest)]
+              [else (values #false attrs)])))))
+
+(define xml-attributes-extract-triplet : (All (R G B) (-> (Listof XML-Element-Attribute*) Symbol Symbol Symbol
+                                                          (XML-Attribute-Value*->Datum (Option R))
+                                                          (XML-Attribute-Value*->Datum (Option G))
+                                                          (XML-Attribute-Value*->Datum (Option B))
+                                                          (Values (Option (List R G B)) (Listof XML-Element-Attribute*))))
+  (lambda [attrs 1st-name 2nd-name 3rd-name val->1st val->2nd val->3rd]
+    (let*-values ([(1st rest) (xml-attributes*-extract attrs 1st-name)]
+                  [(2nd rest) (xml-attributes*-extract rest 2nd-name)]
+                  [(3rd rest) (xml-attributes*-extract rest 3rd-name)])
+      (let ([r (and 1st (val->1st 1st))]
+            [g (and 2nd (val->2nd 2nd))]
+            [b (and 3rd (val->3rd 3rd))])
+        (cond [(and r g b) (values (list r g b) rest)]
+              [else (values #false attrs)])))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-token->source : (-> XML-Token (Option XML-Source))
   (lambda [t]
