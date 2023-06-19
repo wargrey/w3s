@@ -21,7 +21,6 @@
 (require "misc.rkt")
 (require "stdin.rkt")
 
-(require "tokenizer/port.rkt")
 (require "tokenizer/characters.rkt")
 
 (unsafe-require/typed

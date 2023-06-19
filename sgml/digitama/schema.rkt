@@ -2,6 +2,8 @@
 
 (provide (all-defined-out))
 
+(require digimon/struct)
+
 (require "digicore.rkt")
 (require "grammar.rkt")
 (require "misc.rkt")
@@ -108,13 +110,12 @@
 (define-type Schema-Elements (Immutable-HashTable Symbol XSch-Element))
 (define-type Schema-Attributes (Immutable-HashTable Symbol (Immutable-HashTable Symbol XSch-Attribute)))
 
-(struct xml-schema
-  ([entities : Schema-Entities]
-   [notations : Schema-Notations]
-   [elements : Schema-Elements]
-   [attributes : Schema-Attributes])
-  #:transparent
-  #:type-name XML-Schema)
+(define-struct xml-schema : XML-Schema
+  ([entities : Schema-Entities xsch-empty-entities]
+   [notations : Schema-Notations xsch-empty-notations]
+   [elements : Schema-Elements xsch-empty-elements]
+   [attributes : Schema-Attributes xsch-empty-element-attributes])
+  #:transparent)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xsch:attribute:cdata : XSch-Attribute-String-Type (xsch-attribute-string-type))

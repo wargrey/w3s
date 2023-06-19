@@ -97,6 +97,17 @@
                             #px"\\.t?dtd$" ".dtd" src /dev/dtdin
                             'xml-dtd-expand))))
 
+(define xsd-read
+  (lambda [[/dev/xmlin (current-input-port)]]
+    (sgml-read read-xml-document /dev/xmlin)))
+
+(define xsd-read-syntax
+  (lambda [[src #false] [/dev/xsdin (current-input-port)]]
+    (parameterize ([xml-alternative-document-source (sgml-path->string src)])
+      (sgml-doc-read-syntax 'read-xsd-document 'sgml/xsd
+                            #px"\\.t?xsd$" ".xsd" src /dev/xsdin
+                            'xsd-document-simplify))))
+
 (define rnc-read
   (lambda [[/dev/rncin (current-input-port)]]
     (sgml-read read-xml-document /dev/rncin)))
@@ -125,6 +136,15 @@
       [(drracket:default-extension) "tdtd"]
       ;[(drracket:indentation) (dynamic-require 'sgml/village/sgmlang/indentation 'dtd-indentation)]
       [(color-lexer) (dynamic-require 'sgml/village/sgmlang/lexer 'dtd-lexer)]
+      [else default])))
+
+(define (xsd-info in mod line col pos)
+  (lambda [key default]
+    (case key
+      [(drracket:default-filters) '(["XSD Sources" "*.txsd"])]
+      [(drracket:default-extension) "txsd"]
+      ;[(drracket:indentation) (dynamic-require 'sgml/village/sgmlang/indentation 'xml-indentation)]
+      [(color-lexer) (dynamic-require 'sgml/village/sgmlang/lexer 'xml-lexer)]
       [else default])))
 
 (define (rnc-info in mod line col pos)
