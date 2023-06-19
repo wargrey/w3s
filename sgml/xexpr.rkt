@@ -1,12 +1,19 @@
 #lang typed/racket/base
 
 (provide (all-defined-out))
+(provide (all-from-out "digitama/plain/datatype.rkt"))
 (provide XExpr XExpr-AttList XExpr-Element XExpr-Attribute XExpr-Attribute-Value XExpr-Datum XExpr-PI)
+(provide (struct-out XML-Document) XML-Element XML-Element-Attribute XML-Element-Attribute-Value)
+(provide read-xml-document xml-document-normalize)
 (provide xexpr? write-xexpr xexpr->bytes xexpr->string)
+(provide xml-attributes-extract xml-attributes-extract-xmlns)
+(provide xml-attributes-extract-pair xml-attributes-extract-triplet)
 
 (require "digitama/document.rkt")
 (require "digitama/plain/grammar.rkt")
 (require "digitama/plain/xexpr.rkt")
+(require "digitama/plain/datatype.rkt")
+(require "digitama/plain/dialect.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type XExpr-Element-Children (U XML-Element XML-Subdatum))

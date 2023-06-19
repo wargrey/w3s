@@ -7,12 +7,12 @@
 (provide (all-defined-out) (all-from-out "dtd.rkt" "xexpr.rkt"))
 (provide (all-from-out "digitama/namespace.rkt" "digitama/whitespace.rkt" "digitama/datatype.rkt"))
 (provide XML-DTD xml-load-relative-system-entity)
-(provide (struct-out XML-Document) read-xml-document xml-document-normalize xml-document*->document)
-(provide (struct-out XML-Document*) read-xml-document* xml-document*-normalize xml-document*-valid?)
+(provide (struct-out XML-Document*) read-xml-document* xml-document*-normalize xml-document*->document xml-document*-valid?)
 (provide XML-DTD-Guard XML-XXE-Guard make-xml-dtd-guard xml-dtd-guard? xml-xxe-guard?)
+(provide xml-attributes*-extract xml-attributes*-extract-xmlns)
+(provide xml-attributes*-extract-pair xml-attributes*-extract-triplet)
 (provide default-xml-error-topic)
 
-(provide XML-Element XML-Element-Attribute XML-Element-Attribute-Value)
 (provide XML-Processing-Instruction XML-Content XML-Subdatum)
 (provide (rename-out [xml-root-xexpr xml-doc-root]
                      [xexpr-attr-ref xml-attr-ref]
@@ -28,6 +28,7 @@
 (require "digitama/document.rkt")
 (require "digitama/normalize.rkt")
 (require "digitama/datatype.rkt")
+(require "digitama/dialect.rkt")
 
 (require "digitama/digicore.rkt")
 (require "digitama/namespace.rkt")
