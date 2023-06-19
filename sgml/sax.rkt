@@ -10,6 +10,7 @@
 (provide XML-Comment-Handler XML-Event-Handler)
 (provide default-sax-event-prefilter default-sax-event-postfilter)
 (provide make-xml-event-handler/fold make-xml-event-handler/filter)
+(provide sax-element-terminator sax-pcdata-terminator)
 (provide sax-xml-writer sax-handler/xml-writer)
 
 (require "digitama/plain/sax.rkt")

@@ -399,3 +399,13 @@
 (define sax-identity/6 : (All (seed) (-> Any Any Any Any Any seed seed))
   (lambda [a1 a2 a3 a4 a5 datum]
     datum))
+
+(define #:forall (seed) sax-element-terminator : (-> (XML-Element-Handler seed) (XML-Element-Handler seed))
+  (lambda [handle]
+    (λ [[name : Symbol] [xpath : (Listof Symbol)] [attrs : (Option SAX-Attributes)] [empty? : Boolean] [preserve? : Boolean] [datum0 : seed]]
+      (or (handle name xpath attrs empty? preserve? datum0) datum0))))
+
+(define #:forall (seed) sax-pcdata-terminator : (-> (XML-PCData-Handler seed) (XML-PCData-Handler seed))
+  (lambda [handle]
+    (λ [[element : Symbol] [xpath : (Listof Symbol)] [pcdata : String] [preserve? : Boolean] [cdata? : Boolean] [datum0 : seed]]
+      (or (handle element xpath pcdata preserve? cdata? datum0) datum0))))
