@@ -319,11 +319,11 @@
              (values singleton attrs)))))]
     [(_ extract-attr : XML-Attr #:inline #:with report-unknown report-range-exn
         (xml-attr [field FieldType xml-attr-value->datum defval ...] ...)
-        mandatory-fields)
+        mandatory-fields AltReturnType)
      (syntax/loc stx
        (define extract-attr : (->* ((Listof XML-Element-Attribute))
                                    ((Option Symbol) (Listof Symbol))
-                                   (Values (Option XML-Attr) (Listof XML-Element-Attribute)))
+                                   (Values (U XML-Attr AltReturnType) (Listof XML-Element-Attribute)))
          (lambda [attrs [elem #false] [omits null]]
            (let extract ([_attrs : (Listof XML-Element-Attribute) attrs]
                          [_srtta : (Listof XML-Element-Attribute) null]
@@ -337,17 +337,16 @@
                    [(or collected?)
                     (values (xml-attr ((inst xml-attribute->datum/safe FieldType) 'xml-attr 'field field xml-attr-value->datum report-unknown elem omits defval ...) ...)
                             _srtta)]
-                   [(pair? mandatory-fields) (values (raise-xml-missing-attribute-error elem 'xml-attr mandatory-fields) attrs)]
-                   [else (values #false attrs)])))))]
+                   [else (values (and (pair? mandatory-fields) (raise-xml-missing-attribute-error elem 'xml-attr mandatory-fields) #false) attrs)])))))]
     [(_ extract-attr : XML-Attr #:vector #:with report-unknown report-range-exn
         (xml-attr [field FieldType xml-attr-value->datum defval ...] ...)
-        mandatory-fields)
+        mandatory-fields AltReturnType)
      (with-syntax* ([(total field-idx ...) (make-identifier-indices #'(field ...))]
                     [([XML-Type false] ...) (make-list (syntax-e #'total) (list #'XML-Element-Attribute #'#false))])
        (syntax/loc stx
          (define extract-attr : (->* ((Listof XML-Element-Attribute))
                                      ((Option Symbol) (Listof Symbol))
-                                     (Values (Option XML-Attr) (Listof XML-Element-Attribute)))
+                                     (Values (U XML-Attr AltReturnType) (Listof XML-Element-Attribute)))
            (lambda [attrs [elem #false] [omits null]]
              (let ([avec : (Vector (Option XML-Type) ...) (vector false ...)])
                (let extract ([_attrs : (Listof XML-Element-Attribute) attrs]
@@ -364,15 +363,14 @@
                                            (vector-ref avec field-idx) xml-attr-value->datum
                                            report-unknown elem omits defval ...) ...)
                                 _srtta)]
-                       [(pair? mandatory-fields) (values (raise-xml-missing-attribute-error elem 'xml-attr mandatory-fields) attrs)]
-                       [else (values #false attrs)])))))))]
+                       [else (values (and (pair? mandatory-fields) (raise-xml-missing-attribute-error elem 'xml-attr mandatory-fields) #false) attrs)])))))))]
     [(_ extract-attr : XML-Attr #:hash #:with report-unknown report-range-exn
         (xml-attr [field FieldType xml-attr-value->datum defval ...] ...)
-        mandatory-fields)
+        mandatory-fields AltReturnType)
      (syntax/loc stx
        (define extract-attr : (->* ((Listof XML-Element-Attribute))
                                    ((Option Symbol) (Listof Symbol))
-                                   (Values (Option XML-Attr) (Listof XML-Element-Attribute)))
+                                   (Values (U XML-Attr AltReturnType) (Listof XML-Element-Attribute)))
          (lambda [attrs [elem #false] [omits null]]
            (let-values ([(adict _srtta) (xml-attributes-extract attrs '(field ...) report-unknown elem omits)])
              (cond [(hash-empty? adict) (values (and (pair? mandatory-fields) (raise-xml-missing-attribute-error elem 'xml-attr mandatory-fields)) attrs)]
@@ -456,7 +454,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type XML-Report-Unknown (-> (Option Symbol) (Listof XML-Element-Attribute) Void))
 
-(define #:forall (T) raise-xml-missing-attribute-error : (-> (Option Symbol) Symbol (U Symbol (Listof Symbol)) Nothing)
+(define #:forall (T) raise-xml-missing-attribute-error : (-> (Option Symbol) Symbol (U Symbol (Pairof Symbol (Listof Symbol))) Nothing)
   (lambda [elem λattr fields]
     (raise-syntax-error (or elem λattr)
                         (cond [(symbol? fields) (format "missing mandatory attribute: ~a" fields)]
