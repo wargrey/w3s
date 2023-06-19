@@ -7,8 +7,6 @@
 
 (require sgml/digitama/dialect)
 (require sgml/digitama/digicore)
-(require sgml/digitama/document)
-(require sgml/digitama/namespace)
 (require sgml/digitama/datatype)
 (require sgml/digitama/convert)
 

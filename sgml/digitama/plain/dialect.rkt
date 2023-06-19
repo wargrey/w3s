@@ -12,6 +12,7 @@
 (require "../namespace.rkt")
 (require "grammar.rkt")
 
+(require (for-syntax racket/list))
 (require (for-syntax syntax/parse))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -21,7 +22,7 @@
      (syntax/loc stx (func pre-argl ... attrs post-argl ...))]
     [(_ func #:pre-args [pre-argl ...] #:post-args [post-argl ...]
         #:with attrs omits elem report-unknown report-range-exn
-        #:fields [[field xml-value->datum defval ...] ...])
+        #:fields [[field FieldType xml-value->datum defval ...] ...])
      (syntax/loc stx
        (let extract ([_attrs : (Listof XML-Element-Attribute) attrs]
                      [_srtta : (Listof XML-Element-Attribute) null]
@@ -32,7 +33,7 @@
                  [(field) (with-a-field-replaced (extract tail _srtta #:fields (field ...)) #:for field #:set self)] ...
                  [else (extract tail (cons self _srtta) field ...)]))
              (func pre-argl ...
-                   (xml-attribute->datum/safe field xml-value->datum (or defval ...) report-unknown elem omits) ...
+                   ((inst xml-attribute->datum/safe FieldType) 'func 'field field xml-value->datum report-unknown elem omits defval ...) ...
                    _srtta
                    post-argl ...))))]))
 
@@ -40,7 +41,7 @@
   (syntax-case stx [:]
     [(_ func : DOM-Elem #:pre-args [pre-argl ...] #:post-args [post-argl ...] #:with attrs report-range-exn #:fields [])
      (syntax/loc stx (values (func pre-argl ... post-argl ...) attrs))]
-    [(_ func : DOM-Elem #:pre-args [pre-argl ...] #:post-args [post-argl ...] #:with attrs report-range-exn #:fields [[field xml->datum defval ...] ...])
+    [(_ func : DOM-Elem #:pre-args [pre-argl ...] #:post-args [post-argl ...] #:with attrs report-range-exn #:fields [[field FieldType xml->datum defval ...] ...])
      (syntax/loc stx
        (let extract : (Values DOM-Elem (Listof XML-Element-Attribute)) ([_attrs : (Listof XML-Element-Attribute) attrs]
                                                                         [_srtta : (Listof XML-Element-Attribute) null]
@@ -51,7 +52,7 @@
                  [(field) (with-a-field-replaced (extract tail _srtta #:fields (field ...)) #:for field #:set self)] ...
                  [else (extract tail (cons self _srtta) field ...)]))
              (values (func pre-argl ...
-                           (xml-attribute->datum/safe field xml->datum (or defval ...)) ...
+                           ((inst xml-attribute->datum/safe FieldType) 'func 'field field xml->datum #false #false null defval ...) ...
                            post-argl ...)
                      _srtta))))]))
 
@@ -156,7 +157,7 @@
                                          #:pre-args [hfield ... attrib ...]
                                          #:post-args [bfield ... efield ...]
                                          #:with rest report-range-exn
-                                         #:fields [[field xml->datum defval ...] ...]))
+                                         #:fields [[field FieldType xml->datum defval ...] ...]))
                     (when (pair? unknowns) (report-unknown (car xml.dom) unknowns))
                     self))
 
@@ -208,7 +209,7 @@
                   (let*-values ([(hfield ... tail) (header-values attrs elem omits)]
                                 [(attrib tail) (extract-attrib tail elem omits)] ...)
                     (extract-dom-values values #:pre-args [hfield ... attrib ...] #:post-args [] #:with tail omits elem report-unknown report-range-exn
-                                        #:fields [[mfield xml->mdatum mdefval ...] ...])))
+                                        #:fields [[mfield MFieldType xml->mdatum mdefval ...] ...])))
 
                 (define (header->xml-attributes [self : SubDOM]) : (Listof (Pairof Symbol String))
                   (append (dom-attribute-list (header->xexpr self) [(afield-ref self) #:=> attrib->xexpr] ...)
@@ -310,8 +311,14 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-syntax (define-xml-attribute-extract stx)
   (syntax-parse stx #:literals [:]
+    [(_ extract-attr : XML-Attr #:inline #:with report-unknown report-range-exn (xml-attr) mandatory-fields)
+     (syntax/loc stx
+       (define extract-attr : (->* ((Listof XML-Element-Attribute)) ((Option Symbol) (Listof Symbol)) (Values XML-Attr (Listof XML-Element-Attribute)))
+         (let ([singleton (xml-attr)])
+           (lambda [attrs [elem #false] [omits null]]
+             (values singleton attrs)))))]
     [(_ extract-attr : XML-Attr #:inline #:with report-unknown report-range-exn
-        (xml-attr [field : [XML-Type field-idx false] xml-attr-value->datum defval ...] ...)
+        (xml-attr [field FieldType xml-attr-value->datum defval ...] ...)
         mandatory-fields)
      (syntax/loc stx
        (define extract-attr : (->* ((Listof XML-Element-Attribute))
@@ -320,44 +327,47 @@
          (lambda [attrs [elem #false] [omits null]]
            (let extract ([_attrs : (Listof XML-Element-Attribute) attrs]
                          [_srtta : (Listof XML-Element-Attribute) null]
-                         [field : (Option XML-Type) #false] ...)
+                         [collected? : Any #false]
+                         [field : (Option XML-Element-Attribute) #false] ...)
              (cond [(pair? _attrs)
                     (let*-values ([(self rest) (values (car _attrs) (cdr _attrs))])
                       (case (car self)
-                        [(field)
-                         (with-a-field-replaced (extract rest _srtta #:fields (field ...)) #:for field
-                           #:set (xml-attribute->datum/safe self xml-attr-value->datum #false report-unknown elem omits))] ...
-                        [else (extract rest (cons self _srtta) field ...)]))]
-                   [(or field ...)
-                    (values (xml-attr (or field (xml-report-missing-mandatory-attribute elem 'xml-attr 'field defval ...)) ...)
+                        [(field) (with-a-field-replaced (extract rest _srtta #true #:fields (field ...)) #:for field #:set self)] ...
+                        [else (extract rest (cons self _srtta) collected? field ...)]))]
+                   [(or collected?)
+                    (values (xml-attr ((inst xml-attribute->datum/safe FieldType) 'xml-attr 'field field xml-attr-value->datum report-unknown elem omits defval ...) ...)
                             _srtta)]
-                   [(pair? mandatory-fields) (values (xml-report-missing-mandatory-attribute elem 'xml-attr mandatory-fields) attrs)]
+                   [(pair? mandatory-fields) (values (raise-xml-missing-attribute-error elem 'xml-attr mandatory-fields) attrs)]
                    [else (values #false attrs)])))))]
     [(_ extract-attr : XML-Attr #:vector #:with report-unknown report-range-exn
-        (xml-attr [field : [XML-Type field-idx false] xml-attr-value->datum defval ...] ...)
+        (xml-attr [field FieldType xml-attr-value->datum defval ...] ...)
         mandatory-fields)
-     (syntax/loc stx
-       (define extract-attr : (->* ((Listof XML-Element-Attribute))
-                                   ((Option Symbol) (Listof Symbol))
-                                   (Values (Option XML-Attr) (Listof XML-Element-Attribute)))
-         (lambda [attrs [elem #false] [omits null]]
-           (let ([avec : (Vector (Option XML-Type) ...) (vector false ...)])
-             (let extract ([_attrs : (Listof XML-Element-Attribute) attrs]
-                           [_srtta : (Listof XML-Element-Attribute) null]
-                           [collected? : Any #false])
-               (cond [(pair? _attrs)
-                      (let*-values ([(self rest) (values (car _attrs) (cdr _attrs))])
-                        (case (car self)
-                          [(field) (vector-set! avec field-idx (xml-attribute->datum/safe self xml-attr-value->datum #false report-unknown elem omits))
-                                   (extract rest _srtta (or collected? (vector-ref avec field-idx)))] ...
-                          [else (extract rest (cons self _srtta) collected?)]))]
-                     [(or collected?)
-                      (values (xml-attr (or (vector-ref avec field-idx) (xml-report-missing-mandatory-attribute elem 'xml-attr 'field defval ...)) ...)
-                              _srtta)]
-                     [(pair? mandatory-fields) (values (xml-report-missing-mandatory-attribute elem 'xml-attr mandatory-fields) attrs)]
-                     [else (values #false attrs)]))))))]
+     (with-syntax* ([(total field-idx ...) (make-identifier-indices #'(field ...))]
+                    [([XML-Type false] ...) (make-list (syntax-e #'total) (list #'XML-Element-Attribute #'#false))])
+       (syntax/loc stx
+         (define extract-attr : (->* ((Listof XML-Element-Attribute))
+                                     ((Option Symbol) (Listof Symbol))
+                                     (Values (Option XML-Attr) (Listof XML-Element-Attribute)))
+           (lambda [attrs [elem #false] [omits null]]
+             (let ([avec : (Vector (Option XML-Type) ...) (vector false ...)])
+               (let extract ([_attrs : (Listof XML-Element-Attribute) attrs]
+                             [_srtta : (Listof XML-Element-Attribute) null]
+                             [collected? : Any #false])
+                 (cond [(pair? _attrs)
+                        (let*-values ([(self rest) (values (car _attrs) (cdr _attrs))])
+                          (case (car self)
+                            [(field) (vector-set! avec field-idx self) (extract rest _srtta #true)] ...
+                            [else (extract rest (cons self _srtta) collected?)]))]
+                       [(or collected?)
+                        (values (xml-attr ((inst xml-attribute->datum/safe FieldType)
+                                           'xml-attr 'field
+                                           (vector-ref avec field-idx) xml-attr-value->datum
+                                           report-unknown elem omits defval ...) ...)
+                                _srtta)]
+                       [(pair? mandatory-fields) (values (raise-xml-missing-attribute-error elem 'xml-attr mandatory-fields) attrs)]
+                       [else (values #false attrs)])))))))]
     [(_ extract-attr : XML-Attr #:hash #:with report-unknown report-range-exn
-        (xml-attr [field : [XML-Type field-idx false] xml-attr-value->datum defval ...] ...)
+        (xml-attr [field FieldType xml-attr-value->datum defval ...] ...)
         mandatory-fields)
      (syntax/loc stx
        (define extract-attr : (->* ((Listof XML-Element-Attribute))
@@ -365,10 +375,11 @@
                                    (Values (Option XML-Attr) (Listof XML-Element-Attribute)))
          (lambda [attrs [elem #false] [omits null]]
            (let-values ([(adict _srtta) (xml-attributes-extract attrs '(field ...) report-unknown elem omits)])
-             (cond [(hash-empty? adict) (values (if (null? mandatory-fields) #false (xml-report-missing-mandatory-attribute elem 'xml-attr mandatory-fields)))]
-                   [else (values (xml-attr (xml-attribute->datum/safe (hash-ref adict 'field λfalse) xml-attr-value->datum
-                                                                      (xml-report-missing-mandatory-attribute elem 'xml-attr 'field defval ...)
-                                                                      report-unknown elem omits) ...)
+             (cond [(hash-empty? adict) (values (and (pair? mandatory-fields) (raise-xml-missing-attribute-error elem 'xml-attr mandatory-fields)) attrs)]
+                   [else (values (xml-attr ((inst xml-attribute->datum/safe FieldType)
+                                            'xml-attr 'field
+                                            (hash-ref adict 'field λfalse) xml-attr-value->datum
+                                            report-unknown elem omits defval ...) ...)
                                  _srtta)])))))]))
 
 (define-syntax (define-xml-attribute stx)
@@ -442,21 +453,26 @@
         (cond [(and r g b) (values (list r g b) rest)]
               [else (values #false attrs)])))))
 
-(define #:forall (T) xml-report-missing-mandatory-attribute : (case-> [(Option Symbol) Symbol Symbol T -> T]
-                                                                      [(Option Symbol) Symbol (U Symbol (Listof Symbol)) -> Nothing])
-  (case-lambda
-    [(elem attr field default-value) default-value]
-    [(elem attr fields) (raise-syntax-error (or elem attr)
-                                            (cond [(symbol? fields) (format "missing mandatory attribute: ~a" fields)]
-                                                  [(null? (cdr fields)) (format "missing mandatory attribute: ~a" (car fields))]
-                                                  [else (format "missing mandatory attributes: ~a" fields)]))]))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-attribute->datum/safe : (All (a b) (->* ((Option XML-Element-Attribute) (-> XML-Element-Attribute-Value (Option a)) b)
-                                                    ((Option (-> (Option Symbol) (Listof XML-Element-Attribute) Void)) (Option Symbol) (Listof Symbol))
-                                                    (U a b)))
-  (lambda [attr value->datum fallback [report-unknown #false] [elem #false] [omits null]]
-    (cond [(not attr) fallback]
-          [(and report-unknown (pair? omits) (memq (car attr) omits)) (report-unknown elem (list attr)) fallback]
-          [else (let ([datum (value->datum (cdr attr))])
-                  (if (not datum) fallback datum))])))
+(define-type XML-Report-Unknown (-> (Option Symbol) (Listof XML-Element-Attribute) Void))
+
+(define #:forall (T) raise-xml-missing-attribute-error : (-> (Option Symbol) Symbol (U Symbol (Listof Symbol)) Nothing)
+  (lambda [elem λattr fields]
+    (raise-syntax-error (or elem λattr)
+                        (cond [(symbol? fields) (format "missing mandatory attribute: ~a" fields)]
+                              [(null? (cdr fields)) (format "missing mandatory attribute: ~a" (car fields))]
+                              [else (format "missing mandatory attributes: ~a" fields)]))))
+
+(define #:forall (a) xml-attribute->datum/safe
+  : (case-> [Symbol Symbol (Option XML-Element-Attribute) (XML-Attribute-Value->Datum (Option a)) (Option XML-Report-Unknown) (Option Symbol) (Listof Symbol) -> a]
+            [Symbol Symbol (Option XML-Element-Attribute) (XML-Attribute-Value->Datum (Option a)) (Option XML-Report-Unknown) (Option Symbol) (Listof Symbol) a -> a])
+  (case-lambda
+    [(λattr field attr value->datum report-unknown elem omits)
+     (or (cond [(not attr) #false]
+               [(and report-unknown (pair? omits) (memq (car attr) omits)) (report-unknown elem (list attr)) #false]
+               [else (value->datum (cdr attr))])
+         (raise-xml-missing-attribute-error elem λattr field))]
+    [(λattr field attr value->datum report-unknown elem omits defval)
+     (cond [(not attr) defval]
+           [(and report-unknown (pair? omits) (memq (car attr) omits)) (report-unknown elem (list attr)) defval]
+           [else (or (value->datum (cdr attr)) defval)])]))

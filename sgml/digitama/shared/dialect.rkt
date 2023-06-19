@@ -46,7 +46,6 @@
                     [remake-attr (format-id #'attr "remake-~a" (syntax-e #'attr))]
                     [remake-attr* (format-id #'attr "remake-~a*" (syntax-e #'attr))]
                     [cascade-attr (format-id #'attr "cascade-~a" (syntax-e #'attr))]
-                    [(field-total field-idx ...) (make-identifier-indices #'(field ...))]
                     [(field-ref ...) (make-identifiers #'attr #'(field ...))]
                     [([kw-args ...] [kw-reargs ...] [kw-reargs* ...]) (make-keyword-arguments #'self #'(field ...) #'(FieldType ...) #'([defval ...] ...) #'(field-ref ...))]
                     [manatory-fields (for/list ([<field> (syntax->list #'(field ...))]
@@ -57,7 +56,7 @@
                     ;;; TODO: find a better strategy
                     ; #:inline is definitely bad for large structs, whereas
                     ; #:vector and #:hash are almost identical for large structs. 
-                    [switch (let ([count (syntax-e #'field-total)]) (cond [(<= count 10) #'#:inline] [(<= count 20) #'#:vector] [else #'#:hash]))])
+                    [switch (let ([count (length (syntax->list #'(field ...)))]) (cond [(<= count 10) #'#:inline] [(<= count 20) #'#:vector] [else #'#:hash]))])
        (syntax/loc stx
          (begin (struct attr super ([field : FieldType] ...)
                   #:type-name Attr #:transparent
@@ -76,7 +75,7 @@
                   (attr (if (void? field) (field-ref self) field) ...))
 
                 (define-xml-attribute-extract extract-attr : Attr switch #:with report-unknown report-range-exn
-                  (attr [field : [FieldType field-idx #false] xml->datum defval ...] ...) 'manatory-fields)
+                  (attr [field FieldType xml->datum defval ...] ...) 'manatory-fields)
 
                 (define (attr->xexpr [self : Attr]) : (Listof (Pairof Symbol String))
                   (dom-attribute-list [field (field-ref self) #:~> datum->xml] ...))

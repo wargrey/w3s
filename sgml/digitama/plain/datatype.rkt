@@ -347,7 +347,7 @@
 
     (and n (eq? unit '%) (cons n unit))))
 
-(define xml:attr-value+>percentage : (->* (XML-Element-Attribute-Value) (Symbol) (Option XML-Nonnegative-Dimension))
+(define xml:attr-value+>percentage : (->* (XML-Element-Attribute-Value) (Symbol) (Option XML-Nonnegative-Percentage))
   (lambda [v [canonical-unit '||]]
     (define-values (n unit)
       (cond [(string? v) (string->dimension v canonical-unit #:ci? #false)]
@@ -367,7 +367,7 @@
     (and n (>= n -100.0) (<= n 100.0)
          (eq? unit '%) (cons n unit))))
 
-(define xml:attr-value+>fixed-percentage : (->* (XML-Element-Attribute-Value) (Symbol) (Option XML-Nonnegative-Dimension))
+(define xml:attr-value+>fixed-percentage : (->* (XML-Element-Attribute-Value) (Symbol) (Option XML-Nonnegative-Percentage))
   (lambda [v [canonical-unit '||]]
     (define-values (n unit)
       (cond [(string? v) (string->dimension v canonical-unit #:ci? #false)]
