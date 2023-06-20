@@ -161,6 +161,7 @@
   [exn:xml:nonempty      #:-> exn:xml:vc]
   [exn:xml:adoptee       #:-> exn:xml:vc]
   [exn:xml:missing-attr  #:-> exn:xml:vc]
+  [exn:xml:missing-elem  #:-> exn:xml:vc]
   [exn:xml:parsed        #:-> exn:xml:vc]
   [exn:xml:children      #:-> exn:xml:vc]
   

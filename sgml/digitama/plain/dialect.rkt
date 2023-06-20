@@ -454,12 +454,19 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type XML-Report-Unknown (-> (Option Symbol) (Listof XML-Element-Attribute) Void))
 
-(define #:forall (T) raise-xml-missing-attribute-error : (-> (Option Symbol) Symbol (U Symbol (Pairof Symbol (Listof Symbol))) Nothing)
+(define raise-xml-missing-attribute-error : (-> (Option Symbol) Symbol (U Symbol (Pairof Symbol (Listof Symbol))) Nothing)
   (lambda [elem λattr fields]
     (raise-syntax-error (or elem λattr)
                         (cond [(symbol? fields) (format "missing mandatory attribute: ~a" fields)]
                               [(null? (cdr fields)) (format "missing mandatory attribute: ~a" (car fields))]
                               [else (format "missing mandatory attributes: ~a" fields)]))))
+
+(define raise-xml-missing-element-error : (-> (Option Symbol) (U Symbol (Pairof Symbol (Listof Symbol))) Nothing)
+  (lambda [elem children]
+    (raise-syntax-error elem
+                        (cond [(symbol? children) (format "missing mandatory element: ~a" children)]
+                              [(null? (cdr children)) (format "missing mandatory element: ~a" (car children))]
+                              [else (format "missing mandatory elements: ~a" children)]))))
 
 (define #:forall (a) xml-attribute->datum/safe
   : (case-> [Symbol Symbol (Option XML-Element-Attribute) (XML-Attribute-Value->Datum (Option a)) (Option XML-Report-Unknown) (Option Symbol) (Listof Symbol) -> a]

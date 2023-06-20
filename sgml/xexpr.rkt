@@ -8,6 +8,7 @@
 (provide xexpr? write-xexpr xexpr->bytes xexpr->string)
 (provide xml-attributes-extract xml-attributes-extract-xmlns)
 (provide xml-attributes-extract-pair xml-attributes-extract-triplet)
+(provide raise-xml-missing-attribute-error raise-xml-missing-element-error)
 
 (require "digitama/document.rkt")
 (require "digitama/plain/grammar.rkt")

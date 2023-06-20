@@ -11,6 +11,7 @@
 (provide XML-DTD-Guard XML-XXE-Guard make-xml-dtd-guard xml-dtd-guard? xml-xxe-guard?)
 (provide xml-attributes*-extract xml-attributes*-extract-xmlns)
 (provide xml-attributes*-extract-pair xml-attributes*-extract-triplet)
+(provide raise-xml-missing-attribute*-error raise-xml-missing-element*-error)
 (provide default-xml-error-topic)
 
 (provide XML-Processing-Instruction XML-Content XML-Subdatum)
