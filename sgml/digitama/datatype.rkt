@@ -58,19 +58,6 @@
        (cond [(procedure? pattern) (and (pattern s) s)]
              [else (and (regexp-match? pattern s) s)]))]))
 
-(define xml:attr-value*->string/trim
-  : (case-> [XML-Element-Attribute-Value* -> String]
-            [XML-Element-Attribute-Value* (U String Bytes Regexp Byte-Regexp (-> String Boolean)) -> (Option String)])
-  (case-lambda
-    [(v)
-     (cond [(xml:string? v) (string-trim (xml:string-datum v))]
-           [(xml:name? v) (symbol->immutable-string (xml:name-datum v))]
-           [else (symbol-join (map xml:name-datum v))])]
-    [(v pattern)
-     (let ([s (xml:attr-value*->string/trim v)])
-       (cond [(procedure? pattern) (and (pattern s) s)]
-             [else (and (regexp-match? pattern s) s)]))]))
-
 (define xml:attr-value*->token
   : (case-> [XML-Element-Attribute-Value* -> String]
             [XML-Element-Attribute-Value* (U String Bytes Regexp Byte-Regexp (-> String Boolean)) -> (Option String)])
@@ -458,15 +445,15 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml:attr-value*->uri-string : (-> XML-Element-Attribute-Value* (Option String))
   (lambda [v]
-    (xml:attr-value*->string/trim v string-uri?)))
+    (xml:attr-value*->token v string-uri?)))
 
 (define xml:attr-value*->guid-string : (-> XML-Element-Attribute-Value* (Option String))
   (lambda [v]
-    (xml:attr-value*->string/trim v string-guid?)))
+    (xml:attr-value*->token v string-guid?)))
 
 (define xml:attr-value*->panose-string : (-> XML-Element-Attribute-Value* (Option String))
   (lambda [v]
-    (xml:attr-value*->string/trim v string-panose?)))
+    (xml:attr-value*->token v string-panose?)))
 
 (define xml:attr-value*->panose : (-> XML-Element-Attribute-Value* (Option Index))
   (lambda [v]
