@@ -71,6 +71,19 @@
        (cond [(procedure? pattern) (and (pattern s) s)]
              [else (and (regexp-match? pattern s) s)]))]))
 
+(define xml:attr-value*->token
+  : (case-> [XML-Element-Attribute-Value* -> String]
+            [XML-Element-Attribute-Value* (U String Bytes Regexp Byte-Regexp (-> String Boolean)) -> (Option String)])
+  (case-lambda
+    [(v)
+     (cond [(xml:string? v) (string-normalize-spaces (xml:string-datum v))]
+           [(xml:name? v) (symbol->immutable-string (xml:name-datum v))]
+           [else (symbol-join (map xml:name-datum v))])]
+    [(v pattern)
+     (let ([s (xml:attr-value*->token v)])
+       (cond [(procedure? pattern) (and (pattern s) s)]
+             [else (and (regexp-match? pattern s) s)]))]))
+
 (define xml:attr-value*->string-list : (->* (XML-Element-Attribute-Value*) ((U String Regexp)) (Option (Listof String)))
   (lambda [v [sep #px"\\s+"]]
     (cond [(xml:string? v) (string-split (string-trim (xml:string-datum v)) sep)]

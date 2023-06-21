@@ -46,9 +46,23 @@
      (cond [(string? v) (string-trim v)]
            [(symbol? v) (symbol->immutable-string v)]
            [(list? v) (symbol-join v)]
-           [else (xml:attr-value->string (unbox v))])]
+           [else (xml:attr-value->string/trim (unbox v))])]
     [(v pattern)
      (let ([s (xml:attr-value->string/trim v)])
+       (cond [(procedure? pattern) (and (pattern s) s)]
+             [else (and (regexp-match? pattern s) s)]))]))
+
+(define xml:attr-value->token
+  : (case-> [XML-Element-Attribute-Value -> String]
+            [XML-Element-Attribute-Value (U String Bytes Regexp Byte-Regexp (-> String Boolean)) -> (Option String)])
+  (case-lambda
+    [(v)
+     (cond [(string? v) (string-normalize-spaces v)]
+           [(symbol? v) (symbol->immutable-string v)]
+           [(list? v) (symbol-join v)]
+           [else (xml:attr-value->token (unbox v))])]
+    [(v pattern)
+     (let ([s (xml:attr-value->token v)])
        (cond [(procedure? pattern) (and (pattern s) s)]
              [else (and (regexp-match? pattern s) s)]))]))
 
