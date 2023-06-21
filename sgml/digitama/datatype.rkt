@@ -443,7 +443,7 @@
           [else null])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml:attr-value*->guid-uri : (-> XML-Element-Attribute-Value* (Option String))
+(define xml:attr-value*->uri-string : (-> XML-Element-Attribute-Value* (Option String))
   (lambda [v]
     (xml:attr-value*->string/trim v string-uri?)))
 

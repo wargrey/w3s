@@ -412,7 +412,7 @@
                            [(not (memq attr omits)) (extract rest _srtta (hash-set adict attr self))]
                            [else (report-unknown elem (list self)) (extract rest _srtta adict)]))]))]))
 
-(define xml-attributes*-extract-xmlns : (-> (Listof XML-Element-Attribute*) (Values MOX-Namespaces (Listof XML-Element-Attribute*)))
+(define xml-attributes*-extract-xmlns : (-> (Listof XML-Element-Attribute*) (Values XML-Namespaces (Listof XML-Element-Attribute*)))
   (let ([xml:attr->namespace (λ [[attr : XML-Element-Attribute*]] (cons (xml-qname-local-part (xml:name-datum (car attr))) (xml:attr-value*->string (cdr attr))))])
     (lambda [attrs]
       (xml-attributes*-extract attrs xml-qname-xmlns? xml:attr->namespace))))
