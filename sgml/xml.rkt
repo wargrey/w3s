@@ -15,11 +15,7 @@
 (provide default-xml-error-topic)
 
 (provide XML-Processing-Instruction XML-Content XML-Subdatum)
-(provide (rename-out [xml-root-xexpr xml-doc-root]
-                     [xexpr-attr-ref xml-attr-ref]
-                     [xexpr-children-seek xml-children-seek]
-                     [XExpr-Element-Children XML-Element-Children]
-                     [XExpr-Attribute-Datum XML-Attribute-Datum]))
+(provide (rename-out [xml-root-xexpr xml-doc-root]))
 
 (require "dtd.rkt")
 (require "xexpr.rkt")

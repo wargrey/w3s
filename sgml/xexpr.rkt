@@ -17,8 +17,8 @@
 (require "digitama/plain/dialect.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define-type XExpr-Element-Children (U XML-Element XML-Subdatum))
-(define-type XExpr-Attribute-Datum (U String Symbol (Listof Symbol)))
+(define-type XML-Element-Children (U XML-Element XML-Subdatum))
+(define-type XML-Attribute-Datum (U String Symbol (Listof Symbol)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-root-xexpr : (-> (U XML-Document XML-Document*) (Option XML-Element))
@@ -31,7 +31,7 @@
              #:when (list? e))
       e)))
 
-(define xexpr-attr-ref : (-> XML-Element Symbol (Option XExpr-Attribute-Datum))
+(define xml-attr-ref : (-> XML-Element Symbol (Option XML-Attribute-Datum))
   (lambda [elem name]
     (define attr : (Option XML-Element-Attribute) (assq name (cadr elem)))
       (and attr
@@ -39,15 +39,26 @@
              (cond [(box? v) (unbox v)]
                    [else v])))))
 
-(define xexpr-children-seek : (-> XML-Element Symbol (U String Regexp) (Listof XML-Element))
+(define xml-children-seek : (-> XML-Element Symbol (U String Regexp) (Listof XML-Element))
   (lambda [docs.xml attr-name value]
-    (let seek : (Listof XML-Element) ([siblings : (Listof XExpr-Element-Children) (caddr docs.xml)]
+    (let seek : (Listof XML-Element) ([siblings : (Listof XML-Element-Children) (caddr docs.xml)]
                                       [stnemele : (Listof XML-Element) null])
       (cond [(null? siblings) (reverse stnemele)]
             [else (let-values ([(self rest) (values (car siblings) (cdr siblings))])
                     (cond [(not (list? self)) (seek (cdr siblings) stnemele)]
-                          [else (let ([:class (xexpr-attr-ref self attr-name)])
+                          [else (let ([:class (xml-attr-ref self attr-name)])
                                   (cond [(not (string? :class)) (seek rest (append (seek (caddr self) null) stnemele))]
                                         [(and (regexp? value) (regexp-match? value :class)) (seek rest (cons self stnemele))]
                                         [(and (string? value) (string=? value :class)) (seek rest (cons self stnemele))]
                                         [else (seek rest (append (seek (caddr self) null) stnemele))]))]))]))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define #:forall (T) xml-empty-children->list : (-> XML-Element (-> (Listof XML-Element-Attribute) Symbol
+                                                                    (Values T (Listof XML-Element-Attribute)))
+                                                    (Listof T))
+  (lambda [parent attlist->datum]
+    (reverse
+     (for/fold ([seirtne : (Listof T) null])
+               ([child (caddr parent)] #:when (list? child))
+       (let-values ([(entry _) (attlist->datum (cadr child) (car child))])
+         (cons entry seirtne))))))
