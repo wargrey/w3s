@@ -12,8 +12,8 @@
 (require "normalize.rkt")
 (require "whitespace.rkt")
 
-(require "plain/grammar.rkt")
-(require "plain/normalize.rkt")
+(require "xexpr/grammar.rkt")
+(require "xexpr/normalize.rkt")
 
 (require "digicore.rkt")
 (require "misc.rkt")

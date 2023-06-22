@@ -5,12 +5,11 @@
 (require racket/list)
 
 (require "whitespace.rkt")
+(require "grammar.rkt")
+(require "prompt.rkt")
 
 (require "../tokenizer/port.rkt")
 (require "../tokenizer/delimiter.rkt")
-
-(require "../plain/grammar.rkt")
-(require "../plain/prompt.rkt")
 
 (require "../misc.rkt")
 (require "../stdin.rkt")

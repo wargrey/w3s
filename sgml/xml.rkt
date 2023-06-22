@@ -31,7 +31,7 @@
 (require "digitama/namespace.rkt")
 (require "digitama/whitespace.rkt")
 
-(require "digitama/plain/grammar.rkt")
+(require "digitama/xexpr/grammar.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-doc-location : (-> (U XML-Document XML-Document*) (U String Symbol))

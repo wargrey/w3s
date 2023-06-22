@@ -12,7 +12,7 @@
 (require "datatype.rkt")
 
 (require "shared/dialect.rkt")
-(require "plain/grammar.rkt")
+(require "xexpr/grammar.rkt")
 (require "grammar.rkt")
 
 (require (for-syntax syntax/parse))

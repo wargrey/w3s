@@ -2,7 +2,7 @@
 
 (provide (all-defined-out))
 
-(require "../plain/grammar.rkt")
+(require "../xexpr/grammar.rkt")
 
 (require (for-syntax racket/base))
 (require (for-syntax racket/list))

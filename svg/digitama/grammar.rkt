@@ -10,7 +10,7 @@
 (require sgml/digitama/datatype)
 (require sgml/digitama/convert)
 
-(require sgml/digitama/plain/grammar)
+(require sgml/digitama/xexpr/grammar)
 (require sgml/digitama/grammar)
 
 (require "grammar/attribute.rkt")

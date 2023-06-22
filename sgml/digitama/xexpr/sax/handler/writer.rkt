@@ -2,8 +2,8 @@
 
 (provide (all-defined-out))
 
-(require sgml/digitama/plain/sax)
-(require sgml/digitama/plain/prompt)
+(require "../../sax.rkt")
+(require "../../prompt.rkt")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define #:forall (T) sax-display-prolog : (XML-Prolog-Handler T)
