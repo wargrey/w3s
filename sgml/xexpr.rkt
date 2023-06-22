@@ -20,6 +20,15 @@
 (define-type XML-Element-Children (U XML-Element XML-Subdatum))
 (define-type XML-Attribute-Datum (U String Symbol (Listof Symbol)))
 
+(define-type (XML-Children-Fold T) (-> XML-Element T Symbol T))
+(define-type (XML-Children-Filter-Fold T) (-> XML-Element T Symbol (Option T)))
+
+(define-type (XML-Empty-Children-Map T) (-> (Listof XML-Element-Attribute) Symbol
+                                            (Values T (Listof XML-Element-Attribute))))
+
+(define-type (XML-Empty-Children-Filter-Map T) (-> (Listof XML-Element-Attribute) Symbol
+                                                   (Values (Option T) (Listof XML-Element-Attribute))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml-root-xexpr : (-> (U XML-Document XML-Document*) (Option XML-Element))
   (lambda [xml]
@@ -53,12 +62,31 @@
                                         [else (seek rest (append (seek (caddr self) null) stnemele))]))]))]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define #:forall (T) xml-empty-children->list : (-> XML-Element (-> (Listof XML-Element-Attribute) Symbol
-                                                                    (Values T (Listof XML-Element-Attribute)))
-                                                    (Listof T))
+(define #:forall (T) xml-children-fold : (-> XML-Element (XML-Children-Fold T) T T)
+  (lambda [root child-fold datum0]
+    (define parent-name (car root))
+    (for/fold ([self : T datum0])
+              ([child (in-list (caddr root))] #:when (list? child))
+      (child-fold child self parent-name))))
+
+(define #:forall (T) xml-children-filter-fold : (-> XML-Element (XML-Children-Filter-Fold T) T T)
+  (lambda [root child-fold datum0]
+    (define parent-name (car root))
+    (for/fold ([self : T datum0])
+              ([child (in-list (caddr root))] #:when (list? child))
+      (or (child-fold child self parent-name) self))))
+
+(define #:forall (T) xml-empty-children-map : (-> XML-Element (XML-Empty-Children-Map T) (Listof T))
+  (lambda [parent attlist->datum]
+    (for/list ([child (caddr parent)] #:when (list? child))
+      (let-values ([(entry _) (attlist->datum (cadr child) (car child))])
+        entry))))
+
+(define #:forall (T) xml-empty-children-filter-map : (-> XML-Element (XML-Empty-Children-Filter-Map T) (Listof T))
   (lambda [parent attlist->datum]
     (reverse
      (for/fold ([seirtne : (Listof T) null])
                ([child (caddr parent)] #:when (list? child))
        (let-values ([(entry _) (attlist->datum (cadr child) (car child))])
-         (cons entry seirtne))))))
+         (cond [(not entry) seirtne]
+               [else (cons entry seirtne)]))))))
