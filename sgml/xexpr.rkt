@@ -81,6 +81,19 @@
               ([child (in-list (caddr root))] #:when (list? child))
       (or (child-fold child self parent-name) self))))
 
+(define #:forall (T) xml-children-filter-fold* : (-> XML-Element (XML-Children-Filter-Fold T) T
+                                                     (Values T (Listof XML-Element)))
+  (lambda [root child-fold datum0]
+    (define parent-name (car root))
+    (define-values (self++ tser)
+      (for/fold ([self : T datum0]
+                 [tser : (Listof XML-Element) null])
+                ([child (in-list (caddr root))] #:when (list? child))
+        (let ([self++ (child-fold child self parent-name)])
+          (cond [(not self++) (values self (cons child tser))]
+                [else (values self++ tser)]))))
+    (values self++ (reverse tser))))
+
 (define #:forall (T) xml-children-map : (-> XML-Element (XML-Children-Map T) (Listof T))
   (lambda [root child-map]
     (define parent-name (car root))
@@ -96,6 +109,39 @@
        (let ([entry (child-map child parent-name)])
          (cond [(not entry) seirtne]
                [else (cons entry seirtne)]))))))
+
+(define #:forall (T) xml-children-filter-map* : (-> XML-Element (XML-Children-Filter-Map T)
+                                                    (Values (Listof T) (Listof XML-Element)))
+  (lambda [root child-map]
+    (define parent-name (car root))
+    (define-values (seirtne tser)
+      (for/fold ([seirtne : (Listof T) null]
+                 [tser : (Listof XML-Element) null])
+                ([child (in-list (caddr root))] #:when (list? child))
+        (let ([entry (child-map child parent-name)])
+          (cond [(not entry) (values seirtne (cons child tser))]
+                [else (values (cons entry seirtne) tser)]))))
+    (values (reverse seirtne) (reverse tser))))
+
+(define #:forall (T) xml-children->map : (-> XML-Element (XML-Children-Map T) (Immutable-HashTable Symbol T))
+  (lambda [root child-map]
+    (define parent-name (car root))
+    (for/fold ([entries : (Immutable-HashTable Symbol T) (make-immutable-hasheq)])
+              ([child (in-list (caddr root))] #:when (list? child))
+      (hash-set entries (car child) (child-map child parent-name)))))
+
+(define #:forall (T) xml-children->map* : (-> XML-Element (XML-Children-Filter-Map T)
+                                              (Values (Immutable-HashTable Symbol T) (Listof XML-Element)))
+  (lambda [root child-map]
+    (define parent-name (car root))
+    (define-values (entries tser)
+      (for/fold ([entries : (Immutable-HashTable Symbol T) (make-immutable-hasheq)]
+                 [tser : (Listof XML-Element) null])
+                ([child (in-list (caddr root))] #:when (list? child))
+        (let ([entry (child-map child parent-name)])
+          (cond [(not entry) (values entries (cons child tser))]
+                [else (values (hash-set entries (car child) entry) tser)]))))
+    (values entries (reverse tser))))
 
 (define #:forall (T) xml-empty-children-map : (-> XML-Element (XML-Empty-Children-Map T) (Listof T))
   (lambda [parent attlist->datum]
