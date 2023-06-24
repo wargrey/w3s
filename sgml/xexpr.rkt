@@ -157,3 +157,15 @@
        (let-values ([(entry _) (attlist->datum (cadr child) (car child))])
          (cond [(not entry) seirtne]
                [else (cons entry seirtne)]))))))
+
+(define #:forall (T) xml-empty-children-filter-map* : (-> XML-Element (XML-Empty-Children-Filter-Map T)
+                                                          (Values (Listof T) (Listof XML-Element)))
+  (lambda [parent attlist->datum]
+    (define-values (seirtne tser)
+      (for/fold ([seirtne : (Listof T) null]
+                 [tser : (Listof XML-Element) null])
+                ([child (caddr parent)] #:when (list? child))
+        (let-values ([(entry _) (attlist->datum (cadr child) (car child))])
+          (cond [(not entry) (values seirtne (cons child tser))]
+                [else (values (cons entry seirtne) tser)]))))
+    (values (reverse seirtne) (reverse tser))))
