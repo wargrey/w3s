@@ -57,14 +57,16 @@
   (lambda [docs.xml attr-name value]
     (let seek : (Listof XML-Element) ([siblings : (Listof XML-Element-Children) (caddr docs.xml)]
                                       [stnemele : (Listof XML-Element) null])
-      (cond [(null? siblings) (reverse stnemele)]
-            [else (let-values ([(self rest) (values (car siblings) (cdr siblings))])
-                    (cond [(not (list? self)) (seek (cdr siblings) stnemele)]
-                          [else (let ([:class (xml-attr-ref self attr-name)])
-                                  (cond [(not (string? :class)) (seek rest (append (seek (caddr self) null) stnemele))]
-                                        [(and (regexp? value) (regexp-match? value :class)) (seek rest (cons self stnemele))]
-                                        [(and (string? value) (string=? value :class)) (seek rest (cons self stnemele))]
-                                        [else (seek rest (append (seek (caddr self) null) stnemele))]))]))]))))
+      (if (pair? siblings)
+          (let-values ([(self rest) (values (car siblings) (cdr siblings))])
+            (if (list? self)
+                (let ([:class (xml-attr-ref self attr-name)])
+                  (cond [(not (string? :class)) (seek rest (append (seek (caddr self) null) stnemele))]
+                        [(and (regexp? value) (regexp-match? value :class)) (seek rest (cons self stnemele))]
+                        [(and (string? value) (string=? value :class)) (seek rest (cons self stnemele))]
+                        [else (seek rest (append (seek (caddr self) null) stnemele))]))
+                (seek (cdr siblings) stnemele)))
+          (reverse stnemele)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define #:forall (T) xml-children-fold : (-> XML-Element (XML-Children-Fold T) T T)
@@ -131,7 +133,8 @@
       (hash-set entries (car child) (child-map child parent-name)))))
 
 (define #:forall (T) xml-children->map* : (-> XML-Element (XML-Children-Filter-Map T)
-                                              (Values (Immutable-HashTable Symbol T) (Listof XML-Element)))
+                                              (Values (Immutable-HashTable Symbol T)
+                                                      (Listof XML-Element)))
   (lambda [root child-map]
     (define parent-name (car root))
     (define-values (entries tser)
@@ -169,3 +172,26 @@
           (cond [(not entry) (values seirtne (cons child tser))]
                 [else (values (cons entry seirtne) tser)]))))
     (values (reverse seirtne) (reverse tser))))
+
+(define #:forall (T) xml-empty-children->map : (-> XML-Element (XML-Empty-Children-Map T)
+                                                   (Immutable-HashTable Symbol T))
+  (lambda [root attlist->datum]
+    (define parent-name (car root))
+    (for/fold ([entries : (Immutable-HashTable Symbol T) (make-immutable-hasheq)])
+              ([child (in-list (caddr root))] #:when (list? child))
+      (let-values ([(entry _) (attlist->datum (cadr child) (car child))])
+        (hash-set entries (car child) entry)))))
+
+(define #:forall (T) xml-empty-children->map* : (-> XML-Element (XML-Empty-Children-Filter-Map T)
+                                                    (Values (Immutable-HashTable Symbol T)
+                                                            (Listof XML-Element)))
+  (lambda [root attlist->datum]
+    (define parent-name (car root))
+    (define-values (entries tser)
+      (for/fold ([entries : (Immutable-HashTable Symbol T) (make-immutable-hasheq)]
+                 [tser : (Listof XML-Element) null])
+                ([child (in-list (caddr root))] #:when (list? child))
+        (let-values ([(entry _) (attlist->datum (cadr child) (car child))])
+          (cond [(not entry) (values entries (cons child tser))]
+                [else (values (hash-set entries (car child) entry) tser)]))))
+    (values entries (reverse tser))))
