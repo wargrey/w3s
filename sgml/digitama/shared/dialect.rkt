@@ -44,10 +44,9 @@
         options ...)
      (with-syntax* ([make-attr (format-id #'attr "make-~a" (syntax-e #'attr))]
                     [remake-attr (format-id #'attr "remake-~a" (syntax-e #'attr))]
-                    [remake-attr* (format-id #'attr "remake-~a*" (syntax-e #'attr))]
                     [cascade-attr (format-id #'attr "cascade-~a" (syntax-e #'attr))]
                     [(field-ref ...) (make-identifiers #'attr #'(field ...))]
-                    [([kw-args ...] [kw-reargs ...] [kw-reargs* ...]) (make-keyword-arguments #'self #'(field ...) #'(FieldType ...) #'([defval ...] ...) #'(field-ref ...))]
+                    [([kw-args ...] [kw-reargs ...]) (make-keyword-arguments #'(field ...) #'(FieldType ...) #'([defval ...] ...))]
                     [mandatory-fields (for/list ([<field> (syntax->list #'(field ...))]
                                                  [<defvals> (syntax->list #'([defval ...] ...))]
                                                  #:when (null? (syntax-e <defvals>)))
@@ -70,9 +69,6 @@
                   (attr field ...))
 
                 (define (remake-attr [self : Attr] kw-reargs ...) : Attr
-                  (attr field ...))
-
-                (define (remake-attr* [self : Attr] kw-reargs* ...) : Attr
                   (attr (if (void? field) (field-ref self) field) ...))
 
                 (define-xml-attribute-extract extract-attr : Attr switch #:with report-unknown report-range-exn

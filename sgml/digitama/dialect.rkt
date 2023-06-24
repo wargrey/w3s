@@ -94,16 +94,11 @@
                     [(selfield-ref ...) (make-identifiers #'dom-elem #'(field ...))]
                     [(bdyfield-ref ...) (make-identifiers #'dom-elem #'(bfield ...))]
                     [(extfield-ref ...) (make-identifiers #'dom-elem #'(efield ...))]
-                    [([kw-hdrargs ...] [kw-hdrreargs ...] [kw-hdrreargs* ...])
-                     (make-keyword-arguments #'self #'(ifield ...) #'(IFieldType ...) #'([idefval  ...] ...) #'(ifield-ref ...))]
-                    [([kw-attargs ...] [kw-attreargs ...] [kw-attreargs* ...])
-                     (make-keyword-optional-arguments #'self #'(attrib ...) #'(Attrib ...) #'(attfield-ref ...))]
-                    [([kw-bdyargs ...] [kw-bdyreargs ...] [kw-bdyreargs* ...])
-                     (make-keyword-arguments #'self #'(bfield ...) #'(BFieldType ...) #'([bdefval ...] ...) #'(bdyfield-ref ...))]
-                    [([kw-extargs ...] [kw-extreargs ...] [kw-extreargs* ...])
-                     (make-keyword-arguments #'self #'(efield ...) #'(EFieldType ...) #'([edefval ...] ...) #'(extfield-ref ...))]
-                    [([kw-slfargs ...] [kw-slfreargs ...] [kw-slfreargs* ...])
-                     (make-keyword-arguments #'self #'(field ...) #'(FieldType ...) #'([defval ...] ...) #'(selfield-ref ...))])
+                    [([kw-hdrargs ...] [kw-hdrreargs ...]) (make-keyword-arguments #'(ifield ...) #'(IFieldType ...) #'([idefval  ...] ...))]
+                    [([kw-attargs ...] [kw-attreargs ...]) (make-keyword-optional-arguments #'(attrib ...) #'(Attrib ...))]
+                    [([kw-bdyargs ...] [kw-bdyreargs ...]) (make-keyword-arguments #'(bfield ...) #'(BFieldType ...) #'([bdefval ...] ...))]
+                    [([kw-extargs ...] [kw-extreargs ...]) (make-keyword-arguments #'(efield ...) #'(EFieldType ...) #'([edefval ...] ...))]
+                    [([kw-slfargs ...] [kw-slfreargs ...]) (make-keyword-arguments #'(field ...) #'(FieldType ...) #'([defval ...] ...))])
        (syntax/loc stx
          (begin (struct dom-elem super
                   ([attrib : (Option Attrib)] ...
@@ -125,10 +120,6 @@
                     (dom-elem hfield ... attrib ... field ... bfield ... efield ...)))
 
                 (define (remake-dom [self : DOM-Elem] kw-hdrreargs ... kw-attreargs ... kw-slfreargs ... kw-bdyreargs ... kw-extreargs ...) : DOM-Elem
-                  (let ([excfield (excfield-ref self)] ...)
-                    (dom-elem hfield ... attrib ... field ... bfield ... efield ...)))
-
-                (define (remake-dom* [self : DOM-Elem] kw-hdrreargs* ... kw-attreargs* ... kw-slfreargs* ... kw-bdyreargs* ... kw-extreargs* ...) : DOM-Elem
                   (let ([excfield (excfield-ref self)] ...)
                     (dom-elem (if (void? hfield) (hfield-ref self) hfield) ...
                               (if (void? attrib) (attfield-ref self) attrib) ...
