@@ -1,7 +1,7 @@
 #lang typed/racket/base
 
 (provide (all-defined-out))
-(provide (all-from-out "digitama/xexpr/datatype.rkt"))
+(provide (all-from-out "digitama/namespace.rkt" "digitama/xexpr/datatype.rkt"))
 (provide XExpr XExpr-AttList XExpr-Element XExpr-Attribute XExpr-Attribute-Value XExpr-Datum XExpr-PI)
 (provide (struct-out XML-Document) XML-Element XML-Element-Attribute XML-Element-Attribute-Value)
 (provide read-xml-document xml-document-normalize)
@@ -11,6 +11,8 @@
 (provide raise-xml-missing-attribute-error raise-xml-missing-element-error)
 
 (require "digitama/document.rkt")
+(require "digitama/namespace.rkt")
+
 (require "digitama/xexpr/grammar.rkt")
 (require "digitama/xexpr/xexpr.rkt")
 (require "digitama/xexpr/datatype.rkt")
@@ -22,6 +24,9 @@
 
 (define-type (XML-Children-Fold T) (-> XML-Element T Symbol T))
 (define-type (XML-Children-Filter-Fold T) (-> XML-Element T Symbol (Option T)))
+
+(define-type (XML-Children-Map T) (-> XML-Element Symbol T))
+(define-type (XML-Children-Filter-Map T) (-> XML-Element Symbol (Option T)))
 
 (define-type (XML-Empty-Children-Map T) (-> (Listof XML-Element-Attribute) Symbol
                                             (Values T (Listof XML-Element-Attribute))))
@@ -75,6 +80,22 @@
     (for/fold ([self : T datum0])
               ([child (in-list (caddr root))] #:when (list? child))
       (or (child-fold child self parent-name) self))))
+
+(define #:forall (T) xml-children-map : (-> XML-Element (XML-Children-Map T) (Listof T))
+  (lambda [root child-map]
+    (define parent-name (car root))
+    (for/list ([child (in-list (caddr root))] #:when (list? child))
+      (child-map child parent-name))))
+
+(define #:forall (T) xml-children-filter-map : (-> XML-Element (XML-Children-Filter-Map T) (Listof T))
+  (lambda [root child-map]
+    (define parent-name (car root))
+    (reverse
+     (for/fold ([seirtne : (Listof T) null])
+               ([child (in-list (caddr root))] #:when (list? child))
+       (let ([entry (child-map child parent-name)])
+         (cond [(not entry) seirtne]
+               [else (cons entry seirtne)]))))))
 
 (define #:forall (T) xml-empty-children-map : (-> XML-Element (XML-Empty-Children-Map T) (Listof T))
   (lambda [parent attlist->datum]
