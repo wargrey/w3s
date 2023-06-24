@@ -53,6 +53,14 @@
              (cond [(box? v) (unbox v)]
                    [else v])))))
 
+(define xml-elem-ref : (-> (U (Listof XML-Element)) Symbol (Option XML-Element))
+  (lambda [children tag]
+    (let unbox ([rest : (Listof XML-Element) children])
+      (and (pair? rest)
+           (if (eq? (caar rest) tag)
+               (car rest)
+               (unbox (cdr rest)))))))
+
 (define xml-children-seek : (-> XML-Element Symbol (U String Regexp) (Listof XML-Element))
   (lambda [docs.xml attr-name value]
     (let seek : (Listof XML-Element) ([siblings : (Listof XML-Element-Children) (caddr docs.xml)]
