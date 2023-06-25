@@ -18,6 +18,8 @@
 (require "digitama/xexpr/datatype.rkt")
 (require "digitama/xexpr/dialect.rkt")
 
+(require "digitama/tokenizer/port.rkt")
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type XML-Element-Children (Listof XML-Element-Child-Datum))
 (define-type XML-Element-Child-Datum (U XML-Element XML-Subdatum))
@@ -59,9 +61,9 @@
     (let unbox ([rest : XML-Element-Children (caddr elem)])
       (if (pair? rest)
           (let ([self (car rest)])
-            (if (string? self)
-                self
-                (unbox (cdr rest))))
+            (cond [(string? self) self]
+                  [(xml-white-space? self) (xml-white-space-raw self)]
+                  [else (unbox (cdr rest))]))
           #false))))
 
 (define xml-pcdata-unbox* : (-> XML-Element (Listof String))
@@ -70,9 +72,9 @@
                 [stxt : (Listof String) null])
       (if (pair? rest)
           (let ([self (car rest)])
-            (if (string? self)
-                (unbox (cdr rest) (cons self stxt))
-                (unbox (cdr rest) stxt)))
+            (cond [(string? self) (unbox (cdr rest) (cons self stxt))]
+                  [(xml-white-space? self) (unbox (cdr rest) (cons (xml-white-space-raw self) stxt))]
+                  [else (unbox (cdr rest) stxt)]))
           (reverse stxt)))))
 
 (define xml-children-seek : (-> XML-Element Symbol (U String Regexp) (Listof XML-Element))

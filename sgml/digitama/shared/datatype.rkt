@@ -13,6 +13,10 @@
 (define-type XML-Percentage (Pairof Flonum '%))
 (define-type XML-Nonnegative-Percentage (Pairof Nonnegative-Flonum '%))
 
+(define 0% : XML-Nonnegative-Percentage (cons 0.0 '%))
+(define 50% : XML-Nonnegative-Percentage (cons 50.0 '%))
+(define 100% : XML-Nonnegative-Percentage (cons 100.0 '%))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define xml:attr-datum->value : (-> Any String)
   (lambda [v]
