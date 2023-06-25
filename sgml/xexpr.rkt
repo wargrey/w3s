@@ -54,6 +54,27 @@
              (cond [(box? v) (unbox v)]
                    [else v])))))
 
+(define xml-pcdata-unbox : (-> XML-Element (Option String))
+  (lambda [elem]
+    (let unbox ([rest : XML-Element-Children (caddr elem)])
+      (if (pair? rest)
+          (let ([self (car rest)])
+            (if (string? self)
+                self
+                (unbox (cdr rest))))
+          #false))))
+
+(define xml-pcdata-unbox* : (-> XML-Element (Listof String))
+  (lambda [elem]
+    (let unbox ([rest : XML-Element-Children (caddr elem)]
+                [stxt : (Listof String) null])
+      (if (pair? rest)
+          (let ([self (car rest)])
+            (if (string? self)
+                (unbox (cdr rest) (cons self stxt))
+                (unbox (cdr rest) stxt)))
+          (reverse stxt)))))
+
 (define xml-children-seek : (-> XML-Element Symbol (U String Regexp) (Listof XML-Element))
   (lambda [docs.xml attr-name value]
     (let seek : (Listof XML-Element) ([siblings : (Listof XML-Element-Child-Datum) (caddr docs.xml)]
@@ -99,77 +120,77 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define #:forall (T) xml-children-fold : (-> XML-Element (XML-Children-Fold T) T T)
-  (lambda [root child-fold datum0]
-    (define parent-name (car root))
+  (lambda [parent child-fold datum0]
+    (define parent-name (car parent))
     (for/fold ([self : T datum0])
-              ([child (in-list (caddr root))] #:when (list? child))
+              ([child (in-list (caddr parent))] #:when (list? child))
       (child-fold child self parent-name))))
 
 (define #:forall (T) xml-children-filter-fold : (-> XML-Element (XML-Children-Filter-Fold T) T T)
-  (lambda [root child-fold datum0]
-    (define parent-name (car root))
+  (lambda [parent child-fold datum0]
+    (define parent-name (car parent))
     (for/fold ([self : T datum0])
-              ([child (in-list (caddr root))] #:when (list? child))
+              ([child (in-list (caddr parent))] #:when (list? child))
       (or (child-fold child self parent-name) self))))
 
 (define #:forall (T) xml-children-filter-fold* : (-> XML-Element (XML-Children-Filter-Fold T) T
                                                      (Values T (Listof XML-Element)))
-  (lambda [root child-fold datum0]
-    (define parent-name (car root))
+  (lambda [parent child-fold datum0]
+    (define parent-name (car parent))
     (define-values (self++ tser)
       (for/fold ([self : T datum0]
                  [tser : (Listof XML-Element) null])
-                ([child (in-list (caddr root))] #:when (list? child))
+                ([child (in-list (caddr parent))] #:when (list? child))
         (let ([self++ (child-fold child self parent-name)])
           (cond [(not self++) (values self (cons child tser))]
                 [else (values self++ tser)]))))
     (values self++ (reverse tser))))
 
 (define #:forall (T) xml-children-map : (-> XML-Element (XML-Children-Map T) (Listof T))
-  (lambda [root child-map]
-    (define parent-name (car root))
-    (for/list ([child (in-list (caddr root))] #:when (list? child))
+  (lambda [parent child-map]
+    (define parent-name (car parent))
+    (for/list ([child (in-list (caddr parent))] #:when (list? child))
       (child-map child parent-name))))
 
 (define #:forall (T) xml-children-filter-map : (-> XML-Element (XML-Children-Filter-Map T) (Listof T))
-  (lambda [root child-map]
-    (define parent-name (car root))
+  (lambda [parent child-map]
+    (define parent-name (car parent))
     (reverse
      (for/fold ([seirtne : (Listof T) null])
-               ([child (in-list (caddr root))] #:when (list? child))
+               ([child (in-list (caddr parent))] #:when (list? child))
        (let ([entry (child-map child parent-name)])
          (cond [(not entry) seirtne]
                [else (cons entry seirtne)]))))))
 
 (define #:forall (T) xml-children-filter-map* : (-> XML-Element (XML-Children-Filter-Map T)
                                                     (Values (Listof T) (Listof XML-Element)))
-  (lambda [root child-map]
-    (define parent-name (car root))
+  (lambda [parent child-map]
+    (define parent-name (car parent))
     (define-values (seirtne tser)
       (for/fold ([seirtne : (Listof T) null]
                  [tser : (Listof XML-Element) null])
-                ([child (in-list (caddr root))] #:when (list? child))
+                ([child (in-list (caddr parent))] #:when (list? child))
         (let ([entry (child-map child parent-name)])
           (cond [(not entry) (values seirtne (cons child tser))]
                 [else (values (cons entry seirtne) tser)]))))
     (values (reverse seirtne) (reverse tser))))
 
 (define #:forall (T) xml-children->map : (-> XML-Element (XML-Children-Map T) (Immutable-HashTable Symbol T))
-  (lambda [root child-map]
-    (define parent-name (car root))
+  (lambda [parent child-map]
+    (define parent-name (car parent))
     (for/fold ([entries : (Immutable-HashTable Symbol T) (make-immutable-hasheq)])
-              ([child (in-list (caddr root))] #:when (list? child))
+              ([child (in-list (caddr parent))] #:when (list? child))
       (hash-set entries (car child) (child-map child parent-name)))))
 
 (define #:forall (T) xml-children->map* : (-> XML-Element (XML-Children-Filter-Map T)
                                               (Values (Immutable-HashTable Symbol T)
                                                       (Listof XML-Element)))
-  (lambda [root child-map]
-    (define parent-name (car root))
+  (lambda [parent child-map]
+    (define parent-name (car parent))
     (define-values (entries tser)
       (for/fold ([entries : (Immutable-HashTable Symbol T) (make-immutable-hasheq)]
                  [tser : (Listof XML-Element) null])
-                ([child (in-list (caddr root))] #:when (list? child))
+                ([child (in-list (caddr parent))] #:when (list? child))
         (let ([entry (child-map child parent-name)])
           (cond [(not entry) (values entries (cons child tser))]
                 [else (values (hash-set entries (car child) entry) tser)]))))
@@ -204,22 +225,22 @@
 
 (define #:forall (T) xml-empty-children->map : (-> XML-Element (XML-Empty-Children-Map T)
                                                    (Immutable-HashTable Symbol T))
-  (lambda [root attlist->datum]
-    (define parent-name (car root))
+  (lambda [parent attlist->datum]
+    (define parent-name (car parent))
     (for/fold ([entries : (Immutable-HashTable Symbol T) (make-immutable-hasheq)])
-              ([child (in-list (caddr root))] #:when (list? child))
+              ([child (in-list (caddr parent))] #:when (list? child))
       (let-values ([(entry _) (attlist->datum (cadr child) (car child))])
         (hash-set entries (car child) entry)))))
 
 (define #:forall (T) xml-empty-children->map* : (-> XML-Element (XML-Empty-Children-Filter-Map T)
                                                     (Values (Immutable-HashTable Symbol T)
                                                             (Listof XML-Element)))
-  (lambda [root attlist->datum]
-    (define parent-name (car root))
+  (lambda [parent attlist->datum]
+    (define parent-name (car parent))
     (define-values (entries tser)
       (for/fold ([entries : (Immutable-HashTable Symbol T) (make-immutable-hasheq)]
                  [tser : (Listof XML-Element) null])
-                ([child (in-list (caddr root))] #:when (list? child))
+                ([child (in-list (caddr parent))] #:when (list? child))
         (let-values ([(entry _) (attlist->datum (cadr child) (car child))])
           (cond [(not entry) (values entries (cons child tser))]
                 [else (values (hash-set entries (car child) entry) tser)]))))
