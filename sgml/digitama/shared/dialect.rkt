@@ -40,7 +40,8 @@
         ([field : FieldType
                 (~optional (~seq #:= defval ...) #:defaults ([(defval 1) null]))
                 (~seq #:<-> xml->datum (~optional datum->xml #:defaults ([datum->xml #'xml:attr-datum->value])))] ...)
-        #:report report-unknown report-range-exn
+        (~optional (~seq #:report report-unknown report-range-exn)
+                   #:defaults ([report-unknown #'#false] [report-range-exn #'#false]))
         options ...)
      (with-syntax* ([make-attr (format-id #'attr "make-~a" (syntax-e #'attr))]
                     [remake-attr (format-id #'attr "remake-~a" (syntax-e #'attr))]

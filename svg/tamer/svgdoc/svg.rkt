@@ -161,23 +161,23 @@
   (and e (car (cddddr e))))
   
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define xml-pcdata-element->text : (-> XML-Element-Children (U Symbol String False))
+(define xml-pcdata-element->text : (-> XML-Element-Child-Datum (U Symbol String False))
   (lambda [e]
     (cond [(string? e) (string->symbol e)] ; for category NONE
           [else (let ([pcdata (car (caddr (assert e list?)))])
                   (cond [(string? pcdata) pcdata]
                         [else #false]))])))
 
-(define xml-pcdata-element->name : (-> XML-Element-Children Symbol)
+(define xml-pcdata-element->name : (-> XML-Element-Child-Datum Symbol)
   (lambda [e]
     (define pcdata : (U Symbol String False) (xml-pcdata-element->text e))
     (cond [(string? pcdata) (string->symbol (substring pcdata 1 (sub1 (string-length pcdata))))]
           [(symbol? pcdata) pcdata]
           [else (gensym 'svg)])))
 
-(define xml-pcdata-element->attribute : (-> XML-Element-Children (Option SVG-Attribute-Datum))
+(define xml-pcdata-element->attribute : (-> XML-Element-Child-Datum (Option SVG-Attribute-Datum))
   (lambda [e]
-    (define children.li : (Listof XML-Element-Children) (caddr (assert e list?)))
+    (define children.li : (Listof XML-Element-Child-Datum) (caddr (assert e list?)))
     (case (length children.li)
       [(1) #| self attributes |#
        (let ([attr (xml-pcdata-element->name (car (caddr (assert (car children.li) list?))))])
@@ -202,9 +202,9 @@
                                                     [else attrs]))])))))))]
       [else #false])))
 
-(define xml-pcdata-element->categories : (-> XML-Element-Children (Listof Keyword))
+(define xml-pcdata-element->categories : (-> XML-Element-Child-Datum (Listof Keyword))
   (lambda [e]
-    (let refine ([children : (Listof XML-Element-Children) (caddr (assert e list?))]
+    (let refine ([children : (Listof XML-Element-Child-Datum) (caddr (assert e list?))]
                  [seirogetac : (Listof Keyword) null])
       (cond [(null? children) (reverse seirogetac)]
             [else (let*-values ([(self rest) (values (car children) (cdr children))]
@@ -215,9 +215,9 @@
                                                                     #px"\\s+" "-"))
                                                    seirogetac))]))]))))
 
-(define xml-pcdata-element->attributes : (-> XML-Element-Children (Listof SVG-Attribute-Datum))
+(define xml-pcdata-element->attributes : (-> XML-Element-Child-Datum (Listof SVG-Attribute-Datum))
   (lambda [e]
-    (let refine ([children : (Listof XML-Element-Children) (caddr (assert e list?))]
+    (let refine ([children : (Listof XML-Element-Child-Datum) (caddr (assert e list?))]
                  [seirogetac : (Listof SVG-Attribute-Datum) null])
       (cond [(null? children) (reverse seirogetac)]
             [else (let*-values ([(self rest) (values (car children) (cdr children))]
@@ -285,12 +285,12 @@
                       [else (xml-children-seek docs.xml 'class "element-summary")]))]))
 
 (define (svgdoc-element->datum [div : XML-Element]) : SvgDoc-Element
-  (define children : (Listof XML-Element-Children) (caddr div))
-  (define name.span : XML-Element-Children (car (caddr (assert (car children) list?))))
-  (define details.dl : (Listof XML-Element-Children) (caddr (assert (cadr children) list?)))
-  (define categories.dd : XML-Element-Children (list-ref details.dl 1))
-  (define contents.dd : XML-Element-Children (list-ref details.dl 3))
-  (define attributes.dd : XML-Element-Children (car (caddr (assert (list-ref details.dl 5) list?))))
+  (define children : XML-Element-Children (caddr div))
+  (define name.span : XML-Element-Child-Datum (car (caddr (assert (car children) list?))))
+  (define details.dl : (Listof XML-Element-Child-Datum) (caddr (assert (cadr children) list?)))
+  (define categories.dd : XML-Element-Child-Datum (list-ref details.dl 1))
+  (define contents.dd : XML-Element-Child-Datum (list-ref details.dl 3))
+  (define attributes.dd : XML-Element-Child-Datum (car (caddr (assert (list-ref details.dl 5) list?))))
 
   (svgdoc-element (current-source-path)
                   (xml-pcdata-element->name name.span)
