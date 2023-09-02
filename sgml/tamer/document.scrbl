@@ -9,7 +9,7 @@ and processing instructions, all of which are indicated in the document by expli
 
 @handbook-scenario{White Space Handling}
 
-@tamer-action[
+@tamer-repl[
  (tamer-xml:space 'preserve
                   #\return #\newline
                   #\newline
