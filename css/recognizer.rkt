@@ -1,4 +1,4 @@
-#lang typed/racket
+#lang typed/racket/base
 
 ;;; Parser Combinators and Syntax Sugars of dealing with declarations are designed for client applications
 ;;; WARNING: Notations might not follow the CSS Specification(https://drafts.csswg.org/css-values/#component-combinators)
@@ -6,11 +6,13 @@
 ;;; TODO: If we can make the type annotation more precisely, and if it is worth doing.
 
 (provide (all-defined-out))
-(provide nonnegative-flonum? nonnegative-fixnum? positive-flonum? positive-fixnum? positive-index? positive-byte?)
+(provide (all-from-out digimon/digitama/predicate))
 
+(require racket/math)
+(require racket/match)
 (require racket/keyword)
 
-(require digimon/number)
+(require digimon/digitama/predicate)
 
 (require bitmap/digitama/unsafe/image)
 
@@ -18,6 +20,7 @@
 (require "digitama/syntax/digicore.rkt")
 (require "digitama/syntax/dimension.rkt")
 
+(require (for-syntax racket/base))
 (require (for-syntax racket/syntax))
 (require (for-syntax syntax/parse))
 

@@ -272,20 +272,20 @@
 
 (define image-set-options? : (-> Any Boolean : Image-Set-Options)
   (lambda [v]
-    (is-listof? v image-set-option?)))
+    (listof? v image-set-option?)))
 
 (define linear-color-stop? : (-> Any Boolean : Linear-Color-Stop)
   (lambda [v]
     (and (pair? v)
          (css-color-datum? (car v))
-         ((inst is-listof? CSS-Flonum-%) (cdr v) css-flonum-%?))))
+         ((inst listof? CSS-Flonum-%) (cdr v) css-flonum-%?))))
 
 (define linear-color-stop-list? : (-> Any Boolean : Linear-Color-Stops)
   (lambda [datum]
     (and (list? datum)
          (pair? datum)
          (linear-color-stop? (car datum))
-         ((inst is-listof+? Linear-Color-Stop) (cdr datum) linear-color-stop?))))
+         ((inst listof+? Linear-Color-Stop) (cdr datum) linear-color-stop?))))
 
 (define radial-shape? : (-> Any Boolean : #:+ Radial-Shape)
   (lambda [v]
