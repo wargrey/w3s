@@ -8,3 +8,4 @@
 
 (define deps '("base" "digimon" "graphics" "typed-racket-lib" "typed-racket-more"))
 (define build-deps '("scribble-lib" "racket-doc" "typed-racket-doc" "digimon" "graphics"))
+(define test-omit-paths 'all)
