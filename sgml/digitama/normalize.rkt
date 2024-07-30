@@ -54,7 +54,7 @@
                        (string-prefix? (path->string extdtd) (path->string rootdir))
                        (cons (dtd-open-input-port extdtd) #true))))))))
 
-(define default-xxe-guard (xml-xxe-guard xml-load-relative-system-entity #x200000 4.0))
+(define default-xxe-guard (xml-xxe-guard xml-load-relative-system-entity #x400000 4.0))
 (define default-dtd-guard (xml-dtd-guard #x2000 default-xxe-guard))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

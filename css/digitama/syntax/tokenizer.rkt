@@ -178,8 +178,8 @@
                              [(dpi dpcm dppx x)       (css-make-token srcloc css:resolution      rep+unit signed? value unit)]
                              [else                    (css-make-token srcloc css:dimension       rep+unit signed? value unit)])]
                           [(and (char? ch1) (char=? ch1 #\%) (read-char /dev/cssin))
-                           (define n% : Flonum (real->double-flonum (* n 0.01)))
-                           (css-make-token srcloc css:percentage (string-append representation "%") signed? n%)]
+                           (css-make-token srcloc css:percentage (string-append representation "%") signed?
+                                           (real->double-flonum n))]
                           [(flonum? n)
                            (cond [(zero? n) (css-make-token srcloc css:flzero representation signed? n)]
                                  [(fl= n 1.0) (css-make-token srcloc css:flone representation signed? n)]

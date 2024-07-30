@@ -655,31 +655,23 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-type CSS-Boolean (U One Zero))
-(define-type CSS-Flonum-% (U Flonum CSS-%))
-(define-type CSS+Flonum-% (U Nonnegative-Flonum CSS+%))
+(define-type CSS-Flonum-% (U Flonum FlPercentage))
+(define-type CSS+Flonum-% (U Nonnegative-Flonum Nonnegative-FlPercentage))
 
 (define css-boolean? : (-> Any Boolean : #:+ CSS-Boolean) (lambda [v] (and (byte? v) (or (= v 0) (= v 1)))))
 (define css-true? : (-> Integer Boolean) (lambda [v] (not (css-false? v))))
 (define css-false? : (-> Integer Boolean) (lambda [v] (= v 0)))
 
-(define css-flonum-%? : (-> Any Boolean : CSS-Flonum-%) (lambda [v] (or (flonum? v) (css-%? v))))
-(define css+flonum-%? : (-> Any Boolean : #:+ CSS+Flonum-%) (lambda [v] (or (nonnegative-flonum? v) (css+%? v))))
+(define css-flonum-%? : (-> Any Boolean : CSS-Flonum-%) (lambda [v] (or (flonum? v) (flpercentage? v))))
+(define css+flonum-%? : (-> Any Boolean : #:+ CSS+Flonum-%) (lambda [v] (or (nonnegative-flonum? v) (nonnegative-flpercentage? v))))
 
 ; for properties whoes computed values are not their used value
 (struct css-unitless ([value : Flonum]) #:type-name CSS-Unitless #:transparent #:constructor-name make-css-unitless)
 (struct css+unitless css-unitless ([value : Nonnegative-Flonum]) #:type-name CSS+Unitless #:constructor-name unsafe-css+unitless)
 (define make-css+unitless : (-> Nonnegative-Flonum CSS+Unitless) (lambda [ul] (unsafe-css+unitless ul ul)))
 
-(struct css-% ([value : Flonum]) #:type-name CSS-% #:transparent #:constructor-name make-css-%)
-(struct css+% css-% ([value : Nonnegative-Flonum]) #:type-name CSS+% #:constructor-name unsafe-css+%)
-(define make-css+% : (-> Nonnegative-Flonum CSS+%) (lambda [%] (unsafe-css+% % %)))
-
 (struct css-position ([x : CSS-Flonum-%] [y : CSS-Flonum-%]) #:type-name CSS-Position #:transparent)
 (struct css-region ([top : Flonum] [right : Flonum] [bottom : Flonum] [left : Flonum]) #:type-name CSS-Region #:transparent)
-
-(define 0% : CSS+% (make-css+% 0.0))
-(define 50% : CSS+% (make-css+% 0.5))
-(define 100% : CSS+% (make-css+% 1.0))
 
 (define css-center-position : CSS-Position (css-position 50% 50%))
 (define css-full-region : CSS-Region (css-region 0.0 0.0 0.0 0.0))
@@ -759,7 +751,7 @@
   (CSS:<=> (<css:integer> = 1) 1.0))
 
 (define-css-disjoint-filter <css-%flunit> #:-> Nonnegative-Flonum
-  (CSS:<~> (<css:percentage> 0.0 <= 1.0) flabs)
+  (CSS:<~> (<css:percentage> 0.0 fl<= 100.0) (λ [[% : Flonum]] (flabs (fl* % 0.01))))
   (CSS:<~> (<css:flonum> 0.0 fl<= 1.0) flabs)
   (CSS:<=> (<css:integer> = 0) 0.0)
   (CSS:<=> (<css:integer> = 1) 1.0))
@@ -800,8 +792,8 @@
 (define (<css-keyword:from>) : (CSS:Filter Symbol) (CSS:<?> (<css:ident> 'from) make-exn:css:missing-keyword))
 
 (define (<css+unitless>) : (CSS:Filter CSS+Unitless) (CSS:<~> (<css+real>) (λ [[v : Nonnegative-Real]] (make-css+unitless (real->double-flonum v)))))
-(define (<css-percentage>) : (CSS:Filter CSS-%) (CSS:<~> (<css:percentage>) make-css-%))
-(define (<css+percentage>) : (CSS:Filter CSS+%) (CSS:<~> (<css:percentage> nonnegative-flonum?) make-css+%))
+(define (<css-percentage>) : (CSS:Filter FlPercentage) (CSS:<~> (<css:percentage>) (inst make-percentage Flonum)))
+(define (<css+percentage>) : (CSS:Filter Nonnegative-FlPercentage) (CSS:<~> (<css:percentage> nonnegative-flonum?) (inst make-percentage Nonnegative-Flonum)))
 
 (define (<css-length-percentage>) : (CSS:Filter CSS-Flonum-%) (CSS:<+> (<css:length>) (<css-percentage>)))
 (define (<css+length-percentage>) : (CSS:Filter CSS+Flonum-%) (CSS:<+> (<css+length>) (<css+percentage>)))
@@ -869,7 +861,7 @@
   (lambda [defval #:100% fl%]
     (λ [property datum]
       (cond [(nonnegative-flonum? datum) datum]
-            [(css+%? datum) (fl* (css+%-value datum) fl%)]
+            [(percentage? datum nonnegative-flonum?) (fl* (percentage->flonum datum) fl%)]
             [(css:length? datum) (css:length->scalar datum #false)]
             [else defval]))))
 
@@ -879,7 +871,7 @@
     (λ [property datum]
       (define size : Integer
         (cond [(flonum? datum) (-> datum)]
-              [(css-%? datum) (-> (* (css-%-value datum) fl%))]
+              [(#%per? datum) (-> (* (percentage->flonum datum) fl%))]
               [(css:length? datum) (-> (css:length->scalar datum #false))]
               [else -1]))
       (if (pixels? size) size defval))))
@@ -913,7 +905,7 @@
 
     (define (pos-negate [v : (U Symbol CSS+Flonum-%)]) : CSS-Flonum-%
       (cond [(flonum? v) (- v)]
-            [(css-%? v) (make-css-% (- (css-%-value v)))]
+            [(#%per? v) (#%per (- (#%dim-value v)) '%)]
             [else 50%]))
     
     (define (keyword->position [kws : (Listof Symbol)]) : CSS-Position

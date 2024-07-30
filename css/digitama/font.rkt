@@ -16,6 +16,7 @@
 (require "syntax/misc.rkt")
 (require "../recognizer.rkt")
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define &font : (Boxof Font) (box (default-font)))
 
 (define css-font-synthesis-options : (Listof Symbol) '(weight style small-caps))
@@ -25,7 +26,8 @@
 (define css-font-position-options : (Listof Symbol) '(normal sub super))
 (define css-font-caps-options : (Listof Symbol) '(normal small-caps all-small-caps petite-caps all-petite-caps unicase titling-caps))
 (define css-font-variant-options/21 : (Listof Symbol) '(normal small-caps))
-  
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-css-prefab-filter <css-system-font> #:-> Font #:format "default-css-~a-font"
   [caption       (default-font)]
   [icon          (default-font)]
@@ -42,7 +44,7 @@
            [longhand++ (css-shorthand-set longhand++ 'font-size (font-size font))])
       (css-shorthand-set longhand++ 'font-family (list (font-face->family* (font-face font)))))))
 
-(define-css-disjoint-filter <font-stretch> #:-> (U Symbol CSS+%)
+(define-css-disjoint-filter <font-stretch> #:-> (U Symbol Nonnegative-FlPercentage)
   ;;; https://drafts.csswg.org/css-fonts-4/#font-stretch-prop
   (<css-keyword> css-font-stretch-options)
   (<css+percentage>))
@@ -57,7 +59,7 @@
   (<css-size>)
   (<css-keyword> css-font-size-option?))
 
-(define-css-disjoint-filter <line-height> #:-> (U Symbol Nonnegative-Flonum CSS+Unitless CSS+% CSS:Length:Font CSS-Wide-Keyword)
+(define-css-disjoint-filter <line-height> #:-> (U Symbol Nonnegative-Flonum CSS+Unitless Nonnegative-FlPercentage CSS:Length:Font CSS-Wide-Keyword)
   ;;; http://www.w3.org/TR/CSS2/visudet.html#propdef-line-height
   (<css+unitless>)
   (<css+percentage>)
@@ -102,7 +104,7 @@
   (lambda [property value]
     (cond [(symbol? value) (generic-font-size-filter value (font-size (unbox &font)) (font-size (default-font)))]
           [(nonnegative-flonum? value) value]
-          [(css+%? value) (fl* (css+%-value value) (css-em))]
+          [(nonnegative-flpercentage? value) (fl* (percentage->flonum value) (css-em))]
           [(css+length? value) (css:length->scalar value #false)]
           [(eq? property 'min-font-size) 0.0]
           [(eq? property 'max-font-size) +inf.0]
@@ -113,7 +115,7 @@
   (lambda [_ value]
     (cond [(css+length? value) (css:length->scalar value #false)]
           [(nonnegative-flonum? value) value #|computed value is the used value|#]
-          [(css+%? value) (fl* (css+%-value value) (css-em))]
+          [(nonnegative-flpercentage? value) (fl* (percentage->flonum value) (css-em))]
           [(css+unitless? value) value #|computed value is *not* the used value|#]
           [else #|'normal|# +nan.0 #|computed value is *not* the used value|#])))
 

@@ -1,18 +1,16 @@
 #lang typed/racket/base
 
 (provide (all-defined-out))
+(provide (all-from-out digimon/dimension))
 
 ;;; https://drafts.csswg.org/css-values/#absolute-lengths
 ;;; https://drafts.csswg.org/css-values/#relative-lengths
 ;;; https://drafts.csswg.org/css-egg/#astro-units
 ;;; https://drafts.csswg.org/css-egg/#traditional-time
 
-(require racket/math)
-
 (require digimon/dimension)
 
 (require "digicore.rkt")
-(require "misc.rkt")
 
 (require (for-syntax racket/base))
 (require (for-syntax racket/string))

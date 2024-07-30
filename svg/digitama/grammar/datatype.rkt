@@ -61,31 +61,31 @@
                 ; SVG's units are subsets of CSS's, but client-code shouldn't be bothered by that,
                 ;   so here we only report errors, leaving errors to the renderer, which might deal
                 ;   with them in a more intelligent way.    
-                (define svg:dim-filter : (All (a) (-> XML-Element-Attribute-Value* (Option (Pairof a Symbol)) (XML-Option (Pairof a Symbol))))
+                (define svg:dim-filter : (All (a) (-> XML-Element-Attribute-Value* (Option (#%Dim a)) (XML-Option (#%Dim a))))
                   (lambda [value datum]
                     (cond [(not datum) (make+exn:svg:range value)]
-                          [else (let ([u (cdr datum)])
-                                  (case (cdr datum)
+                          [else (let ([u (#%dim-unit datum)])
+                                  (case u
                                     [(suffix) datum] ...
                                     [else (cond [(memq u dim-units) datum]
                                                 [(memq u dim-all-units) (make+exn:svg:unit value) datum]
                                                 [else (make+exn:svg:unit value)])]))])))
 
-                (define svg:attr-value*+>dim : (-> XML-Element-Attribute-Value* (XML-Option (Pairof Nonnegative-Flonum Symbol)))
+                (define svg:attr-value*+>dim : (-> XML-Element-Attribute-Value* (XML-Option XML-Nonnegative-Dimension))
                   (lambda [value]
                     (svg:dim-filter value (xml:attr-value*+>dimension value 'canonical-unit))))
 
-                (define svg:attr-value*->dim : (-> XML-Element-Attribute-Value* (XML-Option (Pairof Flonum Symbol)))
+                (define svg:attr-value*->dim : (-> XML-Element-Attribute-Value* (XML-Option XML-Dimension))
                   (lambda [value]
                     (svg:dim-filter value (xml:attr-value*->dimension value 'canonical-unit))))
 
                 (define svg:attr-dim->value : (-> (Pairof Real Symbol) String)
                   (lambda [datum]
                     (define-values (n u) (values (real->double-flonum (car datum)) (cdr datum)))
-                    (xml:attr-dimension->value
-                     (cond [(eq? u 'suffix) (cons (car datum) u)] ...
-                           [(memq u dim-units) (cons n u)]
-                           [else (cons (dim n u env ...) 'canonical-unit)])))))))]))
+                    (dimension->string
+                     (cond [(eq? u 'suffix) (#%dim (car datum) u)] ...
+                           [(memq u dim-units) (#%dim n u)]
+                           [else (#%dim (dim n u env ...) 'canonical-unit)])))))))]))
 
 (define-syntax (define-svg-lists stx)
   (syntax-case stx [:]

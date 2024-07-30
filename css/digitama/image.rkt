@@ -27,7 +27,7 @@
 (define-type Image-Set-Options (Listof Image-Set-Option))
 (define-type Linear-Color-Stop (Pairof CSS-Color-Datum (Listof CSS-Flonum-%)))
 (define-type Linear-Color-Stops (Pairof Linear-Color-Stop (Listof+ Linear-Color-Stop)))
-(define-type Radial-Size (U Symbol Nonnegative-Flonum (Pairof (U Nonnegative-Flonum CSS+%) (U Nonnegative-Flonum CSS+%))))
+(define-type Radial-Size (U Symbol Nonnegative-Flonum (Pairof (U Nonnegative-Flonum Nonnegative-FlPercentage) (U Nonnegative-Flonum Nonnegative-FlPercentage))))
 (define-type Radial-Shape (Pairof Symbol Radial-Size))
 
 (define-type CSS-Image-Datum (U CSS-Image String))
@@ -190,7 +190,7 @@
 (define make-image-normalizer : (case-> [Nonnegative-Real Positive-Flonum (-> Bitmap) -> (-> (CSS-Maybe Bitmap) Bitmap)]
                                         [Nonnegative-Real Positive-Flonum -> (-> (CSS-Maybe Bitmap) (CSS-Maybe Bitmap))])
   (let ([normalize (λ [[h : Nonnegative-Real] [d : Positive-Flonum] [b : Bitmap]]
-                     (bitmap-scale (bitmap-alter-density b d) (/ h (bitmap-height b))))])
+                     (bitmap-scale (bitmap-alter-density b d) (/ h (bitmap-intrinsic-height b))))])
     (case-lambda
       [(height density)
        (λ [[raw : (CSS-Maybe Bitmap)]]
@@ -199,7 +199,7 @@
        (λ [[raw : (CSS-Maybe Bitmap)]]
          (cond [(bitmap? raw) (normalize height density raw)]
                [else (let ([alt-image : Bitmap (mk-image)])
-                       (cond [(> (bitmap-height alt-image) height) (normalize height density alt-image)]
+                       (cond [(> (bitmap-intrinsic-height alt-image) height) (normalize height density alt-image)]
                              [else (bitmap-cc-superimpose (bitmap-blank height height #:density density)
                                                           (bitmap-alter-density alt-image density))]))]))])))
 

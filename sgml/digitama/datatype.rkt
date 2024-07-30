@@ -4,11 +4,12 @@
 (provide (all-from-out "shared/datatype.rkt"))
 (provide (rename-out [xml:attr-value*->natural xml:attr-value*+>integer]
                      [xml:attr-value*->boolean xml:attr-value*->on-off]
-                     [xml:attr-value*->symbol xml:attr-value*->name]))
+                     [xml:attr-value*->symbol xml:attr-value*->name]
+                     [xml:attr-value*+>flonum xml:attr-value*->nonnegative-flonum]
+                     [xml:attr-value*+>fixnum xml:attr-value*->nonnegative-fixnum]))
 
 (require digimon/symbol)
 (require digimon/string)
-(require digimon/dimension)
 (require digimon/number)
 
 (require "grammar.rkt")
@@ -51,37 +52,30 @@
   (case-lambda
     [(v)
      (cond [(xml:string? v) (xml:string-datum v)]
-           [(xml:name? v) (symbol->immutable-string (xml:name-datum v))]
-           [else (symbol-join (map xml:name-datum v))])]
-    [(v pattern)
-     (let ([s (xml:attr-value*->string v)])
-       (cond [(procedure? pattern) (and (pattern s) s)]
-             [else (and (regexp-match? pattern s) s)]))]))
+           [(xml:name? v) (xml:attr-symbol->string (xml:name-datum v))]
+           [else (xml:attr-list->string (map xml:name-datum v))])]
+    [(v pattern) (xml:attr-string-filter (xml:attr-value*->string v) pattern)]))
 
 (define xml:attr-value*->token
   : (case-> [XML-Element-Attribute-Value* -> String]
             [XML-Element-Attribute-Value* (U String Bytes Regexp Byte-Regexp (-> String Boolean)) -> (Option String)])
   (case-lambda
     [(v)
-     (cond [(xml:string? v) (string-normalize-spaces (xml:string-datum v))]
-           [(xml:name? v) (symbol->immutable-string (xml:name-datum v))]
-           [else (symbol-join (map xml:name-datum v))])]
-    [(v pattern)
-     (let ([s (xml:attr-value*->token v)])
-       (cond [(procedure? pattern) (and (pattern s) s)]
-             [else (and (regexp-match? pattern s) s)]))]))
+     (cond [(xml:string? v) (xml:attr-string->token (xml:string-datum v))]
+           [(xml:name? v) (xml:attr-symbol->token (xml:name-datum v))]
+           [else (xml:attr-list->token (map xml:name-datum v))])]
+    [(v pattern) (xml:attr-string-filter (xml:attr-value*->token v) pattern)]))
 
-(define xml:attr-value*->string-list : (->* (XML-Element-Attribute-Value*) ((U String Regexp)) (Option (Listof String)))
+(define xml:attr-value*->string-list : (->* (XML-Element-Attribute-Value*) ((U String Regexp)) (Listof String))
   (lambda [v [sep #px"\\s+"]]
-    (cond [(xml:string? v) (string-split (string-trim (xml:string-datum v)) sep)]
-          [(list? v) (for/list : (Listof String) ([n (in-list v)]) (symbol->immutable-string (xml:name-datum n)))]
-          [(xml:name? v) (list (symbol->immutable-string (xml:name-datum v)))]
-          [else #false])))
+    (cond [(xml:string? v) ((inst xml:attr-string->list String) (xml:string-datum v) values sep)]
+          [(list? v) ((inst xml:attr-list->list String) (map xml:name-datum v) values)]
+          [else ((inst xml:attr-symbol->list String) (xml:name-datum v) values)])))
 
 (define xml:attr-value*->boolean : (-> XML-Element-Attribute-Value* (Option XML-Boolean))
   (lambda [v]
-    (cond [(xml:string? v) (let ([datum (xml:string-datum v)]) (cond [(member datum '("true" "1")) 'true] [(member datum '("false" "0")) 'false] [else #false]))]
-          [(xml:name? v) (let ([datum (xml:name-datum v)]) (and (or (eq? v 'true) (eq? v 'false)) datum))]
+    (cond [(xml:string? v) (xml:attr-string->boolean (xml:string-datum v))]
+          [(xml:name? v) (xml:attr-symbol->boolean (xml:name-datum v))]
           [else #false])))
 
 (define xml:attr-value*->integer : (case-> [XML-Element-Attribute-Value* -> (Option Integer)]
@@ -89,180 +83,97 @@
                                            [XML-Element-Attribute-Value* (Option Integer) (Option Integer) -> (Option Integer)])
   (case-lambda
     [(v)
-     (cond [(xml:string? v) (string->integer (string-trim (xml:string-datum v)))]
-           [(xml:name? v) (string->integer (symbol->immutable-string (xml:name-datum v)))]
+     (cond [(xml:string? v) (xml:attr-string->real (xml:string-datum v) string->integer)]
+           [(xml:name? v) (xml:attr-symbol->real (xml:name-datum v) string->integer)]
            [else #false])]
-    [(v min)
-     (let ([n (xml:attr-value*->integer v)])
-       (and n
-            (cond [(and min) (and (<= min n) n)]
-                  [else n])))]
-    [(v min max)
-     (let ([n (xml:attr-value*->integer v)])
-       (and n
-            (cond [(and min max) (and (<= min n max) n)]
-                  [(and min) (and (<= min n) n)]
-                  [(and max) (and (<= n max) n)]
-                  [else n])))]))
+    [(v min) (xml:attr-real-filter (xml:attr-value*->integer v) min)]
+    [(v min max) (xml:attr-real-filter (xml:attr-value*->integer v) min max)]))
 
 (define xml:attr-value*->fixnum : (case-> [XML-Element-Attribute-Value* -> (Option Fixnum)]
                                           [XML-Element-Attribute-Value* (Option Fixnum) -> (Option Fixnum)]
                                           [XML-Element-Attribute-Value* (Option Fixnum) (Option Fixnum) -> (Option Fixnum)])
   (case-lambda
     [(v)
-     (cond [(xml:string? v) (string->fixnum (string-trim (xml:string-datum v)))]
-           [(xml:name? v) (string->fixnum (symbol->immutable-string (xml:name-datum v)))]
+     (cond [(xml:string? v) (xml:attr-string->real (xml:string-datum v) string->fixnum)]
+           [(xml:name? v) (xml:attr-symbol->real (xml:name-datum v) string->fixnum)]
            [else #false])]
-    [(v min)
-     (let ([n (xml:attr-value*->fixnum v)])
-       (and n
-            (cond [(and min) (and (<= min n) n)]
-                  [else n])))]
-    [(v min max)
-     (let ([n (xml:attr-value*->fixnum v)])
-       (and n
-            (cond [(and min max) (and (<= min n max) n)]
-                  [(and min) (and (<= min n) n)]
-                  [(and max) (and (<= n max) n)]
-                  [else n])))]))
+    [(v min) (xml:attr-real-filter (xml:attr-value*->fixnum v) min)]
+    [(v min max) (xml:attr-real-filter (xml:attr-value*->fixnum v) min max)]))
 
 (define xml:attr-value*+>fixnum : (case-> [XML-Element-Attribute-Value* -> (Option Nonnegative-Fixnum)]
                                           [XML-Element-Attribute-Value* (Option Nonnegative-Fixnum) -> (Option Nonnegative-Fixnum)]
                                           [XML-Element-Attribute-Value* (Option Nonnegative-Fixnum) (Option Nonnegative-Fixnum) -> (Option Nonnegative-Fixnum)])
   (case-lambda
     [(v)
-     (cond [(xml:string? v) (string+>fixnum (string-trim (xml:string-datum v)))]
-           [(xml:name? v) (string+>fixnum (symbol->immutable-string (xml:name-datum v)))]
+     (cond [(xml:string? v) (xml:attr-string->real (xml:string-datum v) string+>fixnum)]
+           [(xml:name? v) (xml:attr-symbol->real (xml:name-datum v) string+>fixnum)]
            [else #false])]
-    [(v min)
-     (let ([n (xml:attr-value*->fixnum v)])
-       (and n
-            (cond [(and min) (and (<= min n) n)]
-                  [else (and (<= 0 n) n)])))]
-    [(v min max)
-     (let ([n (xml:attr-value*->fixnum v)])
-       (and n
-            (cond [(and min max) (and (<= min n) (<= n max) n)]
-                  [(and min) (and (<= min n) n)]
-                  [(and max) (and (<= 0 n) (<= n max) n)]
-                  [else (and (<= 0 n) n)])))]))
+    [(v min) (xml:attr-real-filter (xml:attr-value*+>fixnum v) min)]
+    [(v min max) (xml:attr-real-filter (xml:attr-value*+>fixnum v) min max)]))
 
 (define xml:attr-value*->byte : (case-> [XML-Element-Attribute-Value* -> (Option Byte)]
-                                       [XML-Element-Attribute-Value* (Option Byte) -> (Option Byte)]
-                                       [XML-Element-Attribute-Value* (Option Byte) (Option Byte) -> (Option Byte)])
+                                        [XML-Element-Attribute-Value* (Option Byte) -> (Option Byte)]
+                                        [XML-Element-Attribute-Value* (Option Byte) (Option Byte) -> (Option Byte)])
   (case-lambda
     [(v)
-     (cond [(xml:string? v) (string->byte (string-trim (xml:string-datum v)))]
-           [(xml:name? v) (string->byte (symbol->immutable-string (xml:name-datum v)))]
+     (cond [(xml:string? v) (xml:attr-string->real (xml:string-datum v) string->byte)]
+           [(xml:name? v) (xml:attr-symbol->real (xml:name-datum v) string->byte)]
            [else #false])]
-    [(v min)
-     (let ([b (xml:attr-value*->integer v)])
-       (and b
-            (cond [(and min) (and (<= min b) (byte? b) b)]
-                  [else (and (byte? b) b)])))]
-    [(v min max)
-     (let ([b (xml:attr-value*->integer v)])
-       (and b
-            (cond [(and min max) (and (<= min b) (<= b max) b)]
-                  [(and min) (and (<= min b) (byte? b) b)]
-                  [(and max) (and (<= 0 b) (<= b max) b)]
-                  [else (and (byte? b) b)])))]))
+    [(v min) (xml:attr-real-filter (xml:attr-value*->byte v) min)]
+    [(v min max) (xml:attr-real-filter (xml:attr-value*->byte v) min max)]))
 
 (define xml:attr-value*->index : (case-> [XML-Element-Attribute-Value* -> (Option Index)]
                                          [XML-Element-Attribute-Value* (Option Index) -> (Option Index)]
                                          [XML-Element-Attribute-Value* (Option Index) (Option Index) -> (Option Index)])
   (case-lambda
     [(v)
-     (cond [(xml:string? v) (string->index (string-trim (xml:string-datum v)))]
-           [(xml:name? v) (string->index (symbol->immutable-string (xml:name-datum v)))]
+     (cond [(xml:string? v) (xml:attr-string->real (xml:string-datum v) string->index)]
+           [(xml:name? v) (xml:attr-symbol->real (xml:name-datum v) string->index)]
            [else #false])]
-    [(v min)
-     (let ([nat (xml:attr-value*->integer v)])
-       (and nat
-            (cond [(and min) (and (<= min nat) (index? nat) nat)]
-                  [else (and (index? nat) nat)])))]
-    [(v min max)
-     (let ([nat (xml:attr-value*->integer v)])
-       (and nat
-            (cond [(and min max) (and (<= min nat) (<= nat max) nat)]
-                  [(and min) (and (<= min nat) (index? nat) nat)]
-                  [(and max) (and (<= 0 nat) (<= nat max) nat)]
-                  [else (and (index? nat) nat)])))]))
-
-(define xml:attr-value*->hexdecimal : (case-> [XML-Element-Attribute-Value* -> (Option Index)]
-                                              [XML-Element-Attribute-Value* Positive-Byte -> (Option Index)])
-  (case-lambda
-    [(v)
-     (cond [(xml:string? v) (string->index (string-trim (xml:string-datum v)) 16)]
-           [(xml:name? v) (string->index (symbol->immutable-string (xml:name-datum v)) 16)]
-           [else #false])]
-    [(v len)
-     (let ([hex (xml:attr-value*->string v)])
-       (and (= (string-length hex) len)
-            (string->index hex 16)))]))
+    [(v min) (xml:attr-real-filter (xml:attr-value*->index v) min)]
+    [(v min max) (xml:attr-real-filter (xml:attr-value*->index v) min max)]))
 
 (define xml:attr-value*->natural : (case-> [XML-Element-Attribute-Value* -> (Option Natural)]
                                            [XML-Element-Attribute-Value* (Option Natural) -> (Option Natural)]
                                            [XML-Element-Attribute-Value* (Option Natural) (Option Natural) -> (Option Natural)])
   (case-lambda
     [(v)
-     (cond [(xml:string? v) (string->natural (string-trim (xml:string-datum v)))]
-           [(xml:name? v) (string->natural (symbol->immutable-string (xml:name-datum v)))]
+     (cond [(xml:string? v) (xml:attr-string->real (xml:string-datum v) string->natural)]
+           [(xml:name? v) (xml:attr-symbol->real (xml:name-datum v) string->natural)]
            [else #false])]
-    [(v min)
-     (let ([nat (xml:attr-value*->integer v)])
-       (and nat
-            (cond [(and min) (and (<= min nat) nat)]
-                  [else (and (<= 0 nat) nat)])))]
-    [(v min max)
-     (let ([nat (xml:attr-value*->natural v)])
-       (and nat
-            (cond [(and min max) (and (<= min nat) (<= nat max) nat)]
-                  [(and min) (and (<= min nat) nat)]
-                  [(and max) (and (<= 0 nat) (<= nat max) nat)]
-                  [else nat])))]))
+    [(v min) (xml:attr-real-filter (xml:attr-value*->natural v) min)]
+    [(v min max) (xml:attr-real-filter (xml:attr-value*->natural v) min max)]))
 
-(define xml:attr-value*->flonum : (case-> [XML-Element-Attribute-Value* -> (Option Flonum)]
-                                         [XML-Element-Attribute-Value* (Option Flonum) -> (Option Flonum)]
-                                         [XML-Element-Attribute-Value* (Option Flonum) (Option Flonum) -> (Option Flonum)])
+(define xml:attr-value*->hexadecimal : (case-> [XML-Element-Attribute-Value* -> (Option Index)]
+                                               [XML-Element-Attribute-Value* Positive-Byte -> (Option Index)])
   (case-lambda
     [(v)
-     (cond [(xml:string? v) (string->flonum (string-trim (xml:string-datum v)))]
-           [(xml:name? v) (string->flonum (symbol->immutable-string (xml:name-datum v)))]
+     (cond [(xml:string? v) (xml:attr-string->real (xml:string-datum v) string->index 16)]
+           [(xml:name? v) (xml:attr-symbol->real (xml:name-datum v) string->index 16)]
            [else #false])]
-    [(v min)
-     (let ([n (xml:attr-value*->flonum v)])
-       (and n
-            (cond [(and min) (and (<= min n) n)]
-                  [else n])))]
-    [(v min max)
-     (let ([n (xml:attr-value*->flonum v)])
-       (and n
-            (cond [(and min max) (and (<= min n) (<= n max) n)]
-                  [(and min) (and (<= min n) n)]
-                  [(and max) (and (<= n max) n)]
-                  [else n])))]))
+    [(v len) (xml:attr-hexadecimal-filter (xml:attr-value*->string v) len)]))
+
+(define xml:attr-value*->flonum : (case-> [XML-Element-Attribute-Value* -> (Option Flonum)]
+                                          [XML-Element-Attribute-Value* (Option Flonum) -> (Option Flonum)]
+                                          [XML-Element-Attribute-Value* (Option Flonum) (Option Flonum) -> (Option Flonum)])
+  (case-lambda
+    [(v)
+     (cond [(xml:string? v) (xml:attr-string->real (xml:string-datum v) string->flonum)]
+           [(xml:name? v) (xml:attr-symbol->real (xml:name-datum v) string->flonum)]
+           [else #false])]
+    [(v min) (xml:attr-real-filter (xml:attr-value*->flonum v) min)]
+    [(v min max) (xml:attr-real-filter (xml:attr-value*->flonum v) min max)]))
 
 (define xml:attr-value*+>flonum : (case-> [XML-Element-Attribute-Value* -> (Option Nonnegative-Flonum)]
                                           [XML-Element-Attribute-Value* (Option Nonnegative-Flonum) -> (Option Nonnegative-Flonum)]
                                           [XML-Element-Attribute-Value* (Option Nonnegative-Flonum) (Option Nonnegative-Flonum) -> (Option Nonnegative-Flonum)])
   (case-lambda
     [(v)
-     (cond [(xml:string? v) (string+>flonum (string-trim (xml:string-datum v)))]
-           [(xml:name? v) (string+>flonum (symbol->immutable-string (xml:name-datum v)))]
+     (cond [(xml:string? v) (xml:attr-string->real (xml:string-datum v) string+>flonum)]
+           [(xml:name? v) (xml:attr-symbol->real (xml:name-datum v) string+>flonum)]
            [else #false])]
-    [(v min)
-     (let ([n (xml:attr-value*->flonum v)])
-       (and n
-            (cond [(and min) (and (<= min n) n)]
-                  [else (and (<= 0 n) n)])))]
-    [(v min max)
-     (let ([n (xml:attr-value*->flonum v)])
-       (and n
-            (cond [(and min max) (and (<= min n) (<= n max) n)]
-                  [(and min) (and (<= min n) n)]
-                  [(and max) (and (>= n 0.0) (<= n max) n)]
-                  [else (and (>= n 0.0) n)])))]))
+    [(v min) (xml:attr-real-filter (xml:attr-value*+>flonum v) min)]
+    [(v min max) (xml:attr-real-filter (xml:attr-value*+>flonum v) min max)]))
 
 (define #:forall (N) xml:attr-value*->number
   : (case-> [XML-Element-Attribute-Value* -> (Option Real)]
@@ -270,19 +181,11 @@
             [XML-Element-Attribute-Value* (-> Any Boolean : (∩ Real N)) (Option (∩ Real N)) (Option (∩ Real N)) -> (Option N)])
   (case-lambda
     [(v)
-     (cond [(xml:string? v) (string->real (string-trim (xml:string-datum v)))]
-           [(xml:name? v) (string->real (symbol->immutable-string (xml:name-datum v)))]
+     (cond [(xml:string? v) (xml:attr-string->real (xml:string-datum v) string->real)]
+           [(xml:name? v) (xml:attr-symbol->real (xml:name-datum v) string->real)]
            [else #false])]
-    [(v number?)
-     (let ([r (xml:attr-value*->number v)])
-       (and r (number? r) r))]
-    [(v number? min max)
-     (let ([r (xml:attr-value*->number v)])
-       (and r (number? r)
-            (cond [(and min max) (and (<= min r) (<= r max) r)]
-                  [(and min) (and (<= min r) r)]
-                  [(and max) (and (<= r max) r)]
-                  [else r])))]))
+    [(v number?) (let ([r (xml:attr-value*->number v)]) (and r (number? r) r))]
+    [(v number? min max) ((inst xml:attr-real-filter N) (xml:attr-value*->number v) number? min max)]))
 
 (define #:forall (N) xml:attr-value*+>number
   : (case-> [XML-Element-Attribute-Value* -> (Option Nonnegative-Real)]
@@ -290,125 +193,89 @@
             [XML-Element-Attribute-Value* (-> Any Boolean : (∩ Real N)) (Option (∩ Real N)) (Option (∩ Real N)) -> (Option N)])
   (case-lambda
     [(v)
-     (cond [(xml:string? v) (string+>real (string-trim (xml:string-datum v)))]
-           [(xml:name? v) (string+>real (symbol->immutable-string (xml:name-datum v)))]
+     (cond [(xml:string? v) (xml:attr-string->real (xml:string-datum v) string+>real)]
+           [(xml:name? v) (xml:attr-symbol->real (xml:name-datum v) string+>real)]
            [else #false])]
-    [(v number?)
-     (let ([r (xml:attr-value*+>number v)])
-       (and r (number? r) r))]
-    [(v number? min max)
-     (let ([r (xml:attr-value*+>number v)])
-       (and r (number? r)
-            (cond [(and min max) (and (<= min r) (<= r max) r)]
-                  [(and min) (and (<= min r) r)]
-                  [(and max) (and (<= r max) r)]
-                  [else r])))]))
+    [(v number?) (let ([r (xml:attr-value*+>number v)]) (and r (number? r) r))]
+    [(v number? min max) ((inst xml:attr-real-filter N) (xml:attr-value*+>number v) number? min max)]))
 
 (define xml:attr-value*->symbol : (-> XML-Element-Attribute-Value* Symbol)
   (lambda [v]
-    (cond [(xml:string? v) (string->symbol (string-trim (xml:string-datum v)))]
-          [(xml:name? v) (symbol->interned-symbol (xml:name-datum v))]
-          [else (string->symbol (symbol-join (map xml:name-datum v)))])))
+    (cond [(xml:string? v) (xml:attr-string->symbol (xml:string-datum v) string->symbol)]
+          [(xml:name? v) (xml:attr-symbol->symbol (xml:name-datum v))]
+          [else (xml:attr-list->symbol (map xml:name-datum v) string->symbol)])))
 
 (define xml:attr-value*->unreadable-symbol : (-> XML-Element-Attribute-Value* Symbol)
   (lambda [v]
-    (cond [(xml:string? v) (string->unreadable-symbol (string-trim (xml:string-datum v)))]
-          [(xml:name? v) (symbol->unreadable-symbol (xml:name-datum v))]
-          [else (string->unreadable-symbol (symbol-join (map xml:name-datum v)))])))
+    (cond [(xml:string? v) (xml:attr-string->symbol (xml:string-datum v) string->unreadable-symbol)]
+          [(xml:name? v) (xml:attr-symbol->unreadable-symbol (xml:name-datum v))]
+          [else (xml:attr-list->symbol (map xml:name-datum v) string->unreadable-symbol)])))
 
-(define xml:attr-value*->symbol-list : (->* (XML-Element-Attribute-Value*) ((U String Regexp)) (Option (Listof Symbol)))
+(define xml:attr-value*->symbol-list : (->* (XML-Element-Attribute-Value*) ((U String Regexp)) (Listof Symbol))
   (lambda [v [sep #px"\\s+"]]
-    (cond [(xml:string? v) (map string->symbol (string-split (string-trim (xml:string-datum v)) sep))]
-          [(list? v) (map xml:name-datum v)]
-          [(xml:name? v) (list (xml:name-datum v))]
-          [else #false])))
+    (cond [(xml:string? v) (xml:attr-string->list (xml:string-datum v) string->symbol sep)]
+          [(list? v) (xml:attr-list->list (map xml:name-datum v) string->symbol)]
+          [else (xml:attr-symbol->list (xml:name-datum v) string->symbol)])))
 
-(define xml:attr-value*->unreadable-symbol-list : (->* (XML-Element-Attribute-Value*) ((U String Regexp)) (Option (Listof Symbol)))
+(define xml:attr-value*->unreadable-symbol-list : (->* (XML-Element-Attribute-Value*) ((U String Regexp)) (Listof Symbol))
   (lambda [v [sep #px"\\s+"]]
-    (cond [(xml:string? v) (map string->unreadable-symbol (string-split (xml:string-datum v) sep))]
-          [(list? v) (map symbol->unreadable-symbol (map xml:name-datum v))]
-          [(xml:name? v) (list (symbol->unreadable-symbol (xml:name-datum v)))]
-          [else #false])))
+    (cond [(xml:string? v) (xml:attr-string->list (xml:string-datum v) string->unreadable-symbol sep)]
+          [(list? v) (xml:attr-list->list (map xml:name-datum v) string->unreadable-symbol)]
+          [else (xml:attr-symbol->list (xml:name-datum v) string->unreadable-symbol)])))
 
 (define xml:attr-value*->keyword : (-> XML-Element-Attribute-Value* Keyword)
   (lambda [v]
-    (cond [(xml:string? v) (string->keyword (string-trim (xml:string-datum v)))]
-          [(xml:name? v) (symbol->keyword (xml:name-datum v))]
-          [else (string->keyword (string-join (map symbol->immutable-string (map xml:name-datum v))))])))
+    (cond [(xml:string? v) (xml:attr-string->symbol (xml:string-datum v) string->keyword)]
+          [(xml:name? v) (xml:attr-symbol->keyword (xml:name-datum v))]
+          [else (xml:attr-list->symbol (map xml:name-datum v) string->keyword)])))
 
 (define xml:attr-value*->dimension : (->* (XML-Element-Attribute-Value*) (Symbol) (Option XML-Dimension))
   (lambda [v [canonical-unit '||]]
-    (define-values (n unit)
-      (cond [(xml:string? v) (string->dimension (xml:string-datum v) canonical-unit #:ci? #false)]
-            [(xml:name? v) (string->dimension (xml:name-datum v) canonical-unit #:ci? #false)]
-            [else (values #false canonical-unit)]))
-
-    (and n (cons n unit))))
+    (cond [(xml:string? v) (xml:attr-string->dimension (xml:string-datum v) canonical-unit #false #false)]
+          [(xml:name? v) (xml:attr-symbol->dimension (xml:name-datum v) canonical-unit #false #false)]
+          [else #false])))
 
 (define xml:attr-value*+>dimension : (->* (XML-Element-Attribute-Value*) (Symbol) (Option XML-Nonnegative-Dimension))
   (lambda [v [canonical-unit '||]]
-    (define-values (n unit)
-      (cond [(xml:string? v) (string->dimension (xml:string-datum v) canonical-unit #:ci? #false)]
-            [(xml:name? v) (string->dimension (xml:name-datum v) canonical-unit #:ci? #false)]
-            [else (values #false canonical-unit)]))
-
-    (and n (>= n 0.0) (cons n unit))))
-
-(define xml:attr-value*->percentage : (->* (XML-Element-Attribute-Value*) (Symbol) (Option XML-Percentage))
-  (lambda [v [canonical-unit '||]]
-    (define-values (n unit)
-      (cond [(xml:string? v) (string->dimension (xml:string-datum v) canonical-unit #:ci? #false)]
-            [(xml:name? v) (string->dimension (xml:name-datum v) canonical-unit #:ci? #false)]
-            [else (values #false canonical-unit)]))
-
-    (and n (eq? unit '%) (cons n unit))))
-
-(define xml:attr-value*+>percentage : (->* (XML-Element-Attribute-Value*) (Symbol) (Option XML-Nonnegative-Percentage))
-  (lambda [v [canonical-unit '||]]
-    (define-values (n unit)
-      (cond [(xml:string? v) (string->dimension (xml:string-datum v) canonical-unit #:ci? #false)]
-            [(xml:name? v) (string->dimension (xml:name-datum v) canonical-unit #:ci? #false)]
-            [else (values #false canonical-unit)]))
-
-    (and n (>= n 0.0) (eq? unit '%) (cons n unit))))
-
-(define xml:attr-value*->fixed-percentage : (->* (XML-Element-Attribute-Value*) (Symbol) (Option XML-Percentage))
-  (lambda [v [canonical-unit '||]]
-    (define-values (n unit)
-      (cond [(xml:string? v) (string->dimension (xml:string-datum v) canonical-unit #:ci? #false)]
-            [(xml:name? v) (string->dimension (xml:name-datum v) canonical-unit #:ci? #false)]
-            [else (values #false canonical-unit)]))
-
-    (and n (>= n -100.0) (<= n 100.0)
-         (eq? unit '%) (cons n unit))))
-
-(define xml:attr-value*+>fixed-percentage : (->* (XML-Element-Attribute-Value*) (Symbol) (Option XML-Nonnegative-Percentage))
-  (lambda [v [canonical-unit '||]]
-    (define-values (n unit)
-      (cond [(xml:string? v) (string->dimension (xml:string-datum v) canonical-unit #:ci? #false)]
-            [(xml:name? v) (string->dimension (xml:name-datum v) canonical-unit #:ci? #false)]
-            [else (values #false canonical-unit)]))
-
-    (and n (>= n 0.0) (<= n 100.0)
-         (eq? unit '%) (cons n unit))))
+    (cond [(xml:string? v) (xml:attr-string->dimension (xml:string-datum v) canonical-unit #false nonnegative-flonum?)]
+          [(xml:name? v) (xml:attr-symbol->dimension (xml:name-datum v) canonical-unit #false nonnegative-flonum?)]
+          [else #false])))
 
 (define xml:attr-value*->dimension/ci : (->* (XML-Element-Attribute-Value*) (Symbol) (Option XML-Dimension))
   (lambda [v [canonical-unit '||]]
-    (define-values (n unit)
-      (cond [(xml:string? v) (string->dimension (xml:string-datum v) canonical-unit #:ci? #true)]
-            [(xml:name? v) (string->dimension (xml:name-datum v) canonical-unit #:ci? #true)]
-            [else (values #false canonical-unit)]))
-
-    (and n (cons n unit))))
+    (cond [(xml:string? v) (xml:attr-string->dimension (xml:string-datum v) canonical-unit #true #false)]
+          [(xml:name? v) (xml:attr-symbol->dimension (xml:name-datum v) canonical-unit #true #false)]
+          [else #false])))
 
 (define xml:attr-value*+>dimension/ci : (->* (XML-Element-Attribute-Value*) (Symbol) (Option XML-Nonnegative-Dimension))
   (lambda [v [canonical-unit '||]]
-    (define-values (n unit)
-      (cond [(xml:string? v) (string->dimension (xml:string-datum v) canonical-unit #:ci? #true)]
-            [(xml:name? v) (string->dimension (xml:name-datum v) canonical-unit #:ci? #true)]
-            [else (values #false canonical-unit)]))
+    (cond [(xml:string? v) (xml:attr-string->dimension (xml:string-datum v) canonical-unit #true nonnegative-flonum?)]
+          [(xml:name? v) (xml:attr-symbol->dimension (xml:name-datum v) canonical-unit #true nonnegative-flonum?)]
+          [else #false])))
 
-    (and n (>= n 0.0) (cons n unit))))
+(define xml:attr-value*->percentage : (->* (XML-Element-Attribute-Value*) (Symbol) (Option XML-Percentage))
+  (lambda [v [canonical-unit '||]]
+    (cond [(xml:string? v) (xml:attr-string->percentage (xml:string-datum v) canonical-unit #false)]
+          [(xml:name? v) (xml:attr-symbol->percentage (xml:name-datum v) canonical-unit #false)]
+          [else #false])))
+
+(define xml:attr-value*+>percentage : (->* (XML-Element-Attribute-Value*) (Symbol) (Option XML-Nonnegative-Percentage))
+  (lambda [v [canonical-unit '||]]
+    (cond [(xml:string? v) (xml:attr-string->percentage (xml:string-datum v) canonical-unit nonnegative-flonum?)]
+          [(xml:name? v) (xml:attr-symbol->percentage (xml:name-datum v) canonical-unit nonnegative-flonum?)]
+          [else #false])))
+
+(define xml:attr-value*->fixed-percentage : (->* (XML-Element-Attribute-Value*) (Symbol) (Option XML-Percentage))
+  (lambda [v [canonical-unit '||]]
+    (cond [(xml:string? v) (xml:attr-string->percentage (xml:string-datum v) canonical-unit fixed-percentage?)]
+          [(xml:name? v) (xml:attr-symbol->percentage (xml:name-datum v) canonical-unit fixed-percentage?)]
+          [else #false])))
+
+(define xml:attr-value*+>fixed-percentage : (->* (XML-Element-Attribute-Value*) (Symbol) (Option XML-Nonnegative-Percentage))
+  (lambda [v [canonical-unit '||]]
+    (cond [(xml:string? v) (xml:attr-string->percentage (xml:string-datum v) canonical-unit nonnegative-fixed-percentage?)]
+          [(xml:name? v) (xml:attr-symbol->percentage (xml:name-datum v) canonical-unit nonnegative-fixed-percentage?)]
+          [else #false])))
 
 (define xml:attr-value*->listof-type : (All (T) (->* (XML-Element-Attribute-Value*
                                                       (-> XML-Element-Attribute-Value* (XML-Option T))

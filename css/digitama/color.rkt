@@ -47,7 +47,7 @@
   #:where
   [(define-css-disjoint-filter <rgb-gamut> #:-> Flonum
      (CSS:<~> (<css:integer> byte?) byte->gamut)
-     (CSS:<~> (<css:percentage>) (λ [[% : Flonum]] (fl* % 255.0)))
+     (CSS:<~> (<css:percentage>) (λ [[% : Flonum]] (fl* (fl* % 0.01) 255.0)))
      (CSS:<~> (<css:flonum>) (λ [[v : Flonum]] (fl/ v 255.0))))
 
    (define make-alpha-parser : (-> (-> (CSS:Filter Char)) (CSS-Parser (Listof Any)))

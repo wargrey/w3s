@@ -141,7 +141,7 @@
 (define css-eval-@λ : (-> CSS-@λ Namespace Nonnegative-Real Any)
   (lambda [datum ns 100%]
     (define (fsexp [datum : Any]) : Any
-      (cond [(css-%? datum) (* (css-%-value datum) 100%)]
+      (cond [(#%per? datum) (* (percentage->flonum datum) 100%)]
             [(css:length? datum) (css:length->scalar datum #true)]
             [(css-thunk? datum) ((css-thunk-λ datum))]
             [(css-@λ? datum) (map fsexp (css-@λ-sexp datum))]
