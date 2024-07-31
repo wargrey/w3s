@@ -5,6 +5,7 @@
 (require digimon/number)
 
 (require "datatype.rkt")
+(require "../shared/datatype.rkt")
 
 (require (for-syntax racket/base))
 (require (for-syntax syntax/parse))

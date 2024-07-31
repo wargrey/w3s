@@ -1,7 +1,6 @@
 #lang typed/racket/base
 
 (provide (all-defined-out))
-(provide (all-from-out "../shared/datatype.rkt"))
 (provide (all-from-out "../shared/enum.rkt"))
 (provide (rename-out [xml:attr-value->natural xml:attr-value+>integer]
                      [xml:attr-value->boolean xml:attr-value->on-off]

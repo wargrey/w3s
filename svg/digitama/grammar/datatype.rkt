@@ -10,11 +10,11 @@
 (require digimon/string)
 (require digimon/number)
 (require digimon/syntax)
-(require digimon/dimension)
 
 (require sgml/digitama/grammar)
 (require sgml/digitama/digicore)
 (require sgml/digitama/datatype)
+(require sgml/digitama/shared/datatype)
 
 (require css/digitama/syntax/dimension)
 

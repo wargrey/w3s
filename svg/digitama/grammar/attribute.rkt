@@ -9,9 +9,9 @@
 
 (require sgml/digitama/dialect)
 (require sgml/digitama/digicore)
-(require sgml/digitama/datatype)
-
 (require sgml/digitama/grammar)
+(require sgml/digitama/datatype)
+(require sgml/digitama/shared/datatype)
 
 (require "datatype.rkt")
 

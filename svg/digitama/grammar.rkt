@@ -7,11 +7,11 @@
 
 (require sgml/digitama/dialect)
 (require sgml/digitama/digicore)
-(require sgml/digitama/datatype)
 (require sgml/digitama/convert)
-
-(require sgml/digitama/xexpr/grammar)
 (require sgml/digitama/grammar)
+(require sgml/digitama/xexpr/grammar)
+(require sgml/digitama/datatype)
+(require sgml/digitama/shared/datatype)
 
 (require "grammar/attribute.rkt")
 
