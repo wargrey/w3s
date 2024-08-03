@@ -3,7 +3,7 @@
 (require digimon/spec)
 (require digimon/format)
 
-(require bitmap/color)
+(require pangocairo/color)
 
 (require sgml/digitama/digicore)
 (require sgml/digitama/tokenizer)

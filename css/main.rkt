@@ -2,7 +2,7 @@
 
 (provide (all-defined-out))
 
-(require bitmap/digitama/misc)
+(require pangocairo/digitama/misc)
 
 (require/provide "base.rkt" "sugar.rkt")
 

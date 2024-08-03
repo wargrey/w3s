@@ -1,15 +1,15 @@
 #lang typed/racket/base
 
 (provide (all-defined-out))
-(provide (all-from-out bitmap/font))
+(provide (all-from-out pangocairo/font))
 (provide (rename-out [<line-height> <css-line-height>]) <css-system-font> css->line-height current-css-element-font)
 
 (require racket/provide)
 (provide (matching-identifiers-out #px"^default-css-[a-zA-Z0-9-]+$" (all-from-out "digitama/font.rkt")))
 
 (require racket/math)
-(require bitmap/font)
-(require bitmap/digitama/font)
+(require pangocairo/font)
+(require pangocairo/digitama/font)
 
 (require "digitama/syntax/digicore.rkt")
 (require "digitama/font.rkt")

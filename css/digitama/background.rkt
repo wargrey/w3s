@@ -5,7 +5,7 @@
 
 (provide (all-defined-out))
 
-(require bitmap/digitama/paint)
+(require pangocairo/digitama/paint)
 
 (require "color.rkt")
 (require "syntax/digicore.rkt")

@@ -2,8 +2,8 @@
 
 (provide (all-defined-out))
 
-(require bitmap/digitama/paint)
-(require bitmap/digitama/source)
+(require pangocairo/digitama/paint)
+(require pangocairo/source)
 
 (require "digitama/syntax/digicore.rkt")
 (require "digitama/background.rkt")
