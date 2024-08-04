@@ -4,8 +4,8 @@
 
 (provide (all-defined-out))
 
-(require pangocairo/color)
-(require pangocairo/digitama/color)
+(require geofun/color)
+(require geofun/digitama/color)
 (require colorspace/misc)
 
 (require racket/keyword)

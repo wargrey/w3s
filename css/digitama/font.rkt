@@ -8,8 +8,8 @@
 (require racket/string)
 (require racket/symbol)
 
-(require pangocairo/font)
-(require pangocairo/digitama/font)
+(require geofun/font)
+(require geofun/digitama/font)
 
 (require "syntax/digicore.rkt")
 (require "syntax/dimension.rkt")

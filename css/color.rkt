@@ -1,10 +1,10 @@
 #lang typed/racket/base
 
 (provide (all-defined-out) <css-color> <css#color>)
-(provide (all-from-out pangocairo/color))
+(provide (all-from-out geofun/color))
 
-(require pangocairo/digitama/color)
-(require pangocairo/color)
+(require geofun/digitama/color)
+(require geofun/color)
 
 (require racket/symbol)
 

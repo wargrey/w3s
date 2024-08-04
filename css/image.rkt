@@ -7,7 +7,7 @@
 
 (require bitmap/base)
 (require bitmap/constructor)
-(require pangocairo/color)
+(require geofun/color)
 
 (require "digitama/syntax/digicore.rkt")
 (require "digitama/syntax/dimension.rkt")

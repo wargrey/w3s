@@ -5,13 +5,14 @@
 
 (provide (all-defined-out))
 
-(require pangocairo/digitama/paint)
+(require geofun/digitama/paint)
 
 (require "color.rkt")
 (require "syntax/digicore.rkt")
 (require "syntax/dimension.rkt")
 (require "../recognizer.rkt")
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define-css-disjoint-filter <border-width> #:-> (U Symbol Nonnegative-Inexact-Real CSS:Length:Font)
   ;;; https://drafts.csswg.org/css-backgrounds/#line-width
   (<css+length:font>)
