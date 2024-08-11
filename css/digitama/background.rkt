@@ -5,7 +5,7 @@
 
 (provide (all-defined-out))
 
-(require geofun/digitama/paint)
+(require geofun/digitama/stroke)
 
 (require "color.rkt")
 (require "syntax/digicore.rkt")

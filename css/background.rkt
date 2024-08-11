@@ -2,8 +2,10 @@
 
 (provide (all-defined-out))
 
-(require geofun/digitama/paint)
-(require geofun/digitama/source)
+(require geofun/stroke)
+(require geofun/paint)
+
+(require geofun/digitama/stroke)
 
 (require "digitama/syntax/digicore.rkt")
 (require "digitama/background.rkt")
