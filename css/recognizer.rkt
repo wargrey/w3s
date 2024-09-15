@@ -12,6 +12,7 @@
 (require racket/match)
 (require racket/keyword)
 
+(require digimon/sequence)
 (require digimon/digitama/predicate)
 
 (require bitmap/digitama/unsafe/image)
