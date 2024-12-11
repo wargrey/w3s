@@ -15,8 +15,6 @@
 (require digimon/sequence)
 (require digimon/digitama/predicate)
 
-(require bitmap/digitama/unsafe/image)
-
 (require "digitama/syntax/misc.rkt")
 (require "digitama/syntax/digicore.rkt")
 (require "digitama/syntax/dimension.rkt")

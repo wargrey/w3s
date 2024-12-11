@@ -85,7 +85,9 @@
       (define-values (fgcolor rcolor) (values (btest-foreground-color $bt) (btest-output-color $bt)))
 
       (define-values (max-width words font) (values (btest-max-width $bt) (btest-desc $bt) (btest-font $bt)))
-      (define desc (bitmap-paragraph #:max-width max-width #:color fgcolor #:background (btest-background $bt) #:lines (btest-lines $bt)
+      (define desc (bitmap-paragraph #:max-width max-width
+                                     #:color fgcolor #:background (btest-background $bt)
+                                     #:lines (filter geo-text-line? (btest-lines $bt))
                                      words font))
       (define-values (desc-width height) (bitmap-size desc))
       (define ~s32 : (-> String String) (λ [txt] (~s txt #:max-width 32 #:limit-marker "...\"")))
