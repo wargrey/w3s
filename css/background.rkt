@@ -5,7 +5,7 @@
 (require geofun/stroke)
 (require geofun/paint)
 
-(require geofun/digitama/stroke)
+(require geofun/digitama/paint/stroke)
 
 (require "digitama/syntax/digicore.rkt")
 (require "digitama/background.rkt")
