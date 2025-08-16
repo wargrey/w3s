@@ -14,9 +14,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (provide (all-defined-out))
-(provide (all-from-out bitmap))
+(provide (all-from-out bitmap geofun/vector))
 
 (require bitmap)
+(require geofun/vector)
 (require geofun/digitama/misc)
 
 (require/provide "syntax.rkt"

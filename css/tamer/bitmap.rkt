@@ -28,7 +28,7 @@
    [max-width : Index                          #:= 512]
    [desc : String                              #:= "['desc' property is required]"]
    [lines : (Listof Symbol)                    #:= null]
-   [prelude : Bitmap                           #:= (bitmap-text "> ")]
+   [prelude : Bitmap                           #:= (geo-freeze (geo-text "> "))]
    [descriptors : (Listof (Pairof Symbol Any)) #:= null])
   #:transparent)
 
@@ -80,31 +80,31 @@
 
 (define-values (bitmap-descs testcases)
   (let-values ([($btests _) (css-cascade* bitmap.css (list ~btest ~module) btest-parsers btest-filter *root)])
-    (for/fold ([bitmap-descs : (Listof Bitmap) null] [testcases : (Listof Btest) null])
+    (for/fold ([bmp-descs : (Listof Bitmap) null] [testcases : (Listof Btest) null])
               ([$bt (in-list $btests)])
       (define-values (fgcolor rcolor) (values (btest-foreground-color $bt) (btest-output-color $bt)))
 
       (define-values (max-width words font) (values (btest-max-width $bt) (btest-desc $bt) (btest-font $bt)))
-      (define desc (bitmap-paragraph #:max-width max-width
-                                     #:color fgcolor #:background (btest-background $bt)
-                                     #:lines (filter geo-text-line? (btest-lines $bt))
-                                     words font))
-      (define-values (desc-width height) (bitmap-size desc))
+      (define desc (geo-paragraph #:max-width max-width
+                                  #:color fgcolor #:background (btest-background $bt)
+                                  #:lines (filter geo-text-line? (btest-lines $bt))
+                                  words font))
+      (define-values (desc-width height) (geo-size desc))
       (define ~s32 : (-> String String) (λ [txt] (~s txt #:max-width 32 #:limit-marker "...\"")))
 
-      (values (append bitmap-descs
+      (values (append bmp-descs
                       (list (bitmap-pin* 1 1/2 0 1/2
                                          (btest-prelude $bt)
-                                         (bitmap-text "(" #:color (btest-paren-color $bt))
-                                         (bitmap-hc-append #:gapsize 7
-                                                           (bitmap-text "bitmap-paragraph" #:color (btest-symbol-color $bt))
-                                                           (bitmap-text (~s32 words) #:color (btest-string-color $bt))
-                                                           (bitmap-text (~a max-width) #:color (btest-number-color $bt))
-                                                           (bitmap-text (~s (font-face font)) #:color (btest-string-color $bt))
-                                                           (bitmap-text (~a (font-size font)) #:color (btest-number-color $bt)))
-                                         (bitmap-text ")" #:color (btest-paren-color $bt)))
-                            (bitmap-text (format "- : (Bitmap ~a ~a)" desc-width height) #:color rcolor)
-                            (bitmap-frame desc #:border (btest-border $bt) #:padding (list 0 (max (- max-width desc-width) 0) 0 0))))
+                                         (geo-freeze (geo-text "(" #:color (btest-paren-color $bt)))
+                                         (geo-freeze (geo-hc-append #:gapsize 7
+                                                                    (geo-text "bitmap-paragraph" #:color (btest-symbol-color $bt))
+                                                                    (geo-text (~s32 words) #:color (btest-string-color $bt))
+                                                                    (geo-text (~a max-width) #:color (btest-number-color $bt))
+                                                                    (geo-text (~s (font-face font)) #:color (btest-string-color $bt))
+                                                                    (geo-text (~a (font-size font)) #:color (btest-number-color $bt))))
+                                         (geo-freeze (geo-text ")" #:color (btest-paren-color $bt))))
+                            (geo-freeze (geo-text (format "- : (Bitmap ~a ~a)" desc-width height) #:color rcolor))
+                            (bitmap-frame (geo-freeze desc) #:border (btest-border $bt) #:padding (list 0 (max (- max-width desc-width) 0) 0 0))))
               (cons $bt testcases)))))
 
 (when DrRacket?
