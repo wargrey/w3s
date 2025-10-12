@@ -31,7 +31,7 @@ Meanwhile, @|the-name|:
 
 @include-section{document.scrbl}
 
-@handbook-appendix[#:index-section? #true
+@handbook-bonus-appendix[#:index-section? #true
  (url-bib-entry "XML10" "Extensible Markup Language (XML) 1.0 (Fifth Edition)" "https://www.w3.org/TR/xml"
                 #:author "W3C"
                 #:date 2008)

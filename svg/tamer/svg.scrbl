@@ -8,4 +8,4 @@
 
  See @racketmodname[sgml/xml] for its foundation.}
 
-@handbook-appendix[#:index-section? #true]
+@handbook-bonus-appendix[#:index-section? #true]
