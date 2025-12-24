@@ -3,8 +3,7 @@
 (provide (all-defined-out))
 
 (require geofun/stroke)
-(require geofun/paint)
-
+(require geofun/digitama/paint/self)
 (require geofun/digitama/paint/stroke)
 
 (require "digitama/syntax/digicore.rkt")
