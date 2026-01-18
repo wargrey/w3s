@@ -70,7 +70,7 @@
                   (attr field ...))
 
                 (define (remake-attr [self : Attr] kw-reargs ...) : Attr
-                  (attr (if (void? field) (field-ref self) field) ...))
+                  (attr (if (undefined? field) (field-ref self) field) ...))
 
                 (define-xml-attribute-extract extract-attr : Attr switch #:with report-unknown report-range-exn
                   (attr [field FieldType xml->datum defval ...] ...) 'mandatory-fields AltReturnType)
