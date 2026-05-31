@@ -65,7 +65,7 @@
       ;; as the `#true`s indicate, giving properties a chance to use their initial value if they are desired to. Also see (css-ref).
       (desc-font #:size (max (min max-size font-size) min-size)
                  #:family (css-ref declared-values #true 'font-family css->font-family)
-                 #:style (css-ref declared-values #true 'font-style symbol? 'normal (font-style inherited-font))
+                 #:style (css-ref declared-values #true 'font-style css-font-style-option? 'normal (font-style inherited-font))
                  #:weight (css-ref declared-values #true 'font-weight font-weight*? 'normal (font-weight inherited-font))
                  #:stretch (css-ref declared-values inherited-values 'font-stretch symbol? 'normal)))
 

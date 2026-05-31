@@ -119,7 +119,7 @@
           [(css+unitless? value) value #|computed value is *not* the used value|#]
           [else #|'normal|# +nan.0 #|computed value is *not* the used value|#])))
 
-(define font-weight*? : (-> Any Boolean : (U Symbol Nonnegative-Integer))
+(define font-weight*? : (-> Any Boolean : (U Font-Weight Nonnegative-Integer))
   (lambda [v]
-    (or (symbol? v)
+    (or (css-font-weight-option? v)
         (exact-nonnegative-integer? v))))
