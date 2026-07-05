@@ -7,7 +7,7 @@
 (require racket/symbol)
 
 (require digimon/syntax)
-(require digimon/digitama/stdio)
+(require digimon/digitama/stdio/port)
 
 (require "../tokenizer/characters.rkt")
 (require "datatype.rkt")
